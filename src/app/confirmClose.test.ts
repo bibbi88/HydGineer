@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { appState } from './AppState';
 import { initConfirmBeforeUnload } from './confirmClose';
-import { createSource } from '../components/source';
+import { createHydPump as createSource } from '../components/hyd/supply';
 
 function compLayer(): HTMLElement {
   return document.createElement('div');

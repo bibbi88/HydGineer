@@ -14,19 +14,28 @@ import { appState } from '../app/AppState';
 import { getSelectedComponents, onSelectionChange } from '../interaction/selection';
 import { redrawAllConnections } from '../wires/connection';
 import { setPageFrameSize, renderPageFrame, type PageFrameSize } from './pageFrame';
-import { ONE_WAY_FLOW_CONTROL_VALVE_TYPE } from '../components/oneWayFlowControlValve';
-import { THROTTLE_VALVE_TYPE } from '../components/throttleValve';
-import { PRESSURE_REDUCING_VALVE_TYPE } from '../components/pressureReducingValve';
-import { SOURCE_PRESSURE } from '../sim/constants';
-import { QUICK_EXHAUST_VALVE_TYPE } from '../components/quickExhaustValve';
-import { TIME_DELAY_VALVE_TYPE } from '../components/timeDelayValve';
-import { LIMIT_VALVE_32_TYPE } from '../components/limitValve32';
-import { PUSH_BUTTON_32_TYPE } from '../components/pushButton32';
-import { AIR_VALVE_32_TYPE } from '../components/airValve32';
-import { CYLINDER_DOUBLE_TYPE } from '../components/cylinderDouble';
-import { CYLINDER_SINGLE_TYPE } from '../components/cylinderSingle';
-import { VALVE_52_TYPE } from '../components/valve52';
-import { VALVE_52_MONO_TYPE } from '../components/valve52Mono';
+import {
+  HYD_PUMP_TYPE,
+  HYD_RELIEF_TYPE,
+  HYD_GAUGE_TYPE,
+  HYD_PRESSURE_SWITCH_TYPE,
+} from '../components/hyd/supply';
+import {
+  CENTER_OPTIONS,
+  HYD_VALVE_43_TYPE,
+  HYD_VALVE_42_TYPE,
+  HYD_CHECK_TYPE,
+  HYD_PILOT_CHECK_TYPE,
+  HYD_THROTTLE_TYPE,
+  HYD_ONE_WAY_FC_TYPE,
+  HYD_FLOW_CONTROL_TYPE,
+  HYD_REDUCING_TYPE,
+} from '../components/hyd/valves';
+import {
+  HYD_CYLINDER_DOUBLE_TYPE,
+  HYD_CYLINDER_SINGLE_TYPE,
+  HYD_MOTOR_TYPE,
+} from '../components/hyd/actuators';
 import {
   nextSensorLabel,
   isSensorLabelInUse,
@@ -36,7 +45,6 @@ import {
 } from '../components/shared/sensorPositions';
 import { swapComponentType } from '../interaction/valveActuatorSwap';
 import { JUNCTION_TYPE } from '../components/junction';
-import { VALVE_53_MONO_TYPE } from '../components/valve53Mono';
 import { PLC_TYPE } from '../components/plc';
 import {
   ELEC_CONTACT_TYPE,
@@ -45,11 +53,6 @@ import {
   ELEC_PUSH_BUTTON_TYPE,
   ELEC_CHANGEOVER_TYPE,
 } from '../components/electrical';
-import {
-  VALVE_52_SOLENOID_TYPE,
-  VALVE_52_SOLENOID_DOUBLE_TYPE,
-  VALVE_53_SOLENOID_TYPE,
-} from '../components/solenoidValves';
 import { NOTE_STYLES, TEXT_ANNOTATION_TYPE } from '../components/textAnnotation';
 
 type FieldLabel = string | ((comp: Component) => string);
@@ -169,12 +172,6 @@ type InspectorField =
   | CylinderModeField
   | SilencerField;
 
-const ACTUATOR_MODES: Array<{ type: string; label: string }> = [
-  { type: PUSH_BUTTON_32_TYPE, label: 'Push button' },
-  { type: LIMIT_VALVE_32_TYPE, label: 'Limit switch' },
-  { type: AIR_VALVE_32_TYPE, label: 'Air-piloted' },
-];
-
 const ELEC_CONTACT_MODES: Array<{ type: string; label: string }> = [
   { type: ELEC_CONTACT_TYPE, label: 'Contact (relay / sensor)' },
   { type: ELEC_PUSH_BUTTON_TYPE, label: 'Push button' },
@@ -185,92 +182,126 @@ const ELEC_COIL_MODES: Array<{ type: string; label: string }> = [
   { type: ELEC_SOLENOID_TYPE, label: 'Solenoid (valve coil)' },
 ];
 
-const VALVE_52_MODES: Array<{ type: string; label: string }> = [
-  { type: VALVE_52_TYPE, label: 'Pneumatic, bistable (double pilot)' },
-  { type: VALVE_52_MONO_TYPE, label: 'Pneumatic, monostable (spring return)' },
-  { type: VALVE_52_SOLENOID_TYPE, label: 'Electric, single solenoid (spring return)' },
-  { type: VALVE_52_SOLENOID_DOUBLE_TYPE, label: 'Electric, double solenoid' },
+const ACTUATION_OPTIONS = [
+  { value: 'solenoid', label: 'Solenoid (electric)' },
+  { value: 'lever', label: 'Hand lever with detent' },
 ];
 
-// Both 5/3 variants are closed-centre and spring-centred; only the actuator differs, and they
-// share '1' through '5', so a swap carries every wire but the pneumatic one's pilot lines.
-const VALVE_53_MODES: Array<{ type: string; label: string }> = [
-  { type: VALVE_53_MONO_TYPE, label: 'Pneumatic, double pilot (spring centred)' },
-  { type: VALVE_53_SOLENOID_TYPE, label: 'Electric, double solenoid (spring centred)' },
-];
+const VALVE_FLOW_FIELD: NumberField = {
+  kind: 'number',
+  key: 'qNom',
+  label: 'Nominal flow (L/min at Δp 5 bar per path)',
+  min: 0.1,
+  max: 2000,
+  step: 1,
+};
 
 const INSPECTOR_FIELDS: Record<string, InspectorField[]> = {
-  [ONE_WAY_FLOW_CONTROL_VALVE_TYPE]: [
-    { kind: 'number', key: 'flowPct', label: 'Reverse flow %', min: 0, max: 100, step: 5 },
-  ],
-  [THROTTLE_VALVE_TYPE]: [
-    { kind: 'number', key: 'flowPct', label: 'Flow %', min: 0, max: 100, step: 5 },
-    { kind: 'silencer', key: 'silencerIN', port: 'IN', label: 'IN silencer' },
-    { kind: 'silencer', key: 'silencerOUT', port: 'OUT', label: 'OUT silencer' },
-  ],
-  [PRESSURE_REDUCING_VALVE_TYPE]: [
+  [HYD_PUMP_TYPE]: [
     {
       kind: 'number',
-      key: 'outletPressure',
-      label: 'Set pressure (bar)',
+      key: 'displacement',
+      label: 'Displacement (cm³/rev)',
       min: 0,
-      max: SOURCE_PRESSURE,
+      max: 1000,
       step: 0.5,
     },
+    { kind: 'number', key: 'speed', label: 'Motor speed (rpm)', min: 0, max: 10000, step: 10 },
+    { kind: 'number', key: 'etaV', label: 'Volumetric efficiency (%)', min: 50, max: 100, step: 1 },
+    {
+      kind: 'number',
+      key: 'ratedPressure',
+      label: 'Rated pressure (bar)',
+      min: 1,
+      max: 1000,
+      step: 10,
+    },
+    { kind: 'text', key: 'signal', label: 'Motor signal (empty = always on, e.g. K1)' },
   ],
-  [QUICK_EXHAUST_VALVE_TYPE]: [
-    { kind: 'checkbox', key: 'showPortNumbers', label: 'Show port numbers' },
+  [HYD_RELIEF_TYPE]: [
+    { kind: 'number', key: 'setting', label: 'Cracking pressure (bar)', min: 0, max: 700, step: 5 },
   ],
-  [TIME_DELAY_VALVE_TYPE]: [
-    { kind: 'number', key: 'delaySec', label: 'Delay (s)', min: 0, max: 30, step: 0.1 },
-    { kind: 'checkbox', key: 'normallyOpen', label: 'Normally open (NO)' },
-    { kind: 'silencer', key: 'silencer3', port: '3', label: 'Port 3 silencer' },
+  [HYD_REDUCING_TYPE]: [
+    { kind: 'number', key: 'setting', label: 'Outlet pressure (bar)', min: 0, max: 700, step: 5 },
   ],
-  [PUSH_BUTTON_32_TYPE]: [
-    { kind: 'actuatorMode', label: 'Control mode', options: ACTUATOR_MODES },
-    { kind: 'checkbox', key: 'normallyOpen', label: 'Normally open (NO)' },
-    { kind: 'silencer', key: 'silencer3', port: '3', label: 'Port 3 silencer' },
+  [HYD_GAUGE_TYPE]: [
+    { kind: 'number', key: 'range', label: 'Scale range (bar)', min: 1, max: 1000, step: 10 },
   ],
-  [LIMIT_VALVE_32_TYPE]: [
-    { kind: 'actuatorMode', label: 'Control mode', options: ACTUATOR_MODES },
-    { kind: 'checkbox', key: 'normallyOpen', label: 'Normally open (NO)' },
-    { kind: 'sensorKeySelect', key: 'sensorKey', label: 'Sensor key' },
-    { kind: 'silencer', key: 'silencer3', port: '3', label: 'Port 3 silencer' },
+  [HYD_PRESSURE_SWITCH_TYPE]: [
+    {
+      kind: 'number',
+      key: 'setting',
+      label: 'Switching pressure (bar)',
+      min: 0,
+      max: 700,
+      step: 5,
+    },
+    { kind: 'text', key: 'key', label: 'Signal name (e.g. S1)' },
   ],
-  [AIR_VALVE_32_TYPE]: [
-    { kind: 'actuatorMode', label: 'Control mode', options: ACTUATOR_MODES },
-    { kind: 'checkbox', key: 'normallyOpen', label: 'Normally open (NO)' },
-    { kind: 'silencer', key: 'silencer3', port: '3', label: 'Port 3 silencer' },
+  [HYD_VALVE_43_TYPE]: [
+    { kind: 'select', key: 'actuation', label: 'Actuation', options: ACTUATION_OPTIONS },
+    { kind: 'select', key: 'center', label: 'Centre position', options: CENTER_OPTIONS },
+    { kind: 'text', key: 'keyLeft', label: 'Left solenoid (P→A, B→T)' },
+    { kind: 'text', key: 'keyRight', label: 'Right solenoid (P→B, A→T)' },
+    VALVE_FLOW_FIELD,
   ],
-  [VALVE_52_TYPE]: [
-    { kind: 'actuatorMode', label: 'Operation', options: VALVE_52_MODES },
-    { kind: 'silencer', key: 'silencer3', port: '3', label: 'Port 3 silencer' },
-    { kind: 'silencer', key: 'silencer5', port: '5', label: 'Port 5 silencer' },
+  [HYD_VALVE_42_TYPE]: [
+    { kind: 'select', key: 'actuation', label: 'Actuation', options: ACTUATION_OPTIONS },
+    { kind: 'text', key: 'key', label: 'Solenoid (energized: P→A, B→T)' },
+    VALVE_FLOW_FIELD,
   ],
-  [VALVE_52_MONO_TYPE]: [
-    { kind: 'actuatorMode', label: 'Operation', options: VALVE_52_MODES },
-    { kind: 'silencer', key: 'silencer3', port: '3', label: 'Port 3 silencer' },
-    { kind: 'silencer', key: 'silencer5', port: '5', label: 'Port 5 silencer' },
+  [HYD_CHECK_TYPE]: [
+    { kind: 'number', key: 'crack', label: 'Cracking pressure (bar)', min: 0, max: 50, step: 0.5 },
   ],
-  [VALVE_53_MONO_TYPE]: [
-    { kind: 'actuatorMode', label: 'Operation', options: VALVE_53_MODES },
-    { kind: 'silencer', key: 'silencer3', port: '3', label: 'Port 3 silencer' },
-    { kind: 'silencer', key: 'silencer5', port: '5', label: 'Port 5 silencer' },
+  [HYD_PILOT_CHECK_TYPE]: [
+    { kind: 'number', key: 'ratio', label: 'Pilot ratio', min: 1, max: 20, step: 0.5 },
   ],
-  [CYLINDER_DOUBLE_TYPE]: [
+  [HYD_THROTTLE_TYPE]: [
+    { kind: 'number', key: 'diameter', label: 'Orifice diameter (mm)', min: 0, max: 50, step: 0.1 },
+  ],
+  [HYD_ONE_WAY_FC_TYPE]: [
+    {
+      kind: 'number',
+      key: 'diameter',
+      label: 'Orifice diameter (mm), IN→OUT',
+      min: 0,
+      max: 50,
+      step: 0.1,
+    },
+  ],
+  [HYD_FLOW_CONTROL_TYPE]: [
+    { kind: 'number', key: 'qSet', label: 'Set flow (L/min)', min: 0, max: 2000, step: 0.5 },
+    { kind: 'checkbox', key: 'bypass', label: 'Bypass check valve (free OUT→IN)' },
+  ],
+  [HYD_CYLINDER_DOUBLE_TYPE]: [
     { kind: 'relabel', label: 'Cylinder letter' },
-    { kind: 'number', key: 'boreDiameter', label: 'Bore diameter (mm)', min: 1, max: 500, step: 1 },
-    { kind: 'number', key: 'rodDiameter', label: 'Rod diameter (mm)', min: 1, max: 500, step: 1 },
-    { kind: 'checkbox', key: 'showForce', label: 'Show force' },
+    { kind: 'number', key: 'bore', label: 'Piston diameter (mm)', min: 5, max: 1000, step: 1 },
+    { kind: 'number', key: 'rodD', label: 'Rod diameter (mm)', min: 1, max: 999, step: 1 },
+    { kind: 'number', key: 'stroke', label: 'Stroke (mm)', min: 1, max: 10000, step: 10 },
+    { kind: 'number', key: 'load', label: 'Load force (N, + opposes extension)', step: 100 },
+    { kind: 'number', key: 'friction', label: 'Seal friction (N)', min: 0, step: 10 },
     { kind: 'sensorList', arrayKey: 'sensors', min: 0, max: 100, step: 1 },
   ],
-  [CYLINDER_SINGLE_TYPE]: [
+  [HYD_CYLINDER_SINGLE_TYPE]: [
     { kind: 'relabel', label: 'Cylinder letter' },
-    { kind: 'cylinderMode' },
-    { kind: 'number', key: 'boreDiameter', label: 'Bore diameter (mm)', min: 1, max: 500, step: 1 },
-    { kind: 'number', key: 'rodDiameter', label: 'Rod diameter (mm)', min: 1, max: 500, step: 1 },
-    { kind: 'checkbox', key: 'showForce', label: 'Show force' },
+    { kind: 'number', key: 'bore', label: 'Piston diameter (mm)', min: 5, max: 1000, step: 1 },
+    { kind: 'number', key: 'stroke', label: 'Stroke (mm)', min: 1, max: 10000, step: 10 },
+    { kind: 'number', key: 'load', label: 'Load force (N, + opposes extension)', step: 100 },
+    { kind: 'number', key: 'springPreload', label: 'Spring preload (N)', min: 0, step: 10 },
+    { kind: 'number', key: 'springRate', label: 'Spring rate (N/mm)', min: 0, step: 0.5 },
+    { kind: 'number', key: 'friction', label: 'Seal friction (N)', min: 0, step: 10 },
     { kind: 'sensorList', arrayKey: 'sensors', min: 0, max: 100, step: 1 },
+  ],
+  [HYD_MOTOR_TYPE]: [
+    {
+      kind: 'number',
+      key: 'displacement',
+      label: 'Displacement (cm³/rev)',
+      min: 0.1,
+      max: 10000,
+      step: 1,
+    },
+    { kind: 'number', key: 'torque', label: 'Load torque (Nm)', min: 0, step: 1 },
   ],
   [TEXT_ANNOTATION_TYPE]: [
     {
@@ -283,7 +314,11 @@ const INSPECTOR_FIELDS: Record<string, InspectorField[]> = {
   ],
   [ELEC_CONTACT_TYPE]: [
     { kind: 'actuatorMode', label: 'Type', options: ELEC_CONTACT_MODES },
-    { kind: 'text', key: 'key', label: 'Signal (relay coil or sensor, e.g. K1, A1)' },
+    {
+      kind: 'text',
+      key: 'key',
+      label: 'Signal (relay coil, sensor or pressure switch, e.g. K1, A1, S1)',
+    },
     { kind: 'checkbox', key: 'normallyClosed', label: 'Normally closed (NC)' },
   ],
   [ELEC_PUSH_BUTTON_TYPE]: [
@@ -292,7 +327,11 @@ const INSPECTOR_FIELDS: Record<string, InspectorField[]> = {
     { kind: 'checkbox', key: 'detent', label: 'Detent (latching)' },
   ],
   [ELEC_CHANGEOVER_TYPE]: [
-    { kind: 'text', key: 'key', label: 'Signal (relay coil or sensor, e.g. K1, A1)' },
+    {
+      kind: 'text',
+      key: 'key',
+      label: 'Signal (relay coil, sensor or pressure switch, e.g. K1, A1, S1)',
+    },
   ],
   [PLC_TYPE]: [
     {
@@ -307,27 +346,7 @@ const INSPECTOR_FIELDS: Record<string, InspectorField[]> = {
   ],
   [ELEC_SOLENOID_TYPE]: [
     { kind: 'actuatorMode', label: 'Type', options: ELEC_COIL_MODES },
-    { kind: 'text', key: 'key', label: 'Name - same as the valve coil it drives (e.g. Y1)' },
-  ],
-  [VALVE_52_SOLENOID_TYPE]: [
-    { kind: 'actuatorMode', label: 'Operation', options: VALVE_52_MODES },
-    { kind: 'text', key: 'key', label: 'Solenoid coil name' },
-    { kind: 'silencer', key: 'silencer3', port: '3', label: 'Port 3 silencer' },
-    { kind: 'silencer', key: 'silencer5', port: '5', label: 'Port 5 silencer' },
-  ],
-  [VALVE_52_SOLENOID_DOUBLE_TYPE]: [
-    { kind: 'actuatorMode', label: 'Operation', options: VALVE_52_MODES },
-    { kind: 'text', key: 'key14', label: 'Left solenoid coil name' },
-    { kind: 'text', key: 'key12', label: 'Right solenoid coil name' },
-    { kind: 'silencer', key: 'silencer3', port: '3', label: 'Port 3 silencer' },
-    { kind: 'silencer', key: 'silencer5', port: '5', label: 'Port 5 silencer' },
-  ],
-  [VALVE_53_SOLENOID_TYPE]: [
-    { kind: 'actuatorMode', label: 'Operation', options: VALVE_53_MODES },
-    { kind: 'text', key: 'key14', label: 'Left solenoid coil name' },
-    { kind: 'text', key: 'key12', label: 'Right solenoid coil name' },
-    { kind: 'silencer', key: 'silencer3', port: '3', label: 'Port 3 silencer' },
-    { kind: 'silencer', key: 'silencer5', port: '5', label: 'Port 5 silencer' },
+    { kind: 'text', key: 'key', label: 'Name - same as the valve solenoid it drives (e.g. Y1)' },
   ],
 };
 
@@ -717,8 +736,8 @@ function renderSensorListField(
   hint.className = 'inspectorHint';
   hint.textContent =
     'Each sensor turns on while the piston is within its range of the stroke (0% = fully ' +
-    'retracted, 100% = fully extended). Give a 3/2 limit switch the same label as its "Sensor ' +
-    'key" to read it - labels are case-insensitive, so "a0" and "A0" are the same sensor.';
+    'retracted, 100% = fully extended). Give an electrical contact (or a PLC) the same label ' +
+    'as its Signal to read it - labels are case-insensitive, so "a0" and "A0" are the same sensor.';
   container.appendChild(hint);
 
   function writeSensors(next: CylinderSensor[]): void {

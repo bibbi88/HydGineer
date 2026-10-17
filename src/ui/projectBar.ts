@@ -5,6 +5,11 @@ import type { ViewportAdapter } from './viewport';
 import { resetHistory } from '../history/historyStore';
 import { openExportDialog } from './exportDialog';
 import { iconButton } from './iconButton';
+import { EXAMPLES } from '../persistence/examples';
+import { loadProject } from '../persistence/project';
+import { zoomToFit } from '../interaction/zoomToFit';
+import { appState } from '../app/AppState';
+import { canEdit } from '../app/modes';
 
 export interface ProjectBarRefs {
   getName(): string;
@@ -48,7 +53,38 @@ export function renderProjectBar(
     openExportDialog(nameInput.value || 'project', connLayer, frameLayer, viewport, workspaceEl);
   });
 
-  container.append(nameInput, saveBtn, loadBtn, exportBtn);
+  // Ready-made circuits to start from - replaces whatever is on the canvas (undoable).
+  const examples = document.createElement('select');
+  examples.className = 'exampleSelect';
+  examples.title = 'Load an example circuit';
+  const placeholder = document.createElement('option');
+  placeholder.value = '';
+  placeholder.textContent = 'Examples…';
+  examples.appendChild(placeholder);
+  EXAMPLES.forEach((ex, i) => {
+    const o = document.createElement('option');
+    o.value = String(i);
+    o.textContent = ex.title;
+    examples.appendChild(o);
+  });
+  examples.addEventListener('change', () => {
+    const ex = EXAMPLES[Number(examples.value)];
+    examples.value = '';
+    if (!ex || !canEdit(appState.mode)) return;
+    if (
+      appState.components.length > 0 &&
+      !window.confirm('Replace the current circuit with this example?')
+    ) {
+      return;
+    }
+    const file = ex.file();
+    loadProject(file, ctx, viewport);
+    nameInput.value = file.name;
+    appState.markDirty();
+    requestAnimationFrame(() => zoomToFit(viewport, workspaceEl));
+  });
+
+  container.append(nameInput, saveBtn, loadBtn, exportBtn, examples);
 
   return {
     getName: () => nameInput.value || 'project',

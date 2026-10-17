@@ -1,5 +1,5 @@
 import { appState } from '../app/AppState';
-import { portKey } from './pressure';
+import { portKey } from './ports';
 import { getSignal, setSignal } from './signals';
 
 /** Upper bound on relay-chain settling passes per frame (a coil closing a contact that

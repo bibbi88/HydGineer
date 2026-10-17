@@ -41,13 +41,13 @@ const TIP_SECTIONS: TipSection[] = [
       'Drag a component from the sidebar onto the canvas, or click it to add at the view center. ' +
         'Placing is an edit, so the library greys out while the simulation is running - stop it ' +
         'first.',
-      'Drag a check valve, throttle valve, one-way flow control valve, quick exhaust valve, ' +
-        'pressure reducing valve or 3/2 valve onto an existing wire (it highlights green when ' +
-        'close enough) to splice it in, instead of dropping it unconnected on top. A 3/2 valve ' +
-        'turns to put port 1 toward the supply and port 2 toward the consumer.',
+      'Drag a check valve, throttle valve, one-way flow control or flow control valve onto an ' +
+        'existing wire (it highlights green when close enough) to splice it in, instead of ' +
+        'dropping it unconnected on top.',
+      'The Examples menu in the toolbar loads ready-made circuits to start from.',
       'Right-click a component for Rotate, Copy, and Delete.',
-      'Right-click a port to add a pressure source to it, or a silencer on an exhaust port ' +
-        '(right-click the silencer itself to change it again).',
+      'Right-click a hydraulic port to put a tank symbol on it - the quick way to draw a ' +
+        'return line, e.g. on a valve’s T port.',
       'Arrow keys nudge the selected component; hold Shift to move a full grid step further.',
       'Delete or Backspace removes the current selection.',
       'Ctrl+C / Ctrl+V copies and pastes the selection.',
@@ -57,25 +57,34 @@ const TIP_SECTIONS: TipSection[] = [
     ],
   },
   {
-    heading: 'Valves & flow control',
+    heading: 'How the hydraulics are calculated',
     tips: [
-      'Every 3/2 valve - push button, limit switch, air-piloted and time delay - can be ' +
-        'switched between normally closed and normally open in the inspector. The two cells ' +
-        'trade places, so at rest it either blocks the supply or passes 1 → 2; the actuator ' +
-        'itself still works the same way round.',
-      'A 3/2 valve can be converted between push button, limit switch and air-piloted ' +
-        'actuation, and a 5/2 or 5/3 between pneumatic and solenoid, from the inspector’s ' +
-        'Control mode / Operation dropdown. Wires on ports the new variant also has carry over; ' +
-        'a wire on a port it doesn’t have is dropped.',
-      'Exhaust ports come with a silencer fitted by default - the inspector can take it off.',
-      'The pressure reducing valve caps everything downstream of it at its set pressure: port ' +
-        'and wire readouts show the reduced figure, and a cylinder behind one develops ' +
-        'proportionally less force. It only reduces - set it at or above supply and the line ' +
-        'stays at supply pressure.',
+      'Every frame the whole circuit is solved for its pressures and flows: oil is conserved at ' +
+        'every line (what flows in flows out), every valve path follows its own characteristic, ' +
+        'and every cylinder and motor is in force/torque balance with its load.',
+      'Units: pressure in bar (gauge, tank = 0), flow in L/min. F = p·A, v = Q/A for a cylinder; ' +
+        'n = Q/V and T = Δp·V/2π for a motor.',
+      'Directional valve paths, check valves and throttles are orifices: Δp grows with the ' +
+        'square of the flow. A valve’s nominal flow is the flow per path at a 5 bar drop; a ' +
+        'throttle is a sharp-edged orifice of the set diameter (Cd 0.62, oil 870 kg/m³).',
+      'The pump delivers displacement × speed, less leakage that grows with pressure (the ' +
+        'volumetric efficiency is reached at the rated pressure). With nowhere for the oil to ' +
+        'go and no relief valve, the pressure runs away - a warning shows.',
+      'A relief valve stays shut below its cracking pressure, then opens just far enough to ' +
+        'pass the surplus flow (10 L/min per bar of override). The flow it dumps is heat.',
+      'Cylinders: the load force opposes extension (enter it negative for a load that pulls the ' +
+        'rod out); seal friction has to be overcome before the piston moves at all.',
+      'The oil is very slightly compressible (bulk modulus 10 000 bar), so a closed-off volume ' +
+        'keeps its pressure, and pressure takes a moment to build up. Steady values are exact.',
+      'Hover over a wire or a port while simulating for its exact pressure and flow. The longest ' +
+        'wire of each line shows them as a label; pressure lines are red (darker = higher), ' +
+        'return lines blue, and the moving dashes show which way the oil flows.',
+      'Hand-lever valves are switched by clicking the left or right half of the symbol while the ' +
+        'simulation runs; click the same side again to return to centre.',
     ],
   },
   {
-    heading: 'Electro-pneumatics',
+    heading: 'Electro-hydraulics',
     tips: [
       'The Electrical group holds a +24 V and a 0 V supply, contacts, a push button, coils and ' +
         'a lamp. Electrical terminals (dark blue) only connect to other electrical terminals.',
@@ -84,7 +93,9 @@ const TIP_SECTIONS: TipSection[] = [
       'Each solenoid valve you place takes the next free Y name, so two valves never start out ' +
         'sharing a coil. If you rename one onto another the labels turn red - allowed, since a ' +
         'real circuit may drive several valves off one output, but usually a slip.',
-      'Set a contact’s Signal to a cylinder sensor label (e.g. A1) to use it as a position sensor.',
+      'Set a contact’s Signal to a cylinder sensor label (e.g. A1) to use it as a position sensor, ' +
+        'or to a pressure switch’s name (e.g. S1) to switch on pressure.',
+      'A pump can be switched by a coil: put its name (e.g. K1) in the pump’s "Motor signal".',
       'The PLC has inputs I0.0-I0.3 (true while wired to +24 V), outputs Q0.0-Q0.3 (drive their ' +
         'terminal to +24 V when true) and L+/M supply terminals. Double-click the PLC to write ' +
         'its logic as a function block diagram: place signal, AND/OR/XOR/NOT, timer/counter/' +

@@ -67,9 +67,9 @@ describe('openExportDialog - "Page frame" region', () => {
   it('"Current view" gets no extra padding beyond whatever is actually on screen', () => {
     openExportDialog('test', svgLayer(), svgLayer(), viewport, fakeWorkspace(800, 600));
 
-    const viewBtn = Array.from(document.querySelectorAll<HTMLButtonElement>('.exportRegionBtn')).find(
-      (b) => b.textContent === 'Current view',
-    );
+    const viewBtn = Array.from(
+      document.querySelectorAll<HTMLButtonElement>('.exportRegionBtn'),
+    ).find((b) => b.textContent === 'Current view');
     viewBtn?.click();
 
     expect(previewViewBox()).toEqual([0, 0, 800, 600]);

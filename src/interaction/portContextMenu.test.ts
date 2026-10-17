@@ -1,8 +1,10 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { appState } from '../app/AppState';
-import { createValve52 } from '../components/valve52';
-import { createSource, SOURCE_TYPE } from '../components/source';
-import { createThrottleValve } from '../components/throttleValve';
+import { createHydValve43 as createValve52 } from '../components/hyd/valves';
+import {
+  createHydTank as createSource,
+  HYD_TANK_TYPE as SOURCE_TYPE,
+} from '../components/hyd/supply';
 import { wireUpPortContextMenu } from './portContextMenu';
 import { createConnection, initWires } from '../wires/connection';
 import type { Component, PortDef } from '../core/types';
@@ -49,7 +51,7 @@ function clickMenuItem(label: string): void {
   (btn as HTMLButtonElement).click();
 }
 
-describe('port right-click "add pressure source" menu', () => {
+describe('port right-click "add tank" menu', () => {
   beforeEach(() => {
     appState.components = [];
     appState.connections = [];
@@ -61,14 +63,14 @@ describe('port right-click "add pressure source" menu', () => {
     );
   });
 
-  it('adds a wired-up pressure source when none is attached yet', () => {
+  it('adds a wired-up tank when none is attached yet', () => {
     const valve = createValve52(compLayer(), 0, 0);
     appState.addComponent(valve);
     wireUpPortContextMenu(valve, mockViewport(), spawnSourceStub);
 
     expect(appState.components).toHaveLength(1);
-    openPortMenu(getPort(valve, '1'));
-    clickMenuItem('Pressure source');
+    openPortMenu(getPort(valve, 'T'));
+    clickMenuItem('Tank');
 
     expect(appState.components).toHaveLength(2);
     expect(appState.connections).toHaveLength(1);
@@ -78,17 +80,17 @@ describe('port right-click "add pressure source" menu', () => {
     expect(appState.findComponent(otherId)?.type).toBe(SOURCE_TYPE);
   });
 
-  it('does not add a second source if the port already has one', () => {
+  it('does not add a second tank if the port already has one', () => {
     const valve = createValve52(compLayer(), 0, 0);
     appState.addComponent(valve);
     wireUpPortContextMenu(valve, mockViewport(), spawnSourceStub);
 
-    openPortMenu(getPort(valve, '1'));
-    clickMenuItem('Pressure source');
+    openPortMenu(getPort(valve, 'T'));
+    clickMenuItem('Tank');
     expect(appState.components).toHaveLength(2);
 
-    openPortMenu(getPort(valve, '1'));
-    clickMenuItem('✓ Pressure source');
+    openPortMenu(getPort(valve, 'T'));
+    clickMenuItem('✓ Tank');
     expect(appState.components).toHaveLength(2);
     expect(appState.connections).toHaveLength(1);
   });
@@ -98,17 +100,17 @@ describe('port right-click "add pressure source" menu', () => {
     appState.addComponent(valve);
     wireUpPortContextMenu(valve, mockViewport(), spawnSourceStub);
 
-    openPortMenu(getPort(valve, '1'));
-    clickMenuItem('Pressure source');
+    openPortMenu(getPort(valve, 'T'));
+    clickMenuItem('Tank');
     expect(appState.components).toHaveLength(2);
 
-    openPortMenu(getPort(valve, '1'));
+    openPortMenu(getPort(valve, 'T'));
     clickMenuItem('None');
     expect(appState.components).toHaveLength(1);
     expect(appState.connections).toHaveLength(0);
   });
 
-  it('removing via "None" keeps a source that still feeds another port', () => {
+  it('removing via "None" keeps a tank that still feeds another port', () => {
     const valveA = createValve52(compLayer(), 0, 0);
     const valveB = createValve52(compLayer(), 200, 0);
     appState.addComponent(valveA);
@@ -116,113 +118,19 @@ describe('port right-click "add pressure source" menu', () => {
     wireUpPortContextMenu(valveA, mockViewport(), spawnSourceStub);
     wireUpPortContextMenu(valveB, mockViewport(), spawnSourceStub);
 
-    openPortMenu(getPort(valveA, '1'));
-    clickMenuItem('Pressure source');
+    openPortMenu(getPort(valveA, 'T'));
+    clickMenuItem('Tank');
     const source = appState.components.find((c) => c.type === SOURCE_TYPE);
-    if (!source) throw new Error('expected a source to have been added');
+    if (!source) throw new Error('expected a tank to have been added');
 
     // Manually wire the same source to valveB's port too, simulating a shared supply.
-    createConnection({ id: source.id, port: 'OUT' }, { id: valveB.id, port: '1' });
+    createConnection({ id: source.id, port: 'T' }, { id: valveB.id, port: 'T' });
     expect(appState.connections).toHaveLength(2);
 
-    openPortMenu(getPort(valveA, '1'));
+    openPortMenu(getPort(valveA, 'T'));
     clickMenuItem('None');
     // The wire to valveA is gone, but the source itself remains (still feeding valveB).
     expect(appState.components.some((c) => c.id === source.id)).toBe(true);
     expect(appState.connections).toHaveLength(1);
-  });
-});
-
-function menuLabels(): string[] {
-  return Array.from(document.querySelectorAll('.ctxmenu button')).map((b) => b.textContent ?? '');
-}
-
-function openSilencerMenu(comp: Component, portKey: string): void {
-  const symbol = comp.el.querySelector(`.silencerSymbol[data-port="${portKey}"]`);
-  if (!symbol) throw new Error(`no silencer symbol for port "${portKey}"`);
-  symbol.dispatchEvent(
-    new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 10, clientY: 10 }),
-  );
-}
-
-describe('port right-click "silencer" option', () => {
-  beforeEach(() => {
-    appState.components = [];
-    appState.connections = [];
-    document.body.replaceChildren();
-    initWires(
-      document.createElementNS('http://www.w3.org/2000/svg', 'svg'),
-      mockViewport(),
-      document.createElement('div'),
-    );
-  });
-
-  function setup(): Component {
-    const valve = createValve52(compLayer(), 0, 0);
-    appState.addComponent(valve);
-    wireUpPortContextMenu(valve, mockViewport(), spawnSourceStub);
-    return valve;
-  }
-
-  it('is offered on exhaust ports only', () => {
-    const valve = setup();
-    openPortMenu(getPort(valve, '1'));
-    expect(menuLabels()).toEqual(['✓ None', 'Pressure source']);
-  });
-
-  it('toggles the built-in silencer, reachable from the silencer symbol while it is fitted', () => {
-    const valve = setup();
-    expect(valve.snapshot().silencer3).toBe('silencer');
-
-    // A silenced port's own dot takes no clicks, so the menu opens from the symbol instead.
-    openSilencerMenu(valve, '3');
-    expect(menuLabels()).toEqual(['None', 'Pressure source', '✓ Silencer']);
-    clickMenuItem('None');
-    expect(valve.snapshot().silencer3).toBe('none');
-
-    openPortMenu(getPort(valve, '3'));
-    expect(menuLabels()).toEqual(['✓ None', 'Pressure source', 'Silencer']);
-    clickMenuItem('Silencer');
-    expect(valve.snapshot().silencer3).toBe('silencer');
-  });
-
-  it('replaces a quick-added source, and is not offered on a port carrying another wire', () => {
-    const valve = setup();
-    openSilencerMenu(valve, '5');
-    clickMenuItem('Pressure source');
-    expect(valve.snapshot().silencer5).toBe('none');
-    expect(appState.components).toHaveLength(2);
-
-    openPortMenu(getPort(valve, '5'));
-    clickMenuItem('Silencer');
-    expect(valve.snapshot().silencer5).toBe('silencer');
-    expect(appState.components).toHaveLength(1);
-    expect(appState.connections).toHaveLength(0);
-
-    // Port 3 wired to an ordinary component: no silencer offered.
-    openSilencerMenu(valve, '3');
-    clickMenuItem('None');
-    const other = createValve52(compLayer(), 300, 0);
-    appState.addComponent(other);
-    createConnection({ id: valve.id, port: '3' }, { id: other.id, port: '1' });
-    openPortMenu(getPort(valve, '3'));
-    expect(menuLabels()).not.toContain('Silencer');
-  });
-
-  it('can fit a silencer to either end of a throttle valve (exhaust throttling)', () => {
-    const throttle = createThrottleValve(compLayer(), 0, 0);
-    appState.addComponent(throttle);
-    wireUpPortContextMenu(throttle, mockViewport(), spawnSourceStub);
-    expect(throttle.snapshot().silencerOUT).toBe('none');
-
-    openPortMenu(getPort(throttle, 'OUT'));
-    expect(menuLabels()).toEqual(['✓ None', 'Pressure source', 'Silencer']);
-    clickMenuItem('Silencer');
-    expect(throttle.snapshot().silencerOUT).toBe('silencer');
-    expect(throttle.snapshot().silencerIN).toBe('none');
-
-    openSilencerMenu(throttle, 'OUT');
-    clickMenuItem('None');
-    expect(throttle.snapshot().silencerOUT).toBe('none');
   });
 });

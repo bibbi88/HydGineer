@@ -6,7 +6,7 @@ import {
   renderPageFrame,
   setPageFrameSize,
 } from './pageFrame';
-import { createSource } from '../components/source';
+import { createHydPump as createSource } from '../components/hyd/supply';
 import type { ProjectBarRefs } from './projectBar';
 import type { ViewportAdapter } from './viewport';
 

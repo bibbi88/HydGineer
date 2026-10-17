@@ -1,7 +1,7 @@
 import { serializeProject } from './project';
 import type { ProjectFileV1 } from './schema';
 
-const AUTOSAVE_KEY = 'pneugineer:autosave';
+const AUTOSAVE_KEY = 'hydgineer:autosave';
 const DEBOUNCE_MS = 400;
 
 interface AutosaveRecord {

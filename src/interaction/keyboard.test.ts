@@ -12,12 +12,16 @@ vi.mock('../persistence/project', () => ({
 import { initKeyboard } from './keyboard';
 import { initHistory, pushHistory, resetHistory, canRedo, canUndo } from '../history/historyStore';
 import { appState } from '../app/AppState';
-import { createSource } from '../components/source';
+import { createHydPump as createSource } from '../components/hyd/supply';
 import { selectOnly, clearSelection } from './selection';
 import { initLinking, isLinking, wireUpPortLinking } from './linking';
 
 function dispatchKeydown(key: string, opts: { ctrlKey?: boolean } = {}): KeyboardEvent {
-  const event = new KeyboardEvent('keydown', { key, ctrlKey: opts.ctrlKey ?? false, cancelable: true });
+  const event = new KeyboardEvent('keydown', {
+    key,
+    ctrlKey: opts.ctrlKey ?? false,
+    cancelable: true,
+  });
   window.dispatchEvent(event);
   return event;
 }
@@ -116,7 +120,7 @@ describe('Escape key', () => {
       },
       document.createElement('div'),
     );
-    b.ports.OUT?.el.dispatchEvent(new MouseEvent('mousedown', { button: 0, bubbles: true }));
+    b.ports.P?.el.dispatchEvent(new MouseEvent('mousedown', { button: 0, bubbles: true }));
     expect(isLinking()).toBe(true);
 
     dispatchKeydown('Escape');

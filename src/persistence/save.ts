@@ -32,7 +32,7 @@ function downloadJson(json: string, filename: string): void {
 
 export async function saveProjectToFile(name: string): Promise<void> {
   const json = JSON.stringify(serializeProject(name), null, 2);
-  const filename = `${name}.pgcl`;
+  const filename = `${name}.hgcl`;
 
   const showSaveFilePicker = getShowSaveFilePicker();
   if (showSaveFilePicker) {
@@ -43,7 +43,7 @@ export async function saveProjectToFile(name: string): Promise<void> {
         // The folder of the file this project was opened from or last saved to; a new
         // project starts in Downloads.
         startIn: getLastProjectFile() ?? 'downloads',
-        types: [{ description: 'PneuGineer project', accept: { 'application/json': ['.pgcl'] } }],
+        types: [{ description: 'HydGineer project', accept: { 'application/json': ['.hgcl'] } }],
       });
     } catch (err) {
       if (err instanceof DOMException && err.name === 'AbortError') return;

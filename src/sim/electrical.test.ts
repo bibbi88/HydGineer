@@ -15,7 +15,7 @@ import {
 } from '../components/electrical';
 import { createPlc } from '../components/plc';
 import { createElecPushButton, ELEC_SOLENOID_TYPE } from '../components/electrical';
-import { createValve52Solenoid } from '../components/solenoidValves';
+import { createHydValve42 } from '../components/hyd/valves';
 import type { Component } from '../core/types';
 import type { ViewportAdapter } from '../ui/viewport';
 
@@ -148,17 +148,14 @@ describe('solveElectrical', () => {
     const coil = add(createElecSolenoid(layer(), 0, 150));
     wire(plus, 'P', coil, 'A');
     wire(coil, 'B', zero, 'P');
-    const valve = add(createValve52Solenoid(layer(), 400, 150));
+    const valve = add(createHydValve42(layer(), 400, 150));
+    const paths = (): string[] =>
+      (valve.hydElements?.() ?? []).map((e) => ('a' in e && 'b' in e ? `${e.a}-${e.b}` : e.kind));
 
-    expect(valve.conductivityRule({ isPressurized: () => false })).toEqual([
-      { a: '1', b: '2' },
-      { a: '4', b: '5' },
-    ]);
+    // At rest the spring holds P→B, A→T; the coil "Y1" shifts it to P→A, B→T.
+    expect(paths()).toEqual(['P-B', 'A-T']);
     solveElectrical(0);
-    expect(valve.conductivityRule({ isPressurized: () => false })).toEqual([
-      { a: '1', b: '4' },
-      { a: '2', b: '3' },
-    ]);
+    expect(paths()).toEqual(['P-A', 'B-T']);
   });
 
   it('a PLC runs a start/stop self-holding program driving a coil', () => {

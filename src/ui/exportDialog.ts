@@ -18,9 +18,21 @@ interface RegionOption {
 }
 
 const REGION_OPTIONS: RegionOption[] = [
-  { value: 'auto', label: 'Everything', hint: 'Every component, auto-cropped with a small margin.' },
-  { value: 'frame', label: 'Page frame', hint: 'The sheet the frame outlines, plus a small margin.' },
-  { value: 'view', label: 'Current view', hint: "Whatever's on screen right now - pan/zoom first to pick a region." },
+  {
+    value: 'auto',
+    label: 'Everything',
+    hint: 'Every component, auto-cropped with a small margin.',
+  },
+  {
+    value: 'frame',
+    label: 'Page frame',
+    hint: 'The sheet the frame outlines, plus a small margin.',
+  },
+  {
+    value: 'view',
+    label: 'Current view',
+    hint: "Whatever's on screen right now - pan/zoom first to pick a region.",
+  },
 ];
 
 // Same margin exportImage.ts's own 'auto' crop adds around the diagram - applied here too so the

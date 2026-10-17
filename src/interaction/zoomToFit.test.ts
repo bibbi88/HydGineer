@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { appState } from '../app/AppState';
 import { zoomToFit } from './zoomToFit';
-import { createSource } from '../components/source';
+import { createHydPump as createSource } from '../components/hyd/supply';
 import { initPageFrame, setPageFrameSize, getPageFrameWorldBounds } from '../ui/pageFrame';
 import type { ProjectBarRefs } from '../ui/projectBar';
 import type { ViewportAdapter } from '../ui/viewport';

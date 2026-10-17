@@ -21,9 +21,21 @@ describe('compileProgram / runScan (plain boolean rungs)', () => {
     expect(p.error).toBeNull();
     const out = bools({ 'Q0.0': false, 'Q0.1': false });
     const fb = new Map<string, FbState>();
-    expect(runScan(p, bools({ 'I0.0': true, 'I0.1': true, 'I0.2': false }), out, fb, 0).outputs.get('Q0.0')).toBe(false);
-    expect(runScan(p, bools({ 'I0.0': true, 'I0.1': false, 'I0.2': false }), out, fb, 0).outputs.get('Q0.0')).toBe(true);
-    expect(runScan(p, bools({ 'I0.0': false, 'I0.1': true, 'I0.2': true }), out, fb, 0).outputs.get('Q0.0')).toBe(true);
+    expect(
+      runScan(p, bools({ 'I0.0': true, 'I0.1': true, 'I0.2': false }), out, fb, 0).outputs.get(
+        'Q0.0',
+      ),
+    ).toBe(false);
+    expect(
+      runScan(p, bools({ 'I0.0': true, 'I0.1': false, 'I0.2': false }), out, fb, 0).outputs.get(
+        'Q0.0',
+      ),
+    ).toBe(true);
+    expect(
+      runScan(p, bools({ 'I0.0': false, 'I0.1': true, 'I0.2': true }), out, fb, 0).outputs.get(
+        'Q0.0',
+      ),
+    ).toBe(true);
   });
 
   it('a self-holding rung keeps its output after the start input drops', () => {
@@ -120,10 +132,16 @@ describe('function blocks', () => {
   it('SR is set-dominant and RS is reset-dominant when both inputs are true at once', () => {
     const out = bools({ 'Q0.0': false, 'Q0.1': false });
     const fb = new Map<string, FbState>();
-    const r = scanOnce('M1 = SR(I0.0, I0.1)\nM2 = RS(I0.0, I0.1)\nQ0.0 = M1.Q\nQ0.1 = M2.Q', {
-      'I0.0': true,
-      'I0.1': true,
-    }, out, fb, 0);
+    const r = scanOnce(
+      'M1 = SR(I0.0, I0.1)\nM2 = RS(I0.0, I0.1)\nQ0.0 = M1.Q\nQ0.1 = M2.Q',
+      {
+        'I0.0': true,
+        'I0.1': true,
+      },
+      out,
+      fb,
+      0,
+    );
     expect(r.outputs.get('Q0.0')).toBe(true); // SR: set wins
     expect(r.outputs.get('Q0.1')).toBe(false); // RS: reset wins
   });

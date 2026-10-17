@@ -15,7 +15,7 @@ import { renderPageFrame } from '../ui/pageFrame';
 import { getDeviceId } from '../app/deviceId';
 import { CURRENT_SCHEMA_VERSION, type ProjectFileV1 } from './schema';
 import { upgradedCoilType } from '../components/electrical';
-import { SOLENOID_KEY_FIELDS, SOLENOID_VALVE_TYPES } from '../components/solenoidValves';
+import { SOLENOID_KEY_FIELDS, SOLENOID_VALVE_TYPES } from '../components/hyd/valves';
 
 export function serializeProject(name: string): ProjectFileV1 {
   // origin is only ever set once per project - a fresh one (never loaded from/saved to a file

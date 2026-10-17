@@ -1,42 +1,160 @@
 import { appState } from '../app/AppState';
-import { portKey, pressureAt, type FrameGraph } from './pressure';
+import { portKey } from './ports';
 import { isElectricallyLive } from './electrical';
+import type { HydFrame } from './engine';
 
-export function applyToDom(graph: FrameGraph): void {
+/** Below this (bar) a line counts as unpressurised - a return or idle line. */
+const PRESSURE_THRESHOLD = 1;
+/** Flow (L/min) below which a line counts as standing still. */
+const FLOW_THRESHOLD = 0.005;
+
+function fmtP(p: number): string {
+  return `${(Math.abs(p) < 0.05 ? 0 : p).toFixed(1)} bar`;
+}
+
+function fmtQ(q: number): string {
+  const a = Math.abs(q);
+  return `${a.toFixed(a < 10 ? 2 : 1)} L/min`;
+}
+
+/** Pressure line colour: pale red at low pressure to deep red at the highest pressure in the
+ * circuit, the usual hydraulic convention. */
+function pressureColor(p: number, pMax: number): string {
+  const t = Math.max(0, Math.min(1, p / Math.max(pMax, 1)));
+  const light = 72 - 42 * t;
+  return `hsl(0 85% ${light.toFixed(0)}%)`;
+}
+
+/**
+ * One wire per hydraulic net (set of ports joined by wires, which all share one pressure) carries
+ * the net's label - the longest one, where the text has the most room - instead of every wire
+ * repeating the same pressure. Recomputed only when the wiring changes.
+ */
+let labelWires = new Set<number>();
+let labelTopology = -1;
+function refreshLabelWires(): void {
+  if (labelTopology === appState.topologyVersion) return;
+  labelTopology = appState.topologyVersion;
+  const parent = new Map<string, string>();
+  const find = (k: string): string => {
+    let r = k;
+    while (parent.has(r) && parent.get(r) !== r) r = parent.get(r)!;
+    parent.set(k, r);
+    return r;
+  };
+  for (const c of appState.connections) {
+    const a = find(portKey(c.from.id, c.from.port));
+    const b = find(portKey(c.to.id, c.to.port));
+    if (a !== b) parent.set(a, b);
+  }
+  const best = new Map<string, { id: number; len: number }>();
+  for (const c of appState.connections) {
+    const root = find(portKey(c.from.id, c.from.port));
+    let len: number;
+    try {
+      len = c.pathEl.getTotalLength?.() ?? 0;
+    } catch {
+      len = 0;
+    }
+    const cur = best.get(root);
+    if (!cur || len > cur.len) best.set(root, { id: c.id, len });
+  }
+  labelWires = new Set([...best.values()].map((b) => b.id));
+}
+
+function setWireTitle(hitEl: SVGPathElement, text: string | null): void {
+  let t = hitEl.querySelector<SVGTitleElement>('title');
+  if (text === null) {
+    t?.remove();
+    return;
+  }
+  if (!t) {
+    t = document.createElementNS('http://www.w3.org/2000/svg', 'title');
+    hitEl.appendChild(t);
+  }
+  if (t.textContent !== text) t.textContent = text;
+}
+
+let statusEl: HTMLElement | null = null;
+function status(): HTMLElement | null {
+  if (statusEl) return statusEl;
+  const ws = document.querySelector('.workspace');
+  if (!ws) return null;
+  statusEl = document.createElement('div');
+  statusEl.className = 'hydStatus';
+  ws.appendChild(statusEl);
+  return statusEl;
+}
+
+/** Draws one solved frame onto the diagram, or clears it all (`frame` null, e.g. on Stop). */
+export function applyToDom(frame: HydFrame | null): void {
+  const sol = frame?.solution;
+  let pMax = 0;
+  if (sol) for (const p of sol.pressure.values()) pMax = Math.max(pMax, p);
+
   for (const c of appState.components) {
     for (const port of Object.values(c.ports)) {
+      if (port.electrical) continue;
       const key = portKey(c.id, port.key);
-      const active = graph.pressurized.has(key);
-      port.el.classList.toggle('pressurized', active);
-      // The pressure actually at this port, which a regulator upstream will have reduced.
-      port.el.setAttribute(
-        'title',
-        `${port.key}: ${active ? pressureAt(graph, key).toFixed(1) : '0.0'} bar`,
-      );
+      const p = sol?.pressure.get(key) ?? 0;
+      port.el.classList.toggle('pressurized', p > PRESSURE_THRESHOLD);
+      if (sol) {
+        const q = sol.portFlow.get(key) ?? 0;
+        port.el.setAttribute('title', `${port.key}: ${fmtP(p)}, ${fmtQ(q)}`);
+      } else {
+        port.el.removeAttribute('title');
+      }
     }
   }
 
+  refreshLabelWires();
   for (const conn of appState.connections) {
     const fromKey = portKey(conn.from.id, conn.from.port);
     const toKey = portKey(conn.to.id, conn.to.port);
+    const pathEl = conn.pathEl;
+    pathEl.classList.toggle('live', isElectricallyLive(fromKey) && isElectricallyLive(toKey));
 
-    conn.pathEl.classList.toggle('live', isElectricallyLive(fromKey) && isElectricallyLive(toKey));
-
-    const active = graph.pressurized.has(fromKey) && graph.pressurized.has(toKey);
-    conn.pathEl.classList.toggle('active', active);
-    // Both ends of a wire are the same node pneumatically, but the two can differ for one frame
-    // while a change propagates - show the higher, so a freshly pressurized line doesn't
-    // momentarily read as regulated when it isn't.
-    const wirePressure = Math.max(pressureAt(graph, fromKey), pressureAt(graph, toKey));
-    conn.labelEl.textContent = active ? `${wirePressure.toFixed(1)} bar` : '';
-
-    const exhausting = graph.exhausting.has(fromKey) && graph.exhausting.has(toKey);
-    conn.pathEl.classList.toggle('exhausting', exhausting);
-    // The path is always drawn from `conn.from` to `conn.to` - flip the flow animation when air
-    // is actually travelling the other way, so it always reads as moving out toward atmosphere
-    // rather than (sometimes, depending on which end happened to get wired as "from") backward.
-    const fromDepth = graph.exhaustDepth.get(fromKey) ?? 0;
-    const toDepth = graph.exhaustDepth.get(toKey) ?? 0;
-    conn.pathEl.classList.toggle('exhausting-reverse', exhausting && fromDepth > toDepth);
+    const p = sol?.pressure.get(fromKey);
+    if (!sol || p === undefined) {
+      pathEl.classList.remove('hydP', 'hydReturn', 'hydFlow', 'hydFlowReverse');
+      pathEl.style.removeProperty('--wp');
+      conn.labelEl.textContent = '';
+      setWireTitle(conn.hitEl, null);
+      continue;
+    }
+    const q = frame?.wireFlow.get(conn.id) ?? NaN;
+    const flowing = Number.isFinite(q) && Math.abs(q) >= FLOW_THRESHOLD;
+    const pressurized = p > PRESSURE_THRESHOLD;
+    pathEl.classList.toggle('hydP', pressurized);
+    pathEl.classList.toggle('hydReturn', !pressurized && flowing);
+    if (pressurized) pathEl.style.setProperty('--wp', pressureColor(p, pMax));
+    pathEl.classList.toggle('hydFlow', flowing);
+    pathEl.classList.toggle('hydFlowReverse', flowing && q < 0);
+    if (flowing) {
+      // Faster marching dashes for more flow, within a readable range.
+      const dur = Math.max(0.15, Math.min(2.5, 3 / Math.sqrt(Math.abs(q) + 0.1)));
+      pathEl.style.setProperty('--flowDur', `${dur.toFixed(2)}s`);
+    }
+    const text = flowing ? `${fmtP(p)} · ${fmtQ(q)}` : fmtP(p);
+    conn.labelEl.textContent = labelWires.has(conn.id) ? text : '';
+    setWireTitle(conn.hitEl, text);
   }
+
+  const el = status();
+  if (!el) return;
+  if (!sol) {
+    el.textContent = '';
+    el.style.display = 'none';
+    return;
+  }
+  const warnings: string[] = [];
+  if (!sol.converged) warnings.push('⚠ Solver did not fully converge - values approximate');
+  let pMin = 0;
+  for (const p of sol.pressure.values()) pMin = Math.min(pMin, p);
+  if (pMin < -0.9) {
+    warnings.push('⚠ Cavitation: a line is sucked down to vapour pressure (runaway load?)');
+  }
+  el.textContent = [`p max ${fmtP(pMax)}`, ...warnings].join('\n');
+  el.style.display = '';
+  el.classList.toggle('hydStatusWarn', warnings.length > 0);
 }

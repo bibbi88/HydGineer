@@ -2,7 +2,10 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { appState } from '../app/AppState';
 import { serializeProject, loadProject } from './project';
 import { setComponentMirrored, setComponentRotation } from '../interaction/componentContextMenu';
-import { createSource, SOURCE_TYPE } from '../components/source';
+import {
+  createHydPump as createSource,
+  HYD_PUMP_TYPE as SOURCE_TYPE,
+} from '../components/hyd/supply';
 import type { ComponentFactoryContext } from '../components/registry';
 import type { ViewportAdapter } from '../ui/viewport';
 

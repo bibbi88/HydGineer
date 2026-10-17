@@ -15,7 +15,10 @@ export type PageFrameSize = 'none' | 'a4' | 'a3';
  * the viewport's minimum zoom, but a real diagram (several valves/cylinders plus wiring) needs
  * more room than that inside the sheet; doubling still leaves plenty of margin against
  * MIN_SCALE (ui/viewport.ts) fitting A3 on a modest window, just zoomed further out. */
-const PAGE_FRAME_SIZES: Record<Exclude<PageFrameSize, 'none'>, { w: number; h: number; label: string }> = {
+const PAGE_FRAME_SIZES: Record<
+  Exclude<PageFrameSize, 'none'>,
+  { w: number; h: number; label: string }
+> = {
   a4: { w: 1800, h: 1280, label: 'A4 · 297 × 210 mm' },
   a3: { w: 2540, h: 1800, label: 'A3 · 420 × 297 mm' },
 };

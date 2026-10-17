@@ -1489,3 +1489,108 @@ rect.wireHandle.wireStubHandle {
   background: var(--panel);
   margin-bottom: 4px;
 }
+
+/* ---------- HydGineer: hydraulic line states ---------- */
+
+/* Pressure line: shade of red by pressure, set per wire in sim/render.ts via --wp. */
+.wire.hydP:not(.selected):not(.wireInsertTarget) {
+  stroke: var(--wp, var(--accent));
+  stroke-width: 3;
+}
+
+/* Unpressurised line carrying flow - a return line to tank. */
+.wire.hydReturn:not(.selected):not(.wireInsertTarget) {
+  stroke: #1f6fd1;
+  stroke-width: 3;
+}
+
+/* Marching dashes in the direction the oil actually flows, faster for more flow. */
+.wire.hydFlow:not(.selected) {
+  stroke-dasharray: 8 4;
+  animation: exhaustFlow var(--flowDur, 1s) linear infinite;
+}
+
+/* Paths are drawn from the wire's `from` end to its `to` end; flip for flow the other way. */
+.wire.hydFlow.hydFlowReverse:not(.selected) {
+  animation-direction: reverse;
+}
+
+/* Live readout under a hydraulic symbol - only while the simulation runs. */
+.hydInfo {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  margin-top: 2px;
+  white-space: pre;
+  text-align: center;
+  font-size: 11px;
+  line-height: 1.3;
+  color: #12355b;
+  background: rgba(255, 255, 255, 0.85);
+  border-radius: 3px;
+  padding: 0 3px;
+  pointer-events: none;
+  font-variant-numeric: tabular-nums;
+}
+
+.workspace:not(.simulating) .hydInfo {
+  display: none;
+}
+
+.hydSpool {
+  transition: transform 0.12s ease-out;
+}
+
+.hydStatus {
+  position: absolute;
+  top: 8px;
+  right: 10px;
+  white-space: pre;
+  font-size: 12px;
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 4px 8px;
+  pointer-events: none;
+  font-variant-numeric: tabular-nums;
+}
+
+.hydStatus.hydStatusWarn {
+  border-color: var(--accent);
+  color: #900;
+}
+
+.wireLabel {
+  font-variant-numeric: tabular-nums;
+}
+
+.exampleSelect {
+  margin-left: 4px;
+  max-width: 130px;
+  font: inherit;
+  font-size: 12px;
+}
+
+.hydInfo[data-side='left'] {
+  top: 50%;
+  left: auto;
+  right: 100%;
+  transform: translateY(-50%);
+  margin: 0 4px 0 0;
+  text-align: right;
+}
+
+.hydInfo[data-side='right'] {
+  top: 50%;
+  left: 100%;
+  transform: translateY(-50%);
+  margin: 0 0 0 4px;
+  text-align: left;
+}
+
+.hydInfo[data-side='above'] {
+  top: auto;
+  bottom: 100%;
+  margin: 0 0 18px 0;
+}

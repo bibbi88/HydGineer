@@ -99,7 +99,9 @@ describe('saveProjectToFile', () => {
     const requestPermission = vi.fn().mockResolvedValue('granted');
     const handle = {
       requestPermission,
-      createWritable: vi.fn().mockResolvedValue({ write, close: vi.fn().mockResolvedValue(undefined) }),
+      createWritable: vi
+        .fn()
+        .mockResolvedValue({ write, close: vi.fn().mockResolvedValue(undefined) }),
     };
     (window as WindowWithPicker).showSaveFilePicker = vi.fn().mockResolvedValue(handle);
 

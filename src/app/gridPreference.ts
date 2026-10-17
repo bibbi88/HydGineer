@@ -1,4 +1,4 @@
-const STORAGE_KEY = 'pneugineer.gridEnabled';
+const STORAGE_KEY = 'hydgineer.gridEnabled';
 
 /** Whether the grid (both the visual pattern and snap-to-grid) is on - a personal viewing/editing
  * preference, not part of any one project, so it lives in localStorage rather than the project

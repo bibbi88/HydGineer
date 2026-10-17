@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { appState } from '../app/AppState';
 import { initMarquee } from './marquee';
 import { selectOnly, getSelectedComponents } from './selection';
-import { createSource } from '../components/source';
+import { createHydPump as createSource } from '../components/hyd/supply';
 import type { Component } from '../core/types';
 
 function compLayer(): HTMLElement {

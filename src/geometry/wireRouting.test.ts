@@ -4,8 +4,11 @@ import { alignJunctionAnchor, worldPortAnchor } from './connectionGeometry';
 import { completeGuides, guideCorners, type Point, type PortAnchor } from './routing';
 import type { Component } from '../core/types';
 import type { ViewportAdapter } from '../ui/viewport';
-import { createThrottleValve } from '../components/throttleValve';
-import { createValve52Mono } from '../components/valve52Mono';
+import {
+  createHydThrottle as createThrottleValve,
+  createHydValve42 as createValve52Mono,
+  createHydPilotCheck,
+} from '../components/hyd/valves';
 import { createJunction } from '../components/junction';
 import { setComponentMirrored, setComponentRotation } from '../interaction/componentContextMenu';
 
@@ -45,8 +48,8 @@ describe('worldPortAnchor', () => {
     const valve = createValve52Mono(layer(), 0, 0);
     const c = valve.getBounds();
     const top = { x: c.x + c.w / 2, y: c.y - 10 };
-    placePort(valve, '4', top);
-    const anchor = worldPortAnchor(viewport, workspaceEl, valve, '4') as PortAnchor;
+    placePort(valve, 'A', top);
+    const anchor = worldPortAnchor(viewport, workspaceEl, valve, 'A') as PortAnchor;
     expect(anchor.entryOrientation).toBe('V');
     expect(anchor.pilotDir).toBe(-1); // up, even if whatever it connects to is below
   });
@@ -56,24 +59,24 @@ describe('worldPortAnchor', () => {
     setComponentRotation(valve, 90);
     const c = valve.getBounds();
     // After a quarter turn the valve's top ports sit on its right-hand side.
-    placePort(valve, '4', { x: c.x + c.w + 10, y: c.y + c.h / 2 });
-    const anchor = worldPortAnchor(viewport, workspaceEl, valve, '4') as PortAnchor;
+    placePort(valve, 'A', { x: c.x + c.w + 10, y: c.y + c.h / 2 });
+    const anchor = worldPortAnchor(viewport, workspaceEl, valve, 'A') as PortAnchor;
     expect(anchor.entryOrientation).toBe('H');
     expect(anchor.pilotDir).toBe(1);
   });
 
   it('turns a pilot port’s fixed exit side with rotation and mirroring', () => {
-    const valve = createValve52Mono(layer(), 0, 0);
-    placePort(valve, '14', { x: -200, y: 0 });
-    // Unrotated, pilot 14 exits to the left.
-    expect(worldPortAnchor(viewport, workspaceEl, valve, '14')?.pilotDir).toBe(-1);
+    const valve = createHydPilotCheck(layer(), 0, 0);
+    placePort(valve, 'X', { x: -200, y: 0 });
+    // Unrotated, pilot port X exits to the left.
+    expect(worldPortAnchor(viewport, workspaceEl, valve, 'X')?.pilotDir).toBe(-1);
 
     setComponentRotation(valve, 180);
-    expect(worldPortAnchor(viewport, workspaceEl, valve, '14')?.pilotDir).toBe(1);
+    expect(worldPortAnchor(viewport, workspaceEl, valve, 'X')?.pilotDir).toBe(1);
 
     setComponentRotation(valve, 0);
     setComponentMirrored(valve, true);
-    expect(worldPortAnchor(viewport, workspaceEl, valve, '14')?.pilotDir).toBe(1);
+    expect(worldPortAnchor(viewport, workspaceEl, valve, 'X')?.pilotDir).toBe(1);
   });
 
   it('leaves a junction dot free to head toward whatever it connects to', () => {

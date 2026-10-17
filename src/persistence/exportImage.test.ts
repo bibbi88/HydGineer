@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { appState } from '../app/AppState';
 import { buildExportSvg } from './exportImage';
-import { createSource } from '../components/source';
+import { createHydPump as createSource } from '../components/hyd/supply';
 
 function compLayer(): HTMLElement {
   return document.createElement('div');

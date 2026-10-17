@@ -3,7 +3,7 @@ import { appState } from '../app/AppState';
 import { Modes } from '../app/modes';
 import { placeComponent, spawnComponent } from './spawn';
 import { initWires } from '../wires/connection';
-import { SOURCE_TYPE } from '../components/source';
+import { HYD_PUMP_TYPE as SOURCE_TYPE } from '../components/hyd/supply';
 import type { ComponentFactoryContext } from '../components/registry';
 import type { ViewportAdapter } from '../ui/viewport';
 

@@ -29,15 +29,11 @@ export interface SidebarGroupSpec {
 
 /** Categories nested under a shared parent dropdown instead of sitting at the top level - the
  * directional valves are split by actuation, but all three are "the valves" when scanning. */
-const PARENT_OF: Record<string, string> = {
-  'Mechanical/Manual': 'Directional valves',
-  'Air operated': 'Directional valves',
-  'Solenoid operated': 'Directional valves',
-};
+const PARENT_OF: Record<string, string> = {};
 
 function createCategoryDetails(
   category: string,
-  itemCount: number
+  itemCount: number,
 ): { details: HTMLDetailsElement; count: HTMLSpanElement } {
   const details = document.createElement('details');
   // All categories start collapsed so the library stays scannable at a glance.

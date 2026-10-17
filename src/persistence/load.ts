@@ -38,7 +38,7 @@ function loadViaFileInput(
   return new Promise((resolve) => {
     const input = document.createElement('input');
     input.type = 'file';
-    input.accept = '.pgcl,.json,application/json';
+    input.accept = '.hgcl,.json,application/json';
     input.addEventListener('change', () => {
       const file = input.files?.[0];
       if (!file) {
@@ -72,7 +72,7 @@ export async function loadProjectFromPicker(
     try {
       [handle] = await showOpenFilePicker({
         types: [
-          { description: 'PneuGineer project', accept: { 'application/json': ['.pgcl', '.json'] } },
+          { description: 'HydGineer project', accept: { 'application/json': ['.hgcl', '.json'] } },
         ],
       });
     } catch (err) {

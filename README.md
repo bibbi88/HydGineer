@@ -1,68 +1,50 @@
-# PneuGineer
+# HydGineer
 
-A browser-based pneumatic circuit editor and simulator. Drag components — valves, cylinders,
-pressure sources, sensors — onto a canvas, wire their ports together, and run a play/pause/step
-simulation with a live pressure overlay.
+A browser-based **hydraulic** circuit editor and simulator - the hydraulic sibling of
+[PneuGineer](https://github.com/bibbi88/PneuGineerCL), built on the same editor. Drag pumps,
+valves, cylinders and motors onto a canvas, wire them together and run the simulation: every
+line shows its **pressure (bar)** and **flow (L/min)**, solved from the actual hydraulic
+relationships rather than an on/off pressure graph.
 
-**▶ Try it in your browser: [bibbi88.github.io/PneuGineer](https://bibbi88.github.io/PneuGineer/)**
+## What is calculated
 
-![PneuGineer editor with an A+B+C+C-B-A- cylinder sequence circuit](docs/screenshot.png)
+Each frame the whole circuit is solved as a network (damped Newton-Raphson with pseudo-transient
+continuation, see `src/sim/hydraulics.ts`):
 
-This is an educational project focused on flow _logic_, not flow _calculations_ — pressure is
-modeled as a simple pressurized/not-pressurized graph, not real fluid dynamics.
+- **Continuity** at every line: what flows in flows out.
+- **Orifice law** for valve paths, throttles and check valves: Q = Cd·A·√(2Δp/ρ)
+  (Cd 0.62, ρ 870 kg/m³). Directional valves are rated as L/min per path at Δp 5 bar.
+- **Pump**: Q = V·n minus pressure-dependent leakage (volumetric efficiency at rated pressure).
+- **Relief valve**: shut below the cracking pressure, then passes the surplus flow.
+- **Pressure-reducing valve**, **pressure-compensated flow control**, **pilot-operated check**.
+- **Cylinders**: force balance p_A·A_A − p_B·A_B = F_load ± friction, speed v = Q/A; end stops.
+- **Motors**: n = Q/V, Δp = 20π·T/V (bar, Nm, cm³/rev).
+- **Compressibility** (bulk modulus 10 000 bar): trapped oil keeps its pressure and pressure
+  builds up over time; steady states are the exact incompressible ones.
+
+Units: bar (gauge), L/min, N, Nm, mm, cm³/rev.
 
 ## Components
 
-- Pressure source, 5/2 valve, AND / OR valve, check valve, throttle valve
-- 3/2 limit valve, 3/2 push button, 3/2 air-piloted valve
-- Double-acting and single-acting (push/pull) cylinders
-- Time delay valve, quick-exhaust valve, one-way flow control valve
+- Power supply: fixed-displacement pump unit (motor can be switched by a relay), tank
+- Directional valves: 4/3 (closed / tandem / float / open centre) and 4/2, solenoid or hand lever
+- Pressure control: relief valve, pressure-reducing valve
+- Flow & check: check valve, pilot-operated check valve, throttle, one-way flow control,
+  pressure-compensated flow control (optional bypass check)
+- Actuators: double-acting cylinder, single-acting spring-return cylinder, hydraulic motor
+- Measuring: pressure gauge, pressure switch (publishes a signal, e.g. S1)
+- Electrical: +24 V / 0 V, push buttons, contacts, relay coils, solenoids, lamps, PLC
 
-## Usage
+The **Examples** menu in the toolbar loads ready-made circuits (meter-out speed control,
+electro-hydraulic control, motor speed control, load holding).
 
-- Drag a component from the sidebar onto the canvas.
-- Click a port, then click another port to wire them together. Click a wire while linking to
-  split it into a junction. Double-click a wire to drag its bend.
-- Use Play / Pause / Step / Stop to run the simulation, and Undo / Redo to step through edits.
-- Save / Load a project as JSON, or export the circuit as an SVG or PNG. Work is autosaved
-  locally and offered back if you return to an unsaved session.
-
-## Running PneuGineer
-
-There are three ways to run the app, from simplest to most involved.
-
-### 1. In the browser
-
-Open [bibbi88.github.io/PneuGineer](https://bibbi88.github.io/PneuGineer/). Nothing to install.
-The site is rebuilt and redeployed automatically on every push to `main`.
-
-### 2. Offline, from a single file
-
-The production build is one self-contained HTML file, [`dist/index.html`](dist/index.html), with
-all scripts and styles inlined. Download it (on GitHub: open the file, then **Download raw file**)
-and double-click it to open it in your browser. It needs no server and no internet connection,
-so it can be copied to a USB stick or shared by email.
-
-### 3. From source
-
-Requires [Node.js](https://nodejs.org/) 22 or newer.
+## Running
 
 ```bash
 npm install
-npm run dev      # start the dev server, then open the URL it prints (http://localhost:5173)
-npm run test     # run the unit test suite
-npm run build    # type-check and write the single-file build to dist/index.html
-npm run preview  # serve the built dist/index.html locally
-npm run lint     # eslint + prettier check
+npm run dev      # dev server
+npm run test     # unit tests (solver checked against hand calculations)
+npm run build    # single self-contained file: dist/index.html
 ```
 
-## About the HTML files
-
-- **`index.html`** (repo root) — the app's page skeleton and Vite's entry point: the toolbar,
-  component sidebar, canvas layers and inspector panel, plus a `<script>` tag that loads
-  `src/main.ts`. All behavior lives in the TypeScript under `src/`. This file can't be opened
-  directly from disk, since browsers can't run the TypeScript it references — use
-  `npm run dev`, or open the built `dist/index.html` instead.
-- **`dist/index.html`** — the output of `npm run build`: `index.html` with the compiled
-  JavaScript and CSS inlined into it (via `vite-plugin-singlefile`). This is the file that is
-  deployed to GitHub Pages and that can be run offline.
+The built `dist/index.html` runs offline by double-clicking it.

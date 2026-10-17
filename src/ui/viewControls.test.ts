@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { appState } from '../app/AppState';
 import { renderViewControls } from './viewControls';
-import { createSource } from '../components/source';
+import { createHydPump as createSource } from '../components/hyd/supply';
 import { selectOnly, clearSelection } from '../interaction/selection';
 import type { ViewportAdapter } from './viewport';
 

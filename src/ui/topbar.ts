@@ -49,7 +49,7 @@ function renderBrand(container: HTMLElement): void {
   name.className = 'brandName';
   const pneu = document.createElement('span');
   pneu.className = 'brandNameAccent';
-  pneu.textContent = 'Pneu';
+  pneu.textContent = 'Hyd';
   name.append(pneu, 'Gineer');
   const version = document.createElement('span');
   version.className = 'brandVersion';

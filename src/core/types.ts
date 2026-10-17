@@ -1,3 +1,5 @@
+import type { HydElement } from '../sim/hydraulics';
+
 export type ComponentId = number;
 export type PortKey = string;
 
@@ -50,16 +52,19 @@ export interface ConductivityContext {
 
 export interface SimStepContext {
   dt: number;
-  isPressurized(port: PortKey): boolean;
-  flowMultiplierToNearestSource(port: PortKey): number;
-  /** Companion to `flowMultiplierToNearestSource` for the port on the opposite (venting) side -
-   * how restricted the path out to open atmosphere is, so a flow control valve throttling a
-   * cylinder's exhaust actually slows it down instead of only supply-side throttling counting. */
-  flowMultiplierToOpenExhaust(port: PortKey): number;
-  /** Pressure (bar) actually available at `port` this frame: the supply pressure, less any
-   * reduction imposed by a pressure-reducing valve between it and the supply. 0 when the port
-   * isn't pressurized at all. What a cylinder computes its force from. */
+  /** Pressure (bar, gauge) at `port` as solved this frame. */
   pressureAt(port: PortKey): number;
+  /** Net flow (L/min) this component pushes out through `port` into the line - negative when
+   * oil flows into the component there. */
+  flowAt(port: PortKey): number;
+  /** The solved value of this component's `index`-th hydraulic element (see
+   * `Component.hydElements`): flow (L/min) for valves, velocity (m/s) for a piston, speed
+   * (rev/s) for a motor. */
+  elementValue(index: number): number;
+  /** Whether this component's `index`-th element (a piston) is held at an end stop. */
+  elementLocked(index: number): boolean;
+  /** Convenience: pressure above 1 bar. */
+  isPressurized(port: PortKey): boolean;
   emitSignal(key: string, value: boolean): void;
   readSignal(key: string): boolean;
 }
@@ -120,6 +125,11 @@ export interface Component<TSnapshot = Record<string, unknown>> {
   electrical?: ElectricalBehavior;
 
   conductivityRule(ctx: ConductivityContext): PortConnection[];
+  /** This component's hydraulic behavior for the current frame: the flow paths, pumps,
+   * actuators... between its own ports (local port keys; keys not in `ports` are internal
+   * nodes). Solved together by sim/hydraulics.ts - see HydElement there. Re-read every frame,
+   * so a valve returns the paths of its current spool position. */
+  hydElements?(): HydElement[];
   flowMultiplier?(fromPort: PortKey, toPort: PortKey): number;
   /** Ceiling, in bar, this component imposes on air crossing from `fromPort` to `toPort` - a
    * pressure-reducing valve's set pressure. null (or omitted) means it imposes none, which is

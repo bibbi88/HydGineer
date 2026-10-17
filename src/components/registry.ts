@@ -1,25 +1,43 @@
 import type { Component } from '../core/types';
-import { createSource, SOURCE_TYPE } from './source';
-import { createValve52, VALVE_52_TYPE } from './valve52';
-import { createValve52Mono, VALVE_52_MONO_TYPE } from './valve52Mono';
-import { createValve53Mono, VALVE_53_MONO_TYPE } from './valve53Mono';
-import { createAndValve, AND_VALVE_TYPE } from './andValve';
-import { createOrValve, OR_VALVE_TYPE } from './orValve';
-import { createCheckValve, CHECK_VALVE_TYPE } from './checkValve';
-import { createLimitValve32, LIMIT_VALVE_32_TYPE } from './limitValve32';
-import { createPushButton32, PUSH_BUTTON_32_TYPE } from './pushButton32';
-import { createAirValve32, AIR_VALVE_32_TYPE } from './airValve32';
-import { createCylinderDouble, CYLINDER_DOUBLE_TYPE } from './cylinderDouble';
-import { createCylinderSingle, CYLINDER_SINGLE_TYPE } from './cylinderSingle';
 import { createJunction, JUNCTION_TYPE } from './junction';
-import { createTimeDelayValve, TIME_DELAY_VALVE_TYPE } from './timeDelayValve';
-import { createQuickExhaustValve, QUICK_EXHAUST_VALVE_TYPE } from './quickExhaustValve';
 import {
-  createOneWayFlowControlValve,
-  ONE_WAY_FLOW_CONTROL_VALVE_TYPE,
-} from './oneWayFlowControlValve';
-import { createThrottleValve, THROTTLE_VALVE_TYPE } from './throttleValve';
-import { createPressureReducingValve, PRESSURE_REDUCING_VALVE_TYPE } from './pressureReducingValve';
+  createHydPump,
+  createHydTank,
+  createHydRelief,
+  createHydGauge,
+  createHydPressureSwitch,
+  HYD_PUMP_TYPE,
+  HYD_TANK_TYPE,
+  HYD_RELIEF_TYPE,
+  HYD_GAUGE_TYPE,
+  HYD_PRESSURE_SWITCH_TYPE,
+} from './hyd/supply';
+import {
+  createHydValve43,
+  createHydValve42,
+  createHydCheck,
+  createHydPilotCheck,
+  createHydThrottle,
+  createHydOneWayFlowControl,
+  createHydFlowControl,
+  createHydReducing,
+  HYD_VALVE_43_TYPE,
+  HYD_VALVE_42_TYPE,
+  HYD_CHECK_TYPE,
+  HYD_PILOT_CHECK_TYPE,
+  HYD_THROTTLE_TYPE,
+  HYD_ONE_WAY_FC_TYPE,
+  HYD_FLOW_CONTROL_TYPE,
+  HYD_REDUCING_TYPE,
+} from './hyd/valves';
+import {
+  createHydCylinderDouble,
+  createHydCylinderSingle,
+  createHydMotor,
+  HYD_CYLINDER_DOUBLE_TYPE,
+  HYD_CYLINDER_SINGLE_TYPE,
+  HYD_MOTOR_TYPE,
+} from './hyd/actuators';
 import {
   createElecRailPlus,
   createElecRailZero,
@@ -38,14 +56,6 @@ import {
   ELEC_SOLENOID_TYPE,
   ELEC_LAMP_TYPE,
 } from './electrical';
-import {
-  createValve52Solenoid,
-  createValve52SolenoidDouble,
-  createValve53Solenoid,
-  VALVE_52_SOLENOID_TYPE,
-  VALVE_52_SOLENOID_DOUBLE_TYPE,
-  VALVE_53_SOLENOID_TYPE,
-} from './solenoidValves';
 import { createPlc, PLC_TYPE } from './plc';
 import { createTextAnnotation, TEXT_ANNOTATION_TYPE } from './textAnnotation';
 
@@ -55,18 +65,15 @@ export interface ComponentFactoryContext {
 
 export type ComponentFactory = (ctx: ComponentFactoryContext, x: number, y: number) => Component;
 
-/** Sidebar grouping, matching how a pneumatics reference organizes symbols rather than an
- * alphabetical dump. */
+/** Sidebar grouping, in the order a hydraulics reference presents symbols: energy supply,
+ * directional control, pressure control, flow control, actuators. */
 export const ComponentCategory = {
-  SOURCES: 'Sources',
-  // Directional valves are split by what actuates them, since that is what you pick between
-  // when building a circuit - the port count (3/2, 5/2, 5/3) is already in each tile's label.
-  DIRECTIONAL_MANUAL: 'Mechanical/Manual',
-  DIRECTIONAL_AIR: 'Air operated',
-  DIRECTIONAL_SOLENOID: 'Solenoid operated',
-  LOGIC: 'Logic',
-  FLOW: 'Flow control',
+  SUPPLY: 'Power supply',
+  DIRECTIONAL: 'Directional valves',
+  PRESSURE: 'Pressure control',
+  FLOW: 'Flow & check valves',
   ACTUATORS: 'Actuators',
+  MEASURING: 'Measuring',
   ELECTRICAL: 'Electrical',
   ANNOTATIONS: 'Annotations',
 } as const;
@@ -84,156 +91,147 @@ export interface RegistryEntry {
 
 export const componentRegistry = new Map<string, RegistryEntry>([
   [
-    SOURCE_TYPE,
+    HYD_PUMP_TYPE,
     {
-      factory: (ctx, x, y) => createSource(ctx.compLayer, x, y),
-      label: 'Pressure source',
+      factory: (ctx, x, y) => createHydPump(ctx.compLayer, x, y),
+      label: 'Pump unit (fixed displacement)',
       placeable: true,
-      category: ComponentCategory.SOURCES,
+      category: ComponentCategory.SUPPLY,
     },
   ],
   [
-    VALVE_52_TYPE,
+    HYD_TANK_TYPE,
     {
-      factory: (ctx, x, y) => createValve52(ctx.compLayer, x, y),
-      label: '5/2 valve',
+      factory: (ctx, x, y) => createHydTank(ctx.compLayer, x, y),
+      label: 'Tank',
       placeable: true,
-      category: ComponentCategory.DIRECTIONAL_AIR,
+      category: ComponentCategory.SUPPLY,
     },
   ],
   [
-    VALVE_52_MONO_TYPE,
+    HYD_VALVE_43_TYPE,
     {
-      factory: (ctx, x, y) => createValve52Mono(ctx.compLayer, x, y),
-      label: '5/2 valve, monostable',
+      factory: (ctx, x, y) => createHydValve43(ctx.compLayer, x, y),
+      label: '4/3 valve',
       placeable: true,
-      category: ComponentCategory.DIRECTIONAL_AIR,
+      category: ComponentCategory.DIRECTIONAL,
     },
   ],
   [
-    VALVE_53_MONO_TYPE,
+    HYD_VALVE_42_TYPE,
     {
-      factory: (ctx, x, y) => createValve53Mono(ctx.compLayer, x, y),
-      label: '5/3 valve, monostable',
+      factory: (ctx, x, y) => createHydValve42(ctx.compLayer, x, y),
+      label: '4/2 valve',
       placeable: true,
-      category: ComponentCategory.DIRECTIONAL_AIR,
+      category: ComponentCategory.DIRECTIONAL,
     },
   ],
   [
-    LIMIT_VALVE_32_TYPE,
+    HYD_RELIEF_TYPE,
     {
-      factory: (ctx, x, y) => createLimitValve32(ctx.compLayer, x, y),
-      label: '3/2 limit valve',
+      factory: (ctx, x, y) => createHydRelief(ctx.compLayer, x, y),
+      label: 'Pressure relief valve',
       placeable: true,
-      category: ComponentCategory.DIRECTIONAL_MANUAL,
+      category: ComponentCategory.PRESSURE,
     },
   ],
   [
-    PUSH_BUTTON_32_TYPE,
+    HYD_REDUCING_TYPE,
     {
-      factory: (ctx, x, y) => createPushButton32(ctx.compLayer, x, y),
-      label: '3/2 push button',
+      factory: (ctx, x, y) => createHydReducing(ctx.compLayer, x, y),
+      label: 'Pressure reducing valve',
       placeable: true,
-      category: ComponentCategory.DIRECTIONAL_MANUAL,
+      category: ComponentCategory.PRESSURE,
     },
   ],
   [
-    AIR_VALVE_32_TYPE,
+    HYD_CHECK_TYPE,
     {
-      factory: (ctx, x, y) => createAirValve32(ctx.compLayer, x, y),
-      label: '3/2 air-piloted',
-      placeable: true,
-      category: ComponentCategory.DIRECTIONAL_AIR,
-    },
-  ],
-  [
-    AND_VALVE_TYPE,
-    {
-      factory: (ctx, x, y) => createAndValve(ctx.compLayer, x, y),
-      label: 'AND valve',
-      placeable: true,
-      category: ComponentCategory.LOGIC,
-    },
-  ],
-  [
-    OR_VALVE_TYPE,
-    {
-      factory: (ctx, x, y) => createOrValve(ctx.compLayer, x, y),
-      label: 'OR valve',
-      placeable: true,
-      category: ComponentCategory.LOGIC,
-    },
-  ],
-  [
-    CHECK_VALVE_TYPE,
-    {
-      factory: (ctx, x, y) => createCheckValve(ctx.compLayer, x, y),
+      factory: (ctx, x, y) => createHydCheck(ctx.compLayer, x, y),
       label: 'Check valve',
       placeable: true,
       category: ComponentCategory.FLOW,
     },
   ],
   [
-    ONE_WAY_FLOW_CONTROL_VALVE_TYPE,
+    HYD_PILOT_CHECK_TYPE,
     {
-      factory: (ctx, x, y) => createOneWayFlowControlValve(ctx.compLayer, x, y),
-      label: 'One-way flow control',
+      factory: (ctx, x, y) => createHydPilotCheck(ctx.compLayer, x, y),
+      label: 'Pilot-operated check valve',
       placeable: true,
       category: ComponentCategory.FLOW,
     },
   ],
   [
-    THROTTLE_VALVE_TYPE,
+    HYD_THROTTLE_TYPE,
     {
-      factory: (ctx, x, y) => createThrottleValve(ctx.compLayer, x, y),
+      factory: (ctx, x, y) => createHydThrottle(ctx.compLayer, x, y),
       label: 'Throttle valve',
       placeable: true,
       category: ComponentCategory.FLOW,
     },
   ],
   [
-    PRESSURE_REDUCING_VALVE_TYPE,
+    HYD_ONE_WAY_FC_TYPE,
     {
-      factory: (ctx, x, y) => createPressureReducingValve(ctx.compLayer, x, y),
-      label: 'Pressure reducing valve',
+      factory: (ctx, x, y) => createHydOneWayFlowControl(ctx.compLayer, x, y),
+      label: 'One-way flow control',
       placeable: true,
       category: ComponentCategory.FLOW,
     },
   ],
   [
-    QUICK_EXHAUST_VALVE_TYPE,
+    HYD_FLOW_CONTROL_TYPE,
     {
-      factory: (ctx, x, y) => createQuickExhaustValve(ctx.compLayer, x, y),
-      label: 'Quick-exhaust valve',
+      factory: (ctx, x, y) => createHydFlowControl(ctx.compLayer, x, y),
+      label: 'Flow control (pressure comp.)',
       placeable: true,
       category: ComponentCategory.FLOW,
     },
   ],
   [
-    TIME_DELAY_VALVE_TYPE,
+    HYD_CYLINDER_DOUBLE_TYPE,
     {
-      factory: (ctx, x, y) => createTimeDelayValve(ctx.compLayer, x, y),
-      label: 'Time delay valve',
-      placeable: true,
-      category: ComponentCategory.FLOW,
-    },
-  ],
-  [
-    CYLINDER_DOUBLE_TYPE,
-    {
-      factory: (ctx, x, y) => createCylinderDouble(ctx.compLayer, x, y),
+      factory: (ctx, x, y) => createHydCylinderDouble(ctx.compLayer, x, y),
       label: 'Cylinder, double-acting',
       placeable: true,
       category: ComponentCategory.ACTUATORS,
     },
   ],
   [
-    CYLINDER_SINGLE_TYPE,
+    HYD_CYLINDER_SINGLE_TYPE,
     {
-      factory: (ctx, x, y) => createCylinderSingle(ctx.compLayer, x, y),
+      factory: (ctx, x, y) => createHydCylinderSingle(ctx.compLayer, x, y),
       label: 'Cylinder, single-acting',
       placeable: true,
       category: ComponentCategory.ACTUATORS,
+    },
+  ],
+  [
+    HYD_MOTOR_TYPE,
+    {
+      factory: (ctx, x, y) => createHydMotor(ctx.compLayer, x, y),
+      label: 'Hydraulic motor',
+      placeable: true,
+      category: ComponentCategory.ACTUATORS,
+    },
+  ],
+  [
+    HYD_GAUGE_TYPE,
+    {
+      factory: (ctx, x, y) => createHydGauge(ctx.compLayer, x, y),
+      label: 'Pressure gauge',
+      placeable: true,
+      category: ComponentCategory.MEASURING,
+    },
+  ],
+  [
+    HYD_PRESSURE_SWITCH_TYPE,
+    {
+      factory: (ctx, x, y) => createHydPressureSwitch(ctx.compLayer, x, y),
+      label: 'Pressure switch',
+      placeable: true,
+      category: ComponentCategory.MEASURING,
     },
   ],
   [
@@ -339,33 +337,6 @@ export const componentRegistry = new Map<string, RegistryEntry>([
     },
   ],
   [
-    VALVE_52_SOLENOID_TYPE,
-    {
-      factory: (ctx, x, y) => createValve52Solenoid(ctx.compLayer, x, y),
-      label: '5/2 solenoid valve',
-      placeable: true,
-      category: ComponentCategory.DIRECTIONAL_SOLENOID,
-    },
-  ],
-  [
-    VALVE_52_SOLENOID_DOUBLE_TYPE,
-    {
-      factory: (ctx, x, y) => createValve52SolenoidDouble(ctx.compLayer, x, y),
-      label: '5/2 double solenoid valve',
-      placeable: true,
-      category: ComponentCategory.DIRECTIONAL_SOLENOID,
-    },
-  ],
-  [
-    VALVE_53_SOLENOID_TYPE,
-    {
-      factory: (ctx, x, y) => createValve53Solenoid(ctx.compLayer, x, y),
-      label: '5/3 solenoid valve',
-      placeable: true,
-      category: ComponentCategory.DIRECTIONAL_SOLENOID,
-    },
-  ],
-  [
     PLC_TYPE,
     {
       factory: (ctx, x, y) => createPlc(ctx.compLayer, x, y),
@@ -405,13 +376,12 @@ export function createComponent(
 }
 
 const CATEGORY_ORDER: ComponentCategoryName[] = [
-  ComponentCategory.SOURCES,
-  ComponentCategory.DIRECTIONAL_MANUAL,
-  ComponentCategory.DIRECTIONAL_AIR,
-  ComponentCategory.DIRECTIONAL_SOLENOID,
-  ComponentCategory.LOGIC,
+  ComponentCategory.SUPPLY,
+  ComponentCategory.DIRECTIONAL,
+  ComponentCategory.PRESSURE,
   ComponentCategory.FLOW,
   ComponentCategory.ACTUATORS,
+  ComponentCategory.MEASURING,
   ComponentCategory.ELECTRICAL,
   ComponentCategory.ANNOTATIONS,
 ];
@@ -422,7 +392,7 @@ export interface ComponentGroup {
 }
 
 /** Placeable component types grouped for the sidebar, in a fixed category order matching how a
- * pneumatics reference organizes symbols (sources -> valves -> logic -> flow control ->
+ * hydraulics reference organizes symbols (supply -> valves -> pressure/flow control ->
  * actuators) rather than the registration order above. */
 export function placeableComponentsByCategory(): ComponentGroup[] {
   const entries = [...componentRegistry.entries()].filter(([, entry]) => entry.placeable);

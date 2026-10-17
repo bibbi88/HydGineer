@@ -1,14 +1,14 @@
 import { appState } from '../app/AppState';
 import { Modes } from '../app/modes';
-import { stepSimulation } from './engine';
+import { stepSimulation, resetHydraulics } from './engine';
 import { applyToDom } from './render';
-import { emptyFrameGraph } from './pressure';
 import { clearElectrical } from './electrical';
 import { MAX_DT } from './constants';
 import { redrawAllConnections } from '../wires/connection';
 
 let lastTime = performance.now();
 let stepOnce = false;
+let cleared = false;
 
 export function requestSingleStep(): void {
   stepOnce = true;
@@ -19,18 +19,16 @@ function tick(now: number): void {
   lastTime = now;
 
   if (appState.mode === Modes.PLAY || stepOnce) {
-    const graph = stepSimulation(dt);
-    applyToDom(graph);
-    // A component can move its own ports in response to simulation state (e.g. the 5/2 valve's
-    // sliding pilot ports) without going through any of the normal edit-time triggers that
-    // redraw wires (drag, handle-drag, undo/redo) - so any wire attached to one would otherwise
-    // stay stuck at its pre-slide path. Cheap even every frame: geometry is measured from live
-    // DOM/cached per endpoint position, so nothing recomputes for a wire whose ports didn't move.
+    const frame = stepSimulation(dt);
+    applyToDom(frame);
     redrawAllConnections();
     stepOnce = false;
-  } else if (appState.mode === Modes.STOP) {
+    cleared = false;
+  } else if (appState.mode === Modes.STOP && !cleared) {
     clearElectrical();
-    applyToDom(emptyFrameGraph());
+    resetHydraulics();
+    applyToDom(null);
+    cleared = true;
   }
 
   requestAnimationFrame(tick);

@@ -3,7 +3,7 @@ import { appState } from '../app/AppState';
 import { initWires } from '../wires/connection';
 import { alignComponents, distributeComponents } from './align';
 import { createElecCoil, createElecContact, createElecLamp } from '../components/electrical';
-import { createCylinderDouble } from '../components/cylinderDouble';
+import { createHydCylinderDouble as createCylinderDouble } from '../components/hyd/actuators';
 import type { Component } from '../core/types';
 import type { ViewportAdapter } from '../ui/viewport';
 

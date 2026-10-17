@@ -1,4 +1,4 @@
-const STORAGE_KEY = 'pneugineer.deviceId';
+const STORAGE_KEY = 'hydgineer.deviceId';
 
 /** A random ID generated once per browser (localStorage-backed, so it survives reloads on this
  * same browser but not a cleared profile, a different browser, or incognito mode) - not a real
