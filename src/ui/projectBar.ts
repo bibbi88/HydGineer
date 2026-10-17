@@ -53,7 +53,8 @@ export function renderProjectBar(
     openExportDialog(nameInput.value || 'project', connLayer, frameLayer, viewport, workspaceEl);
   });
 
-  // Ready-made circuits to start from - replaces whatever is on the canvas (undoable).
+  // Ready-made circuits to start from - replaces whatever is on the canvas (Undo brings it
+  // back; no confirm() dialog, which embedded viewers suppress).
   const examples = document.createElement('select');
   examples.className = 'exampleSelect';
   examples.title = 'Load an example circuit';
@@ -71,12 +72,6 @@ export function renderProjectBar(
     const ex = EXAMPLES[Number(examples.value)];
     examples.value = '';
     if (!ex || !canEdit(appState.mode)) return;
-    if (
-      appState.components.length > 0 &&
-      !window.confirm('Replace the current circuit with this example?')
-    ) {
-      return;
-    }
     const file = ex.file();
     loadProject(file, ctx, viewport);
     nameInput.value = file.name;
