@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>PneuGineer</title>
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+  </head>
+  <body>
+    <div class="app">
+      <header class="topbar" id="topbar" role="toolbar" aria-label="Main toolbar"></header>
+
+      <aside class="sidebar">
+        <h2>Component Library</h2>
+        <div id="sidebarButtons"></div>
+      </aside>
+
+      <main class="workspace">
+        <div id="gridLayer"></div>
+        <div id="viewport">
+          <svg id="frameLayer" class="layer"></svg>
+          <svg id="connLayer" class="layer"></svg>
+          <div id="compLayer" class="layer"></div>
+          <svg id="handleLayer" class="layer"></svg>
+        </div>
+        <div class="hint">
+          <span>Drag components from the sidebar onto the canvas</span>
+          <span class="hintSep">·</span>
+          <span><span class="hintKey">Pan</span> = Alt + left-drag, or middle-drag</span>
+          <span class="hintSep">·</span>
+          <span><span class="hintKey">Zoom</span> = scroll</span>
+          <span class="hintSep">·</span>
+          <span><span class="hintKey">Select</span> = left-drag</span>
+        </div>
+      </main>
+
+      <aside class="inspectorPanel">
+        <h2>Inspector</h2>
+        <div id="inspector"></div>
+      </aside>
+    </div>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

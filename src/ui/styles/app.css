@@ -1,0 +1,1491 @@
+:root {
+  --bg: #f7f7f9;
+  --panel: #ececf1;
+  --panel-2: #e2e2ea;
+  --ink: #111;
+  --muted: #666;
+  --faint: #96969e;
+  --accent: #d00;
+  --port: #0a74ff;
+  --exhaust: #e08a00;
+  --line: #ccc;
+  --line-soft: #dcdce2;
+  --frame: #5b6b8c;
+  --frame-fill: rgba(91, 107, 140, 0.045);
+  --insert: #1a9c4a;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family:
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    Roboto,
+    sans-serif;
+  background: var(--bg);
+  color: var(--ink);
+}
+
+.app {
+  display: grid;
+  /* The toolbar spans all three columns as its own row above them, so it reads as belonging to
+     the whole window rather than to any one panel. */
+  grid-template-columns: 244px 1fr 260px;
+  grid-template-rows: auto 1fr;
+  height: 100vh;
+}
+
+/* ---------- Top toolbar ---------- */
+
+.topbar {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 10px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--line);
+  /* A narrow window scrolls the toolbar rather than wrapping or squeezing the groups, which
+     would move every button somewhere different depending on the window width. */
+  overflow-x: auto;
+}
+
+/* Each group of related controls, separated from the next by a divider rather than by spacing
+   alone, so the grouping survives the toolbar being crowded or scrolled. */
+.topbarSection {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 8px;
+  border-right: 1px solid var(--line);
+}
+
+.topbarSection:first-child {
+  padding-left: 0;
+}
+
+/* App name and version at the far left of the toolbar. */
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+  padding-right: 12px;
+  margin-right: 4px;
+  border-right: 1px solid var(--line);
+}
+
+.brandText {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.1;
+}
+
+.brandName {
+  font-weight: 700;
+  font-size: 15px;
+  letter-spacing: 0.2px;
+}
+
+.brandNameAccent {
+  color: #1d3b8b;
+}
+
+.brandVersion {
+  font-size: 11px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.topbarSection:last-child {
+  border-right: none;
+}
+
+.iconBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.iconBtn:hover:not(:disabled) {
+  background: #fff;
+  border-color: var(--line);
+}
+
+.iconBtn:active:not(:disabled) {
+  background: var(--panel-2);
+}
+
+.iconBtn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+/* Stop is the one transport control that interrupts something, so it's the one given color. */
+.iconBtn--danger {
+  color: var(--accent);
+}
+
+/* A toggle that is currently on (the grid button), as opposed to a button you merely hover -
+   it has to stay visibly lit once the pointer leaves, which a :hover style alone would not do. */
+.iconBtn--active {
+  background: var(--panel-2);
+  border-color: var(--line);
+  color: var(--ink);
+}
+
+.iconBtn--active:hover:not(:disabled) {
+  background: var(--panel-2);
+}
+
+.zoomReadout {
+  min-width: 52px;
+  padding: 6px 4px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 12px;
+  /* Tabular figures so the toolbar doesn't shuffle sideways as the percentage changes width. */
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  cursor: pointer;
+}
+
+.zoomReadout:hover {
+  background: #fff;
+  border-color: var(--line);
+  color: var(--ink);
+}
+
+.sidebar {
+  background: var(--panel);
+  border-right: 1px solid #ccc;
+  padding: 10px;
+  overflow: auto;
+}
+
+.inspectorPanel {
+  background: var(--panel);
+  border-left: 1px solid #ccc;
+  padding: 10px;
+  overflow: auto;
+  /* A column so #inspector can fill the leftover height, which is what lets the Tips section
+     inside it sit on the bottom edge instead of directly under the last field. */
+  display: flex;
+  flex-direction: column;
+}
+
+#inspector {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+
+.inspectorPanel h2 {
+  margin: 6px 0 10px;
+  font-size: 16px;
+}
+
+.sidebar h2 {
+  margin: 6px 0 10px;
+  font-size: 16px;
+}
+
+/* ---------- Component library ---------- */
+
+/* Placing a component is an edit, and edits are only allowed while stopped (see app/modes.ts's
+   canEdit, which every other editing path checks too). Dimmed and inert rather than hidden, so
+   the palette doesn't jump around each time the simulation starts or stops. The JS guard in
+   interaction/spawn.ts is what actually enforces it - this is the visible half. */
+.libraryDisabled {
+  opacity: 0.45;
+  pointer-events: none;
+}
+
+.libFilter {
+  display: block;
+  width: 100%;
+  margin: 0 0 10px;
+  padding: 6px 9px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #fff;
+  font-size: 12px;
+  color: var(--ink);
+}
+
+.libFilter::placeholder {
+  color: var(--faint);
+}
+
+.libCategory {
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.libCategory:last-child {
+  border-bottom: none;
+}
+
+.libCategory summary {
+  list-style: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 2px;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.libCategory summary::-webkit-details-marker {
+  display: none;
+}
+
+.libCategory summary:focus-visible {
+  outline: 2px solid var(--port);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+.libCategory summary::before {
+  content: '';
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-right: 1.6px solid var(--muted);
+  border-bottom: 1.6px solid var(--muted);
+  transform: rotate(-45deg);
+  transition: transform 0.15s ease;
+}
+
+.libCategory[open] > summary::before {
+  transform: rotate(45deg);
+}
+
+.libSubcategories {
+  padding: 0 0 4px 12px;
+}
+
+.libCategory--sub:last-child {
+  border-bottom: none;
+}
+
+.libCategoryName {
+  font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  flex: 1;
+}
+
+.libCategoryCount {
+  font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  font-size: 10px;
+  color: var(--faint);
+  background: var(--panel-2);
+  border-radius: 20px;
+  padding: 1px 7px;
+}
+
+.libGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  padding: 2px 2px 10px;
+}
+
+.libGrid--single {
+  grid-template-columns: 1fr;
+}
+
+.libGrid--single .libTile {
+  flex-direction: row;
+  justify-content: flex-start;
+  padding: 7px 9px;
+}
+
+.libGrid--single .libIcon {
+  width: 28px;
+  height: 24px;
+}
+
+.libTile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px 5px 6px;
+  cursor: grab;
+  transition:
+    border-color 0.12s ease,
+    background 0.12s ease,
+    transform 0.12s ease;
+}
+
+.libTile:hover {
+  background: #fbfbff;
+  border-color: var(--port);
+  transform: translateY(-1px);
+}
+
+.libTile:active {
+  transform: translateY(0);
+  cursor: grabbing;
+}
+
+.libTile.dragging {
+  opacity: 0.4;
+}
+
+.libTile[hidden] {
+  display: none;
+}
+
+.libIcon {
+  width: 38px;
+  height: 30px;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.libTileLabel {
+  font-size: 10.3px;
+  line-height: 1.2;
+  text-align: center;
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.libTile:hover .libTileLabel {
+  color: var(--ink);
+}
+
+.btn {
+  display: block;
+  width: 100%;
+  margin: 6px 0;
+  padding: 8px 10px;
+  border: 1px solid #bbb;
+  background: #fff;
+  cursor: pointer;
+  border-radius: 6px;
+  text-align: left;
+}
+
+.btn:hover {
+  background: #f8f8ff;
+}
+
+.btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.btn:disabled:hover {
+  background: #fff;
+}
+
+/* Pushed to the bottom of the panel rather than just following the content above it, so Tips
+   sits on the bottom edge whether the panel above is full or nearly empty. */
+.inspectorTips {
+  margin-top: auto;
+  padding-top: 12px;
+}
+
+.inspectorTipsBtn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  text-align: left;
+}
+
+.workspace {
+  position: relative;
+  overflow: hidden;
+}
+
+/* A separate, untransformed layer rather than a background on #viewport itself: #viewport gets
+   panned/scaled, so a background painted directly on it would pan/scale (and visibly tile) along
+   with it instead of looking like one continuous grid. This one stays pinned to the
+   always-visible workspace box and has its background-size/position recalculated on every
+   pan/zoom (see viewport.ts) to look like the same infinite world-aligned grid no matter how far
+   you pan or zoom. */
+#gridLayer {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background-image:
+    linear-gradient(to right, rgba(0, 0, 0, 0.04) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(0, 0, 0, 0.04) 1px, transparent 1px);
+}
+
+/* No overflow: hidden here (and no oversized width/height to compensate for it, both removed) -
+   .workspace above is what actually clips to the visible screen area. #viewport's own box is
+   only ever as big as .workspace itself; overflow: hidden on *this* element clipped to that
+   local, untransformed box regardless of pan/zoom, silently hiding any component placed at a
+   negative world x/y (or past whatever fixed width/height this had) instead of panning into
+   view like it should - the workspace-level clip is the correct (and sufficient) one. */
+#viewport {
+  position: absolute;
+  inset: 0;
+  transform-origin: 0 0;
+}
+
+.layer {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  /* #connLayer/#frameLayer/#handleLayer are each their own <svg>, which by default clips its
+     content to its own box - the same 100%-of-workspace size as this rule, in *local*,
+     untransformed coordinates - regardless of #viewport's own pan/zoom transform (see that
+     .workspace/#viewport comment above). World-space content well outside that local box (wires
+     to a far-off component, or the page frame's own sheet, which is often bigger than the
+     workspace itself) would otherwise get silently clipped there even after .workspace's fix. */
+  overflow: visible;
+}
+
+#connLayer {
+  z-index: 0;
+}
+
+/* Deliberately no z-index (paints below #connLayer's explicit 0 within #viewport's own
+   transform-created stacking context) and before it in the DOM - it needs to sit behind the
+   diagram, the same relationship #gridLayer has to everything, but inside #viewport (unlike
+   #gridLayer) so it pans/zooms with the diagram instead of staying pinned to the workspace. */
+#frameLayer {
+  pointer-events: none;
+}
+
+.pageFrameRect {
+  fill: var(--frame-fill);
+  stroke: var(--frame);
+  stroke-width: 2;
+}
+
+.pageFrameLabel {
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  fill: var(--frame);
+}
+
+.pageFrameTitleBlock {
+  fill: var(--bg);
+  stroke: var(--frame);
+  stroke-width: 1.5;
+}
+
+/* Row/column dividers inside the title block, separating each field into its own cell - lighter
+   than the block's own outer border so the grid reads as internal structure, not another frame. */
+.pageFrameGridLine {
+  stroke: var(--line);
+  stroke-width: 1;
+}
+
+.pageFrameTitleLabel {
+  font-size: 11px;
+  fill: var(--muted);
+}
+
+.pageFrameTitleValue {
+  font-size: 12px;
+  font-weight: 500;
+  fill: var(--ink);
+}
+
+#compLayer {
+  z-index: 1;
+  pointer-events: none;
+}
+
+#compLayer > * {
+  pointer-events: auto;
+}
+
+/* Above compLayer so drag handles stay reachable even when a wire's stub sits right against a
+   component's own artwork. pointer-events: none on the root (re-enabled per handle below) so
+   the rest of its empty bounding box still lets clicks fall through to layers below. */
+#handleLayer {
+  z-index: 2;
+  pointer-events: none;
+}
+
+#handleLayer > * {
+  pointer-events: auto;
+}
+
+.comp {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  user-select: none;
+}
+
+.boundsBox {
+  position: absolute;
+  pointer-events: none;
+}
+
+.boundsBox.selected {
+  outline: 2px dashed var(--accent);
+  outline-offset: 4px;
+}
+
+.label {
+  position: absolute;
+  top: -18px;
+  left: 0;
+  right: 0;
+  text-align: center;
+  font-size: 12px;
+  color: var(--muted);
+  pointer-events: none;
+}
+
+/* A cylinder's live output-force readout ("Show force" in the inspector) - placed below the
+   body (mirroring .label's position above it) so it never collides with the name label. */
+.forceLabel {
+  position: absolute;
+  bottom: -18px;
+  left: 0;
+  right: 0;
+  text-align: center;
+  font-size: 12px;
+  color: var(--muted);
+  pointer-events: none;
+}
+
+svg.compSvg {
+  display: block;
+  overflow: visible;
+}
+
+.annotationText {
+  position: absolute;
+  top: 0;
+  left: 0;
+  min-width: 100%;
+  min-height: 100%;
+  box-sizing: border-box;
+  white-space: pre;
+  pointer-events: none;
+}
+
+/* The in-place editor laid over a note's SVG text while it's being edited (see
+   textAnnotation.ts). */
+.annotationText.editing {
+  cursor: text;
+  user-select: text;
+  pointer-events: auto;
+  outline: 2px solid var(--port);
+  background: #fff;
+}
+
+.port {
+  fill: #fff;
+  stroke: var(--port);
+  stroke-width: 1.5;
+  cursor: crosshair;
+}
+
+.port:hover {
+  fill: #e8f1ff;
+}
+
+/* A connected port's dot is hidden so the wire reads as one continuous solid line running
+   into the component, instead of visibly stopping at a filled circle. Still fully interactive
+   (pointer-events unchanged) so it can be clicked to branch another wire from it. */
+.port.portConnected {
+  fill: transparent;
+  stroke: transparent;
+}
+
+.port.portConnected:hover {
+  fill: #e8f1ff;
+  stroke: var(--port);
+}
+
+/* A selected component shows all its port dots, wired or not, so you can see where every
+   connection actually lands. */
+.comp.compSelected .port.portConnected {
+  fill: #fff;
+  stroke: var(--port);
+}
+
+.comp.compSelected .port.portElectrical.portConnected {
+  stroke: #1d3b8b;
+}
+
+.comp.compSelected .port.portConnected.pressurized {
+  fill: var(--accent);
+  stroke: var(--accent);
+}
+
+/* A silenced port is physically occupied by the muffler attached to it (see
+   shared/silencer.ts) - hidden the same way a wired port's dot is, but with no hover-reveal
+   since pointer-events is also disabled on it (nothing to branch a wire from). */
+.port.portSilenced {
+  fill: transparent;
+  stroke: transparent;
+}
+
+/* Port dots are only a wiring aid, so they disappear entirely while simulating (see
+   refreshSimulatingClass in main.ts) - selected, pressurized or not. */
+.workspace.simulating .port {
+  visibility: hidden;
+}
+
+.wireHandle {
+  fill: #fff;
+  stroke: var(--accent);
+  stroke-width: 1.5;
+}
+
+.wireHandle:hover {
+  fill: #ffe8e8;
+}
+
+/* Extra class selector so this reliably wins over the plain .wireHandle rule regardless of
+   declaration order. */
+rect.wireHandle.wireStubHandle {
+  fill: #eaf3ff;
+}
+
+.draggable {
+  cursor: move;
+}
+
+.wire {
+  stroke: #000;
+  stroke-width: 2;
+  fill: none;
+  transition:
+    stroke 0.12s ease,
+    stroke-width 0.12s ease;
+}
+
+.wire.active {
+  stroke: var(--accent);
+}
+
+.wire.dashed {
+  stroke-dasharray: 8 5;
+}
+
+/* Live exhaust flow (e.g. a cylinder's currently-retracting chamber venting to atmosphere) -
+   marching dashes rather than just a static color, so it reads as air actually moving through
+   the wire right now rather than a fixed state like .active's steady supply-pressurized color.
+   Wins over .dashed (a user styling choice) since it's transient, informative simulation
+   feedback, but .selected still wins over this - keeps the "this is selected" signal strongest,
+   matching .selected's existing precedence over .dashed. */
+.wire.exhausting {
+  stroke: var(--exhaust);
+  stroke-width: 3;
+  stroke-dasharray: 6 6;
+  animation: exhaustFlow 0.5s linear infinite;
+}
+
+.wire.exhausting-reverse {
+  animation-direction: reverse;
+}
+
+@keyframes exhaustFlow {
+  to {
+    stroke-dashoffset: -12;
+  }
+}
+
+/* Internal air-path lines drawn as part of a valve's own symbol (quick-exhaust valve, one-way
+   flow control valve) - the same red/amber distinction .wire.active vs .wire.exhausting draws
+   for connections, just applied to a fixed line inside the component instead of a wire between
+   two of them: solid red for supply actually reaching something, marching amber dashes for air
+   genuinely exhausting to atmosphere. */
+.qevFlowPath--pressurized,
+.owfvFlowPath--pressurized {
+  stroke: var(--accent);
+  stroke-width: 2;
+}
+
+.qevFlowPath--exhausting,
+.owfvFlowPath--exhausting {
+  stroke: var(--exhaust);
+  stroke-width: 2;
+  stroke-dasharray: 6 6;
+  animation: exhaustFlow 0.5s linear infinite;
+}
+
+.wireGhost {
+  stroke: var(--port);
+  stroke-width: 2;
+  stroke-dasharray: 6 6;
+  fill: none;
+  opacity: 0.7;
+  pointer-events: none;
+}
+
+.wire.selected {
+  stroke: var(--accent);
+  stroke-width: 3;
+  stroke-dasharray: 4 4;
+}
+
+/* Previewed while dragging a check/throttle/one-way-flow valve over the canvas (see
+   interaction/wireInsertion.ts's setWireInsertHighlight) - the nearest wire within reach lights
+   up green so it's clear *before* letting go that dropping here splices the valve in rather than
+   leaving it unconnected. Comes after .selected in source order so it still reads clearly even
+   on a wire that happened to already be selected. */
+.wire.wireInsertTarget {
+  stroke: var(--insert);
+  stroke-width: 4;
+}
+
+.wireHit {
+  stroke: transparent;
+  stroke-width: 10;
+  cursor: pointer;
+  pointer-events: stroke;
+}
+
+.wireLabel {
+  font-size: 10px;
+  fill: var(--muted);
+  text-anchor: middle;
+}
+
+/* Quick-exhaust valve's floating ball, sliding over to whichever seat is currently closed
+   (see quickExhaustValve.ts's step()) - a plain CSS transition rather than a per-frame redraw,
+   since it only ever has two resting positions. */
+.qevBall {
+  transition: transform 0.15s ease-out;
+}
+
+.qevBall.right {
+  transform: translateX(34px);
+}
+
+/* A limit switch's sensor-key label turns red when another limit switch is bound to the same
+   sensor - allowed, since a real circuit might legitimately fan one signal out to several
+   valves, but worth flagging since it's easy to do by accident. */
+.sensorLabelDuplicate {
+  fill: var(--accent);
+  font-weight: 600;
+}
+
+/* Two solenoids answering to one coil name - allowed (a real circuit may drive several valves
+   off one output) but nearly always a slip, and otherwise invisible until the simulation runs.
+   Same treatment as a duplicated sensor label above. */
+.solenoidLabelDuplicate {
+  fill: var(--accent);
+  font-weight: 600;
+}
+
+.port.pressurized {
+  fill: var(--accent);
+  stroke: var(--accent);
+}
+
+/* One-way flow control valve's throttle glyph: nudges up while the check valve's own path is
+   conducting (see oneWayFlowControlValve.ts's onPressureChange), as a small "air is passing
+   through here" cue. Transform is in the ellipse's own local units, before the decor group's
+   2x scale, so this reads as a modest ~6px shift on screen rather than a large jump. */
+.flowThrottleCircle {
+  transition: transform 0.15s ease-out;
+}
+
+.flowThrottleCircle.flowing {
+  transform: translateY(-3px);
+}
+
+.port.portHover {
+  fill: #e8f1ff;
+  stroke-width: 3;
+}
+
+.wireHandle {
+  fill: #fff;
+  stroke: var(--port);
+  stroke-width: 1.5;
+  cursor: move;
+}
+
+.marquee {
+  position: fixed;
+  border: 1px dashed var(--port);
+  background: rgba(10, 116, 255, 0.08);
+  pointer-events: none;
+  z-index: 999;
+}
+
+.ctxmenu {
+  position: fixed;
+  z-index: 1000;
+  background: #fff;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.15);
+  padding: 4px;
+  display: flex;
+  flex-direction: column;
+  min-width: 160px;
+}
+
+.ctxmenu button {
+  border: none;
+  background: none;
+  text-align: left;
+  padding: 6px 10px;
+  font-size: 13px;
+  cursor: pointer;
+  border-radius: 4px;
+}
+
+.ctxmenu button:hover {
+  background: #f0f4ff;
+}
+
+/* The multi-selection Align section's icon buttons, wrapping onto a second row if the panel is
+   narrow. */
+.inspectorAlignRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  margin: 6px 0 10px;
+}
+
+.inspectorHint {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+  margin: 4px 0;
+}
+
+.inspectorWarning {
+  color: var(--accent);
+  font-size: 12px;
+  line-height: 1.5;
+  margin: 2px 0 8px;
+}
+
+.inspectorRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 6px 0;
+  font-size: 13px;
+}
+
+.inspectorRow input,
+.inspectorRow select {
+  padding: 4px 6px;
+  border: 1px solid #bbb;
+  border-radius: 4px;
+  font: inherit;
+}
+
+.inspectorRow input {
+  width: 90px;
+}
+
+/* Label above a full-width control, for a multi-line text box. */
+.inspectorRowStacked {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+}
+
+.inspectorRowStacked textarea {
+  padding: 4px 6px;
+  border: 1px solid #bbb;
+  border-radius: 4px;
+  font: inherit;
+  resize: vertical;
+}
+
+.inspectorRow input[type='checkbox'] {
+  width: auto;
+  padding: 0;
+}
+
+.inspectorRow input.inspectorCustomNameInput {
+  width: 140px;
+}
+
+.inspectorRow select {
+  width: 130px;
+  font-size: 12px;
+}
+
+/* A read-only field whose value is multi-line (the PLC's generated program preview) stacks its
+   label above the field instead of side by side - .inspectorRow's own flex row leaves no room for
+   a multi-line value next to a label. */
+.inspectorRowStacked {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.inspectorReadonlyText {
+  width: 100%;
+  font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  font-size: 11.5px;
+  padding: 5px 6px;
+  border: 1px solid #bbb;
+  border-radius: 4px;
+  resize: vertical;
+  background: var(--panel-2);
+  color: var(--muted);
+}
+
+.inspectorSectionHeading {
+  font-size: 13px;
+  font-weight: 600;
+  margin: 10px 0 4px;
+}
+
+/* One sensor per block: its label/bounds/remove on one line, a slider below - separated by a
+   hairline so a growing list of sensors still reads as distinct entries. */
+.inspectorSensorRow {
+  padding: 8px 0;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.inspectorSensorRow:first-of-type {
+  border-top: 1px solid var(--line-soft);
+}
+
+.inspectorSensorNumbers {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.inspectorSensorNumbers input {
+  padding: 4px 6px;
+  border: 1px solid #bbb;
+  border-radius: 4px;
+  font-size: 12px;
+}
+
+.inspectorSensorLabel {
+  width: 46px;
+}
+
+.inspectorSensorNumbers input[type='number'] {
+  width: 44px;
+  padding: 4px 4px;
+}
+
+.inspectorFieldError {
+  border-color: var(--accent) !important;
+  outline: 1px solid var(--accent);
+}
+
+.inspectorRangeSep {
+  color: var(--muted);
+}
+
+.inspectorRemoveBtn {
+  border: none;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 13px;
+  padding: 2px 5px;
+  border-radius: 4px;
+  margin-left: auto;
+}
+
+.inspectorRemoveBtn:hover {
+  background: var(--panel-2);
+  color: var(--accent);
+}
+
+.inspectorAddBtn {
+  margin-top: 6px;
+  font-size: 12px;
+  padding: 6px 8px;
+}
+
+/* Dual-handle range slider: two native range inputs stacked on the same track, each with a
+   transparent body (clicks pass through to whichever is on top / the track beneath) and only
+   its thumb interactive, plus a plain div drawn underneath as the filled span between them. */
+.sensorSlider {
+  position: relative;
+  height: 20px;
+  margin: 8px 2px 2px;
+}
+
+.sensorSliderTrack {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: var(--line);
+  border-radius: 2px;
+  transform: translateY(-50%);
+}
+
+.sensorSliderRange {
+  position: absolute;
+  top: 50%;
+  height: 4px;
+  background: var(--port);
+  border-radius: 2px;
+  transform: translateY(-50%);
+}
+
+.sensorSliderInput {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  margin: 0;
+  background: transparent;
+  appearance: none;
+  -webkit-appearance: none;
+  pointer-events: none;
+}
+
+.sensorSliderInput::-webkit-slider-runnable-track {
+  background: transparent;
+}
+
+.sensorSliderInput::-moz-range-track {
+  background: transparent;
+}
+
+.sensorSliderInput::-webkit-slider-thumb {
+  appearance: none;
+  -webkit-appearance: none;
+  pointer-events: auto;
+  width: 14px;
+  height: 14px;
+  margin-top: 3px;
+  border-radius: 50%;
+  background: #fff;
+  border: 2px solid var(--port);
+  cursor: grab;
+}
+
+.sensorSliderInput::-moz-range-thumb {
+  pointer-events: auto;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #fff;
+  border: 2px solid var(--port);
+  cursor: grab;
+}
+
+.projectName {
+  /* Sized for the toolbar rather than stretched to a panel width: wide enough for a typical
+     project name, and allowed to shrink before the icon buttons beside it do. */
+  flex: 0 1 180px;
+  min-width: 90px;
+  padding: 6px 8px;
+  border: 1px solid #bbb;
+  border-radius: 6px;
+  background: #fff;
+  font: inherit;
+  font-size: 13px;
+}
+
+.restoreBanner {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1000;
+  background: #fff7e0;
+  border: 1px solid #e6d38a;
+  border-radius: 8px;
+  padding: 8px 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.12);
+}
+
+.restoreBanner button {
+  border: 1px solid #ccc;
+  background: #fff;
+  border-radius: 6px;
+  padding: 4px 10px;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+/* One row of orientation for a new canvas: what to do with the sidebar, and the two mouse
+   gestures that are otherwise undiscoverable. Wraps rather than running past the workspace edge
+   on a narrow window, so it stays a single row wherever there is room for one. */
+.hint {
+  position: absolute;
+  bottom: 8px;
+  left: 8px;
+  right: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  width: fit-content;
+  max-width: calc(100% - 16px);
+  padding: 6px 8px;
+  font-size: 12px;
+  color: #333;
+  background: #ffffffcc;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  z-index: 3;
+}
+
+.hint .hintSep {
+  color: var(--faint);
+}
+
+.hint .hintKey {
+  font-weight: 600;
+  color: var(--ink);
+}
+
+/* ---------- Export dialog ---------- */
+
+.modalBackdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(17, 17, 17, 0.35);
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.exportDialog {
+  background: #fff;
+  border-radius: 10px;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.25);
+  width: 480px;
+  max-width: calc(100vw - 32px);
+  max-height: calc(100vh - 32px);
+  overflow: auto;
+  padding: 16px;
+}
+
+.exportDialogHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.exportDialogHeader h2 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.exportDialogClose {
+  border: none;
+  background: none;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  color: var(--muted);
+  padding: 4px;
+}
+
+.exportDialogClose:hover {
+  color: var(--ink);
+}
+
+.exportRegionRow {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.exportRegionBtn {
+  flex: 1;
+  padding: 7px 8px;
+  border: 1px solid var(--line);
+  background: #fff;
+  border-radius: 6px;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+
+.exportRegionBtn:hover:not(:disabled) {
+  background: #f8f8ff;
+}
+
+.exportRegionBtn.selected {
+  border-color: var(--port);
+  background: #eaf2ff;
+  color: var(--port);
+  font-weight: 600;
+}
+
+.exportRegionBtn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.exportDialogHint {
+  margin: 0 0 12px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.exportPreviewBox {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 220px;
+  background: var(--panel);
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  padding: 10px;
+  margin-bottom: 14px;
+}
+
+.exportPreviewSvg {
+  max-width: 100%;
+  max-height: 260px;
+  width: auto;
+  height: auto;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
+}
+
+.exportPreviewEmpty {
+  color: var(--faint);
+  font-size: 13px;
+}
+
+.exportDialogButtons {
+  display: flex;
+  gap: 8px;
+}
+
+.exportDialogButtons .btn {
+  margin: 0;
+  text-align: center;
+}
+
+.tipsDialog {
+  width: 520px;
+}
+
+.tipsDialog .inspectorSectionHeading:first-of-type {
+  margin-top: 0;
+}
+
+.tipsList {
+  margin: 0 0 14px;
+  padding-left: 18px;
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--ink);
+}
+
+.tipsList li {
+  margin-bottom: 4px;
+}
+
+/* Electrical circuit: terminals and wires are drawn apart from pneumatics (thin dark-blue
+   lines, square-ish look) and turn amber while connected to +24 V during a run. */
+.port.portElectrical {
+  stroke: #1d3b8b;
+}
+
+.wire.wireElectrical {
+  stroke: #1d3b8b;
+  stroke-width: 1.5;
+}
+
+.wire.wireElectrical.live {
+  stroke: #e6a800;
+  stroke-width: 2.5;
+}
+
+.port.portElectrical.portConnected {
+  stroke: transparent;
+}
+
+/* PLC graphical program editor (ui/plcEditorDialog.ts) - reuses .exportDialog's own chrome,
+   but much wider, since the canvas needs real room to lay out a diagram in. */
+.plcEditorDialog {
+  width: 820px;
+}
+
+.plcPalette {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 10px;
+  padding: 8px;
+  background: var(--panel);
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+}
+
+.plcPaletteGroup {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.plcPaletteGroupLabel {
+  font-size: 11px;
+  color: var(--muted);
+  margin-right: 2px;
+}
+
+.plcPaletteBtn {
+  margin: 0;
+  padding: 5px 9px;
+  font-size: 12px;
+}
+
+.plcCanvasWrap {
+  position: relative;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  overflow: auto;
+  margin-bottom: 10px;
+  background: #fafafa;
+}
+
+.plcCanvas {
+  display: block;
+}
+
+.plcOverlayLayer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.plcOverlayBox {
+  position: absolute;
+  display: flex;
+  gap: 2px;
+  pointer-events: auto;
+}
+
+.plcOverlayName,
+.plcOverlayParam {
+  width: 100%;
+  min-width: 0;
+  font-size: 10px;
+  padding: 1px 3px;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+}
+
+.plcOverlayParams {
+  display: flex;
+  gap: 3px;
+}
+
+.plcOverlayParams .plcOverlayParam {
+  flex: 1;
+}
+
+.plcNode rect {
+  fill: #fff;
+  stroke: #111;
+  stroke-width: 1.5;
+  cursor: grab;
+}
+
+.plcNode-signal rect {
+  fill: #eef6ff;
+}
+
+.plcNode-coil rect {
+  fill: #fff4e5;
+}
+
+/* Labels inside a node must not swallow the drag that moves it - a mousedown anywhere on the
+   node body should grab it, including on the text sitting over that body. */
+.plcNode text {
+  pointer-events: none;
+  user-select: none;
+}
+
+/* ...except the remove button, which is itself a <text> and so needs its events handed back,
+   or its mousedown (and its hover feedback, and its cursor) never fire at all. Same
+   none-on-the-parent / auto-on-the-interactive-child pattern as .plcWire vs .plcWireHit
+   below. */
+.plcNodeRemove {
+  pointer-events: auto;
+  cursor: pointer;
+  fill: var(--muted);
+}
+
+.plcNodeRemove:hover {
+  fill: var(--accent);
+}
+
+.plcPin {
+  fill: var(--port);
+  stroke: #fff;
+  stroke-width: 1.2;
+  cursor: crosshair;
+}
+
+.plcWire {
+  stroke: #111;
+  stroke-width: 1.5;
+  pointer-events: none;
+}
+
+.plcWireSelected {
+  stroke: var(--accent);
+  stroke-width: 2.5;
+}
+
+.plcWireHit {
+  stroke: transparent;
+  stroke-width: 10;
+  cursor: pointer;
+}
+
+.plcWireGhost {
+  stroke: var(--port);
+  stroke-width: 1.5;
+  stroke-dasharray: 4 3;
+  pointer-events: none;
+}
+
+.plcProgramPreview {
+  width: 100%;
+  font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  font-size: 12px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 8px;
+  resize: vertical;
+  background: var(--panel);
+  margin-bottom: 4px;
+}
