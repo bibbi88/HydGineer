@@ -99,7 +99,15 @@ const TIP_SECTIONS: TipSection[] = [
       'Cylinders: give the moving mass (kg) to include inertia. The piston then accelerates ' +
         'and decelerates by F = m·a against the springy oil, and stopping it suddenly shows the ' +
         'pressure peak it causes ("peak" in its readout). Each frame is solved in steps of 2 ms.',
-      'Flow dividers and directional valves can be switched type in place: pick another type ' +
+      'Load sensing: wire each load-sensing valve’s LS port to the LS pump’s LS port (with ' +
+        'two sections, through a shuttle valve, which passes on the higher signal). The pump ' +
+        'then holds its outlet at the highest load pressure plus its margin, so the flow follows ' +
+        'the lever and not the load, and the pump only makes the pressure that’s needed. In ' +
+        'neutral the LS line is vented and the pump idles at standby pressure.',
+      'Load-sensing valve lever: drag the slider beside the valve while simulating - left = ' +
+        'P→A, right = P→B, middle = closed (double-click it to centre). With several sections, ' +
+        'tick "Section pressure compensator" so a lightly loaded section doesn’t take all the oil.',
+      'Flow dividers, pumps and directional valves can be switched type in place: pick another type ' +
         'in the inspector, or drag the other type from the library onto it (it outlines green). ' +
         'Wires, position and rotation are kept.',
       'Hand-lever valves are switched by clicking the left or right half of the symbol while the ' +

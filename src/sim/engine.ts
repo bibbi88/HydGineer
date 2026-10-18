@@ -26,7 +26,7 @@ function globalize(id: number, e: HydElement): HydElement {
   const k = (p: string): string => portKey(id, p);
   switch (e.kind) {
     case 'pump':
-      return { ...e, out: k(e.out) };
+      return { ...e, out: k(e.out), x: e.x === undefined ? undefined : k(e.x) };
     case 'tank':
     case 'accumulator':
       return { ...e, a: k(e.a) };
@@ -39,6 +39,7 @@ function globalize(id: number, e: HydElement): HydElement {
     case 'pilotCheck':
     case 'rotaryDivider':
     case 'counterbalance':
+    case 'shuttle':
       return { ...e, a: k(e.a), b: k(e.b), x: k(e.x) };
     case 'compensator':
       return { ...e, a: k(e.a), b: k(e.b), x: k(e.x), y: k(e.y) };

@@ -35,10 +35,16 @@ export const HYD_ONE_WAY_FC_TYPE = 'hydOneWayFlowControl';
 export const HYD_FLOW_CONTROL_TYPE = 'hydFlowControl';
 export const HYD_REDUCING_TYPE = 'hydReducing';
 export const HYD_COUNTERBALANCE_TYPE = 'hydCounterbalance';
+export const HYD_VALVE_LS_TYPE = 'hydValveLS';
+export const HYD_SHUTTLE_TYPE = 'hydShuttle';
 
 /** Directional valves driven by named solenoids - also what project loading and the electrical
  * coil components use to pair coil names with valves. */
-export const SOLENOID_VALVE_TYPES = new Set<string>([HYD_VALVE_43_TYPE, HYD_VALVE_42_TYPE]);
+export const SOLENOID_VALVE_TYPES = new Set<string>([
+  HYD_VALVE_43_TYPE,
+  HYD_VALVE_42_TYPE,
+  HYD_VALVE_LS_TYPE,
+]);
 /** Snapshot fields that hold a solenoid name on those valves. */
 export const SOLENOID_KEY_FIELDS = ['key', 'keyLeft', 'keyRight'] as const;
 
@@ -167,7 +173,7 @@ function paintValve(
   const cell = cells[active] ?? {};
   const items: Array<{ els: SVGElement[]; p: number; q: number }> = [];
   elements.forEach((e, i) => {
-    if (e.kind !== 'orifice') return;
+    if (e.kind !== 'orifice' && e.kind !== 'flowControl') return;
     const els = cell[`${e.a}>${e.b}`];
     if (!els) return;
     const q = ctx.elementValue(i);
@@ -303,7 +309,9 @@ function valveInfo(ctx: SimStepContext, elements: HydElement[]): string[] {
     return lines;
   }
   elements.forEach((e, i) => {
-    if (e.kind !== 'orifice') return;
+    if (e.kind !== 'orifice' && e.kind !== 'flowControl') return;
+    // The load-sensing signal path carries next to nothing; it isn't a working flow.
+    if (e.a === 'LS' || e.b === 'LS') return;
     const q = ctx.elementValue(i);
     if (Math.abs(q) < 0.005) return;
     lines.push(`${q >= 0 ? `${e.a}→${e.b}` : `${e.b}→${e.a}`} ${fmtFlow(Math.abs(q))}`);
@@ -1089,6 +1097,271 @@ export function createHydCounterbalance(compLayer: HTMLElement, x: number, y: nu
         ...pilotL,
         ...pilotX,
       ]);
+    },
+  });
+}
+
+/** Pressure drop (bar) across a load-sensing valve's metering notch at which its rated flow is
+ * quoted (full spool stroke) - in a load-sensing circuit this is about the pump's margin. */
+export const LS_VALVE_RATING_DP = 15;
+/** Δp (bar) a section pressure compensator holds across the metering notch. */
+export const LS_SECTION_COMP_DP = 10;
+/** LS signal passage (L/min per √bar): work port ↔ LS port, or LS port ↔ tank in neutral. */
+const LS_SIGNAL_K = 1;
+
+/**
+ * Load-sensing proportional directional valve (4/3, closed centre, with LS port). The spool is
+ * proportional: its stroke (−100 % … +100 %) opens the metering notch P→A or P→B - and the
+ * matching return notch to T - in proportion. Whichever work port is open is connected to the
+ * LS port, which tells the load-sensing pump the load pressure; in neutral the LS port is vented
+ * to tank, so the pump drops to standby.
+ *
+ * Flow through the notch is Q = k·stroke·√Δp, and a load-sensing pump keeps Δp at its margin -
+ * so the flow depends on the lever position only, not on the load. With several sections, the
+ * lighter load still gets more oil unless each section has its own pressure compensator, which
+ * holds a fixed Δp across its notch (enable "Section compensator").
+ *
+ * Operated by its lever (a slider under the symbol while simulating) or by two solenoids
+ * driving it to a set stroke.
+ */
+export function createHydValveLS(compLayer: HTMLElement, x: number, y: number): Component {
+  const svgW = 240;
+  const svgH = 120;
+  const shell = createHydShell(compLayer, HYD_VALVE_LS_TYPE, x, y, svgW, svgH, 'LS valve', {
+    x: 60,
+    y: 34,
+    w: 120,
+    h: 52,
+  });
+  const slide = createSvgEl('g');
+  shell.g.appendChild(slide);
+  const leads = drawValveLeads(shell.g);
+  const ports = makeValvePorts(shell);
+  // Proportional valve: a line above and below the body.
+  line(shell.g, 60, BODY_Y - 5, 180, BODY_Y - 5, { 'stroke-width': 1.5 });
+  line(shell.g, 60, BODY_Y + CELL + 5, 180, BODY_Y + CELL + 5, { 'stroke-width': 1.5 });
+  // LS port, bottom right, with its signal line into the body.
+  const lsLead = [
+    path(shell.g, `M 170 100 V ${BODY_Y + CELL + 5}`, {
+      'stroke-dasharray': '4 3',
+      'stroke-width': 1.5,
+    }),
+  ];
+  lsLead[0]!.dataset.nodash = '1';
+  createPortLabel(shell.g, 178, 102, 'LS', { anchor: 'start', fontSize: 10 });
+  ports.LS = createPort(shell.g, 'LS', 170, 100, 'V');
+  const compLabel = createSvgEl('text', { x: 60, y: 30, 'font-size': 9 });
+  shell.g.appendChild(compLabel);
+  shell.setInfoSide('right');
+  let cells: CellPaths[] = [];
+
+  // The lever: a slider under the symbol, shown while simulating (see app.css).
+  const lever = document.createElement('input');
+  lever.type = 'range';
+  lever.min = '-100';
+  lever.max = '100';
+  lever.step = '5';
+  lever.value = '0';
+  lever.className = 'lsLever';
+  lever.title = 'Lever: left = P→A, right = P→B, middle = closed (double-click to centre)';
+  for (const ev of ['mousedown', 'pointerdown', 'click', 'dblclick'] as const) {
+    lever.addEventListener(ev, (e) => e.stopPropagation());
+  }
+  shell.el.appendChild(lever);
+
+  const [k1, k2] = nextFreeSolenoidKeys(2);
+  let keyLeft = k1 ?? 'Y1';
+  let keyRight = k2 ?? 'Y2';
+  let actuation: Actuation = 'lever';
+  let qNom = 40; // L/min at full stroke, Δp LS_VALVE_RATING_DP
+  let solenoidStroke = 100; // % the solenoids drive the spool to
+  let compensated = false;
+  /** Spool stroke, −1 (P→A, left box) … +1 (P→B, right box). */
+  let stroke = 0;
+  let lastElements: HydElement[] = [];
+
+  function draw(): void {
+    slide.replaceChildren();
+    cells = [
+      drawCell(slide, 60, 'parallel'),
+      drawCell(slide, 100, 'closed'),
+      drawCell(slide, 140, 'cross'),
+    ];
+    if (actuation === 'solenoid') {
+      drawSolenoid(slide, 60, -1, keyLeft);
+      drawSolenoid(slide, 180, 1, keyRight);
+    } else {
+      drawLever(slide, 60, -1);
+    }
+    drawSpring(slide, 60, -1);
+    drawSpring(slide, 180, 1);
+    lever.style.display = actuation === 'lever' ? '' : 'none';
+    compLabel.textContent = compensated ? 'comp.' : '';
+    applyState();
+  }
+  function applyState(): void {
+    // Proportional: the boxes slide as far as the spool actually strokes.
+    slide.setAttribute('transform', `translate(${(stroke * CELL).toFixed(1)},0)`);
+  }
+  draw();
+
+  lever.addEventListener('input', () => {
+    stroke = Number(lever.value) / 100;
+    applyState();
+  });
+  lever.addEventListener('dblclick', () => {
+    stroke = 0;
+    lever.value = '0';
+    applyState();
+  });
+
+  const comp = hydComponentBase(shell, HYD_VALVE_LS_TYPE, x, y, svgW, svgH, ports);
+  return Object.assign(comp, {
+    recompute(): void {
+      if (actuation !== 'solenoid') return;
+      const l = keyLeft.trim() !== '' && getSignal(keyLeft);
+      const r = keyRight.trim() !== '' && getSignal(keyRight);
+      const next = l && !r ? -solenoidStroke / 100 : r && !l ? solenoidStroke / 100 : 0;
+      if (next !== stroke) {
+        stroke = next;
+        applyState();
+      }
+    },
+    hydElements(): HydElement[] {
+      const open = Math.abs(stroke);
+      if (open < 0.005) {
+        lastElements = [{ kind: 'orifice', a: 'LS', b: 'T', k: LS_SIGNAL_K }];
+        return lastElements;
+      }
+      const work = stroke < 0 ? 'A' : 'B';
+      const other = stroke < 0 ? 'B' : 'A';
+      const kMeter = orificeKFromRating(qNom, LS_VALVE_RATING_DP) * open;
+      const meter: HydElement = compensated
+        ? {
+            kind: 'flowControl',
+            a: 'P',
+            b: work,
+            q: kMeter * Math.sqrt(LS_SECTION_COMP_DP),
+            dpMin: 2,
+          }
+        : { kind: 'orifice', a: 'P', b: work, k: kMeter };
+      lastElements = [
+        meter,
+        // Return notch: larger than the metering notch, so it doesn't hold the load back.
+        { kind: 'orifice', a: other, b: 'T', k: kMeter * 2 },
+        { kind: 'orifice', a: work, b: 'LS', k: LS_SIGNAL_K },
+      ];
+      return lastElements;
+    },
+    step(_dt: number, ctx: SimStepContext): void {
+      const pct = Math.round(Math.abs(stroke) * 100);
+      const lines = valveInfo(ctx, lastElements);
+      if (pct > 0) lines.unshift(`${stroke < 0 ? 'P→A' : 'P→B'} open ${pct} %`);
+      lines.push(`LS ${fmtBar(ctx.pressureAt('LS'))}`);
+      shell.setInfo(lines);
+      const active = stroke < -0.005 ? 0 : stroke > 0.005 ? 2 : 1;
+      paintValve(ctx, cells, active, lastElements, leads);
+      paintFlow(lsLead, ctx.pressureAt('LS'), 0);
+    },
+    snapshot: () => ({
+      ...nameSnapshot(shell),
+      keyLeft,
+      keyRight,
+      actuation,
+      qNom,
+      solenoidStroke,
+      compensated,
+    }),
+    restore(data: Record<string, unknown>): void {
+      restoreName(shell, data);
+      if (typeof data.keyLeft === 'string') keyLeft = data.keyLeft;
+      if (typeof data.keyRight === 'string') keyRight = data.keyRight;
+      if (data.actuation === 'solenoid' || data.actuation === 'lever') actuation = data.actuation;
+      qNom = readNum(data, 'qNom', qNom, 0.1, 2000);
+      solenoidStroke = readNum(data, 'solenoidStroke', solenoidStroke, 0, 100);
+      if ('compensated' in data) compensated = Boolean(data.compensated);
+      draw();
+    },
+    reset(): void {
+      stroke = 0;
+      lever.value = '0';
+      applyState();
+      shell.setInfo([]);
+      clearFlow([...allCellEls(cells), ...Object.values(leads).flat(), ...lsLead]);
+    },
+  });
+}
+
+/**
+ * Shuttle valve (OR valve): the outlet takes the higher of the two inlet pressures - the ball is
+ * pushed onto the seat of the lower one. In load-sensing circuits it picks the highest load
+ * signal of two sections for the pump.
+ */
+export function createHydShuttle(compLayer: HTMLElement, x: number, y: number): Component {
+  const svgW = 80;
+  const svgH = 80;
+  const shell = createHydShell(compLayer, HYD_SHUTTLE_TYPE, x, y, svgW, svgH, 'Shuttle valve', {
+    x: 18,
+    y: 28,
+    w: 44,
+    h: 24,
+  });
+  const g = shell.g;
+  g.appendChild(
+    createSvgEl('rect', {
+      x: 20,
+      y: 30,
+      width: 40,
+      height: 20,
+      fill: '#fff',
+      stroke: INK,
+      'stroke-width': STROKE,
+    }),
+  );
+  // Seats at both ends, the ball between them.
+  path(g, 'M 24 33 L 30 40 L 24 47');
+  path(g, 'M 56 33 L 50 40 L 56 47');
+  const ball = createSvgEl('circle', {
+    cx: 40,
+    cy: 40,
+    r: 5,
+    fill: '#fff',
+    stroke: INK,
+    'stroke-width': 1.5,
+  });
+  g.appendChild(ball);
+  // Drawn from each inlet towards the outlet.
+  const in1 = [line(g, 10, 40, 20, 40)];
+  const in2 = [line(g, 70, 40, 60, 40)];
+  const out = [line(g, 40, 30, 40, 10)];
+  createPortLabel(g, 10, 54, '1', { anchor: 'middle', fontSize: 9 });
+  createPortLabel(g, 70, 54, '2', { anchor: 'middle', fontSize: 9 });
+  const ports = {
+    X1: createPort(g, 'X1', 10, 40, 'H'),
+    X2: createPort(g, 'X2', 70, 40, 'H'),
+    OUT: createPort(g, 'OUT', 40, 10, 'V'),
+  };
+  shell.setInfoSide('right');
+  const comp = hydComponentBase(shell, HYD_SHUTTLE_TYPE, x, y, svgW, svgH, ports);
+  return Object.assign(comp, {
+    hydElements: (): HydElement[] => [{ kind: 'shuttle', a: 'X1', b: 'X2', x: 'OUT', k: 1 }],
+    step(_dt: number, ctx: SimStepContext): void {
+      // The ball sits on the seat of the lower-pressure inlet.
+      const w = ctx.elementValue(0);
+      ball.setAttribute('cx', String(32 + 16 * w));
+      const p1 = ctx.pressureAt('X1');
+      const p2 = ctx.pressureAt('X2');
+      paintFlow(in1, p1, -ctx.flowAt('X1'));
+      paintFlow(in2, p2, -ctx.flowAt('X2'));
+      paintFlow(out, ctx.pressureAt('OUT'), ctx.flowAt('OUT'));
+      shell.setInfo(Math.max(p1, p2) > 1 ? [`out ${fmtBar(ctx.pressureAt('OUT'))}`] : []);
+    },
+    snapshot: () => nameSnapshot(shell),
+    restore: (data: Record<string, unknown>) => restoreName(shell, data),
+    reset(): void {
+      ball.setAttribute('cx', '40');
+      shell.setInfo([]);
+      clearFlow([...in1, ...in2, ...out]);
     },
   });
 }

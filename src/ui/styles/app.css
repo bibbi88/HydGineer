@@ -1665,3 +1665,19 @@ polygon.hydPathReturn {
   outline-offset: 4px;
   background: color-mix(in srgb, var(--insert) 8%, transparent);
 }
+
+/* Proportional lever of a load-sensing valve: under the symbol, only while simulating. */
+.lsLever {
+  position: absolute;
+  /* Beside the valve's own lever, on its left: the side no ports or readout use. */
+  top: 50%;
+  right: calc(100% - 32px);
+  transform: translateY(-50%);
+  width: 90px;
+  accent-color: var(--accent);
+  cursor: ew-resize;
+}
+
+.workspace:not(.simulating) .lsLever {
+  display: none;
+}

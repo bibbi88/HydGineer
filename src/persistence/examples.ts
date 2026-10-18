@@ -51,6 +51,26 @@ function powerUnit(
   return j;
 }
 
+/** Load-sensing pump (max 40 L/min, 20 bar margin, 250 bar cut-off) with a safety relief valve
+ * and a gauge. Returns the supply junction and the pump (whose LS port the valves feed). */
+function lsUnit(b: Builder, px: number, py: number): { p: number; pump: number } {
+  const pump = b.add('hydPumpLS', px, py, {
+    displacement: 28,
+    speed: 1450,
+    margin: 20,
+    compSetting: 250,
+  });
+  const j = b.add('junction', px - 10, py - 110, { orientation: 'H' });
+  const relief = b.add('hydRelief', px - 130, py - 60, { setting: 270 });
+  const tank = b.add('hydTank', px - 130, py + 40);
+  const gauge = b.add('hydGauge', px - 70, py - 150, { range: 250 });
+  b.wire(pump, 'P', j, 'P');
+  b.wire(j, 'P', relief, 'P');
+  b.wire(relief, 'T', tank, 'T');
+  b.wire(j, 'P', gauge, 'P');
+  return { p: j, pump };
+}
+
 export const EXAMPLES: Array<{ title: string; file: () => ProjectFileV1 }> = [
   {
     title: 'Cylinder, hand lever valve, meter-out',
@@ -303,6 +323,69 @@ export const EXAMPLES: Array<{ title: string; file: () => ProjectFileV1 }> = [
         b.wire(valve, 'T', tank, 'T');
         b.wire(valve, 'A', cyl, 'A');
         b.wire(valve, 'B', cyl, 'B');
+      }),
+  },
+  {
+    title: 'Load sensing: one proportional section',
+    file: () =>
+      circuit('Example - load sensing', (b) => {
+        // Move the lever slider under the valve while simulating: the flow (and the cylinder's
+        // speed) follows the lever, whatever the load, and the pump runs at only the load
+        // pressure + its 20 bar margin. In neutral the pump idles at standby.
+        const supply = lsUnit(b, 260, 560);
+        const valve = b.add('hydValveLS', 460, 380, { actuation: 'lever', qNom: 40 });
+        const tank = b.add('hydTank', 540, 470);
+        const cyl = b.add('hydCylinderDouble', 500, 150, {
+          bore: 63,
+          rodD: 36,
+          stroke: 500,
+          load: 15000,
+          friction: 200,
+          showName: true,
+        });
+        b.wire(supply.p, 'P', valve, 'P');
+        b.wire(valve, 'T', tank, 'T');
+        b.wire(valve, 'LS', supply.pump, 'LS');
+        b.wire(valve, 'A', cyl, 'A');
+        b.wire(valve, 'B', cyl, 'B');
+      }),
+  },
+  {
+    title: 'Load sensing: two sections, shuttle valve, compensators',
+    file: () =>
+      circuit('Example - load sensing, two sections', (b) => {
+        // Two sections on one LS pump; the shuttle valve sends the higher load signal to the
+        // pump. With their section compensators each cylinder gets the flow its lever asks for,
+        // although one carries 5 kN and the other 25 kN. Untick "Section compensator" on both
+        // valves to see the light load take most of the oil.
+        const supply = lsUnit(b, 200, 620);
+        const v1 = b.add('hydValveLS', 420, 420, {
+          actuation: 'lever',
+          qNom: 30,
+          compensated: true,
+        });
+        const v2 = b.add('hydValveLS', 840, 420, {
+          actuation: 'lever',
+          qNom: 30,
+          compensated: true,
+        });
+        const t1 = b.add('hydTank', 500, 510);
+        const t2 = b.add('hydTank', 920, 510);
+        const shuttle = b.add('hydShuttle', 680, 580);
+        const cylData = { bore: 50, rodD: 30, stroke: 400, friction: 150, showName: true };
+        const c1 = b.add('hydCylinderDouble', 460, 170, { ...cylData, load: 5000 });
+        const c2 = b.add('hydCylinderDouble', 880, 170, { ...cylData, load: 25000 });
+        b.wire(supply.p, 'P', v1, 'P');
+        b.wire(supply.p, 'P', v2, 'P');
+        b.wire(v1, 'T', t1, 'T');
+        b.wire(v2, 'T', t2, 'T');
+        b.wire(v1, 'LS', shuttle, 'X1');
+        b.wire(v2, 'LS', shuttle, 'X2');
+        b.wire(shuttle, 'OUT', supply.pump, 'LS');
+        b.wire(v1, 'A', c1, 'A');
+        b.wire(v1, 'B', c1, 'B');
+        b.wire(v2, 'A', c2, 'A');
+        b.wire(v2, 'B', c2, 'B');
       }),
   },
 ];

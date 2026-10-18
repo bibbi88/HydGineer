@@ -23,6 +23,7 @@ import {
 } from './base';
 
 export const HYD_PUMP_TYPE = 'hydPump';
+export const HYD_PUMP_LS_TYPE = 'hydPumpLS';
 export const HYD_TANK_TYPE = 'hydTank';
 export const HYD_RELIEF_TYPE = 'hydRelief';
 export const HYD_GAUGE_TYPE = 'hydGauge';
@@ -36,6 +37,12 @@ export const PUMP_BURST_PRESSURE = 1000;
 /** Pressure band (bar) below its setting over which a compensated pump swivels back to zero. */
 export const PC_BAND = 5;
 
+/** Pressure band (bar) over which a load-sensing pump's flow controller regulates. */
+export const LS_BAND = 3;
+/** Bleed orifice (L/min per √bar) from an LS pump's LS port to tank, which lets the LS line
+ * fall back once no valve is signalling - a few tenths of a L/min at working pressure. */
+export const LS_BLEED_K = 0.02;
+
 /** Relief valve characteristic: flow per bar above the cracking pressure (pressure override). */
 export const RELIEF_GAIN = 10;
 
@@ -48,11 +55,24 @@ export const RELIEF_GAIN = 10;
  * something gives, which is shown as an overpressure warning.
  *
  * The motor can be left always on, or switched by a named signal (e.g. a relay coil "M1").
+ *
+ * The 'ls' variant is a load-sensing pump: variable displacement with an LS port. Its flow
+ * controller holds the outlet at the highest load pressure signalled on LS plus a margin
+ * (standby pressure, typically 15-30 bar), so the pump delivers exactly the flow the valves
+ * meter out, at only the pressure the heaviest load needs; a pressure cut-off limits the
+ * maximum. With no valve open the LS line is vented and the pump idles at standby pressure.
  */
-export function createHydPump(compLayer: HTMLElement, x: number, y: number): Component {
+export function createHydPump(
+  compLayer: HTMLElement,
+  x: number,
+  y: number,
+  variant: 'standard' | 'ls' = 'standard',
+): Component {
+  const isLS = variant === 'ls';
+  const type = isLS ? HYD_PUMP_LS_TYPE : HYD_PUMP_TYPE;
   const svgW = 100;
   const svgH = 120;
-  const shell = createHydShell(compLayer, HYD_PUMP_TYPE, x, y, svgW, svgH, 'Pump', {
+  const shell = createHydShell(compLayer, type, x, y, svgW, svgH, 'Pump', {
     x: 18,
     y: 26,
     w: 76,
@@ -109,15 +129,31 @@ export function createHydPump(compLayer: HTMLElement, x: number, y: number): Com
   const pcG = createSvgEl('g');
   g.appendChild(pcG);
   adjustArrow(pcG, cx, cy, 22);
-  path(pcG, `M ${cx} 20 H 8 V ${cy + 22} H ${cx - 12}`, {
-    'stroke-dasharray': '4 3',
-    'stroke-width': 1.5,
-  });
+  if (!isLS) {
+    path(pcG, `M ${cx} 20 H 8 V ${cy + 22} H ${cx - 12}`, {
+      'stroke-dasharray': '4 3',
+      'stroke-width': 1.5,
+    });
+  }
   springH(pcG, cx - 30, cx - 12, cy + 30, 4);
   const compText = createSvgEl('text', { x: 4, y: 16, 'font-size': 9 });
   pcG.appendChild(compText);
+  // LS variant: the load-sensing line from the LS port to the flow controller.
+  const lsLine: SVGElement[] = [];
+  if (isLS) {
+    const l = path(g, `M 10 60 H 16 V ${cy + 22} H ${cx - 12}`, {
+      'stroke-dasharray': '4 3',
+      'stroke-width': 1.5,
+    });
+    l.dataset.nodash = '1';
+    lsLine.push(l);
+    createPortLabel(g, 10, 50, 'LS', { anchor: 'middle', fontSize: 9 });
+  }
 
-  const ports = { P: createPort(g, 'P', cx, 10, 'V') };
+  const ports: Record<string, ReturnType<typeof createPort>> = {
+    P: createPort(g, 'P', cx, 10, 'V'),
+  };
+  if (isLS) ports.LS = createPort(g, 'LS', 10, 60, 'H', { isPilot: true, pilotDir: -1 });
   shell.setInfoSide('right');
 
   let displacement = 10; // cm³/rev
@@ -128,7 +164,8 @@ export function createHydPump(compLayer: HTMLElement, x: number, y: number): Com
   let running = true;
   /** 'fixed' displacement, or 'pc': variable displacement with a pressure compensator. */
   let control: 'fixed' | 'pc' = 'fixed';
-  let compSetting = 150; // bar
+  let compSetting = isLS ? 250 : 150; // bar - for the LS pump, its maximum pressure cut-off
+  let margin = 20; // bar - LS pump: pressure kept above the highest load
 
   function theoreticalFlow(): number {
     return (displacement * speed) / 1000;
@@ -144,13 +181,20 @@ export function createHydPump(compLayer: HTMLElement, x: number, y: number): Com
   function refresh(): void {
     signalText.textContent = signal.trim();
     motor.setAttribute('fill', running ? '#d8f5dc' : '#fff');
-    pcG.style.display = control === 'pc' ? '' : 'none';
-    compText.textContent = control === 'pc' ? `${compSetting} bar` : '';
-    shell.setDefaultName(control === 'pc' ? 'Pump (pressure compensated)' : 'Pump');
+    const variable = isLS || control === 'pc';
+    pcG.style.display = variable ? '' : 'none';
+    compText.textContent = isLS
+      ? `Δp ${margin} · max ${compSetting} bar`
+      : control === 'pc'
+        ? `${compSetting} bar`
+        : '';
+    shell.setDefaultName(
+      isLS ? 'Load-sensing pump' : control === 'pc' ? 'Pump (pressure compensated)' : 'Pump',
+    );
   }
   refresh();
 
-  const comp = hydComponentBase(shell, HYD_PUMP_TYPE, x, y, svgW, svgH, ports);
+  const comp = hydComponentBase(shell, type, x, y, svgW, svgH, ports);
   return Object.assign(comp, {
     recompute(): void {
       const next = signalSaysRun();
@@ -163,6 +207,14 @@ export function createHydPump(compLayer: HTMLElement, x: number, y: number): Com
       if (!running) return [];
       const q = theoreticalFlow();
       const leak = (q * (1 - etaV / 100)) / Math.max(1, ratedPressure);
+      if (isLS) {
+        return [
+          { kind: 'pump', out: 'P', q, leak, comp: compSetting, band: LS_BAND, x: 'LS', margin },
+          { kind: 'tank', a: '_S' },
+          { kind: 'relief', a: 'P', b: '_S', set: PUMP_BURST_PRESSURE, gain: 100 },
+          { kind: 'orifice', a: 'LS', b: '_S', k: LS_BLEED_K },
+        ];
+      }
       return [
         control === 'pc'
           ? { kind: 'pump', out: 'P', q, leak, comp: compSetting, band: PC_BAND }
@@ -177,7 +229,12 @@ export function createHydPump(compLayer: HTMLElement, x: number, y: number): Com
       const lines = running
         ? [`Q ${fmtFlow(q)}`, `p ${fmtBar(p)}`, `P ${((p * q) / 600).toFixed(2)} kW`]
         : ['motor off'];
-      if (running && control === 'pc') {
+      if (isLS) {
+        const pls = ctx.pressureAt('LS');
+        paintFlow(lsLine, pls, 0);
+        if (running) lines.splice(2, 0, `LS ${fmtBar(pls)} (Δp ${fmtBar(p - pls)})`);
+      }
+      if (running && (isLS || control === 'pc')) {
         // Swivel angle as a share of full displacement: what's delivered plus what leaks.
         const qTheo = theoreticalFlow();
         const leak = (qTheo * (1 - etaV / 100)) / Math.max(1, ratedPressure);
@@ -196,7 +253,7 @@ export function createHydPump(compLayer: HTMLElement, x: number, y: number): Com
         etaV,
         ratedPressure,
         signal,
-        control,
+        ...(isLS ? { margin } : { control }),
         compSetting,
       };
     },
@@ -209,6 +266,7 @@ export function createHydPump(compLayer: HTMLElement, x: number, y: number): Com
       if (typeof data.signal === 'string') signal = data.signal;
       if (data.control === 'fixed' || data.control === 'pc') control = data.control;
       compSetting = readNum(data, 'compSetting', compSetting, 1, 1000);
+      margin = readNum(data, 'margin', margin, 1, 100);
       running = signal.trim() === '' || signal.trim().startsWith('!');
       refresh();
     },
@@ -216,6 +274,7 @@ export function createHydPump(compLayer: HTMLElement, x: number, y: number): Com
       running = signal.trim() === '' || signal.trim().startsWith('!');
       refresh();
       shell.setInfo([]);
+      clearFlow(lsLine);
     },
   });
 }

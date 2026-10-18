@@ -16,7 +16,8 @@ import {
   setComponentRotation,
 } from './componentContextMenu';
 import { HYD_ROTARY_DIVIDER_TYPE, HYD_SPOOL_DIVIDER_TYPE } from '../components/hyd/dividers';
-import { HYD_VALVE_42_TYPE, HYD_VALVE_43_TYPE } from '../components/hyd/valves';
+import { HYD_VALVE_42_TYPE, HYD_VALVE_43_TYPE, HYD_VALVE_LS_TYPE } from '../components/hyd/valves';
+import { HYD_PUMP_LS_TYPE, HYD_PUMP_TYPE } from '../components/hyd/supply';
 
 /**
  * Groups of interchangeable component types: same job, same port names, so one can replace the
@@ -31,6 +32,11 @@ export const SWAP_FAMILIES: Array<Array<{ type: string; label: string }>> = [
   [
     { type: HYD_VALVE_43_TYPE, label: '4/3 (three positions)' },
     { type: HYD_VALVE_42_TYPE, label: '4/2 (two positions)' },
+    { type: HYD_VALVE_LS_TYPE, label: 'Load-sensing, proportional (4/3 + LS port)' },
+  ],
+  [
+    { type: HYD_PUMP_TYPE, label: 'Fixed or pressure-compensated' },
+    { type: HYD_PUMP_LS_TYPE, label: 'Load-sensing (LS port)' },
   ],
 ];
 

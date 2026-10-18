@@ -20,6 +20,7 @@ import {
   HYD_GAUGE_TYPE,
   HYD_PRESSURE_SWITCH_TYPE,
   HYD_ACCUMULATOR_TYPE,
+  HYD_PUMP_LS_TYPE,
 } from '../components/hyd/supply';
 import {
   CENTER_OPTIONS,
@@ -32,6 +33,7 @@ import {
   HYD_FLOW_CONTROL_TYPE,
   HYD_REDUCING_TYPE,
   HYD_COUNTERBALANCE_TYPE,
+  HYD_VALVE_LS_TYPE,
 } from '../components/hyd/valves';
 import {
   HYD_CYLINDER_DOUBLE_TYPE,
@@ -201,6 +203,7 @@ const VALVE_FLOW_FIELD: NumberField = {
 
 const INSPECTOR_FIELDS: Record<string, InspectorField[]> = {
   [HYD_PUMP_TYPE]: [
+    { kind: 'actuatorMode', label: 'Pump type', options: swapFamilyOf(HYD_PUMP_TYPE) },
     {
       kind: 'number',
       key: 'displacement',
@@ -240,6 +243,79 @@ const INSPECTOR_FIELDS: Record<string, InspectorField[]> = {
       kind: 'text',
       key: 'signal',
       label: 'Motor signal (empty = always on; K1 = runs while K1 is on; !S1 = while S1 is off)',
+    },
+  ],
+  [HYD_PUMP_LS_TYPE]: [
+    { kind: 'actuatorMode', label: 'Pump type', options: swapFamilyOf(HYD_PUMP_LS_TYPE) },
+    {
+      kind: 'number',
+      key: 'displacement',
+      label: 'Max displacement (cm³/rev)',
+      min: 0,
+      max: 1000,
+      step: 0.5,
+    },
+    { kind: 'number', key: 'speed', label: 'Motor speed (rpm)', min: 0, max: 10000, step: 10 },
+    {
+      kind: 'number',
+      key: 'margin',
+      label: 'LS margin / standby pressure (bar)',
+      min: 1,
+      max: 100,
+      step: 1,
+    },
+    {
+      kind: 'number',
+      key: 'compSetting',
+      label: 'Max pressure cut-off (bar)',
+      min: 1,
+      max: 1000,
+      step: 5,
+    },
+    { kind: 'number', key: 'etaV', label: 'Volumetric efficiency (%)', min: 50, max: 100, step: 1 },
+    {
+      kind: 'number',
+      key: 'ratedPressure',
+      label: 'Rated pressure (bar)',
+      min: 1,
+      max: 1000,
+      step: 10,
+    },
+    {
+      kind: 'text',
+      key: 'signal',
+      label: 'Motor signal (empty = always on; K1 = runs while K1 is on; !S1 = while S1 is off)',
+    },
+  ],
+  [HYD_VALVE_LS_TYPE]: [
+    { kind: 'actuatorMode', label: 'Valve type', options: swapFamilyOf(HYD_VALVE_LS_TYPE) },
+    {
+      kind: 'select',
+      key: 'actuation',
+      label: 'Actuation',
+      options: [
+        { value: 'lever', label: 'Proportional lever (slider while simulating)' },
+        { value: 'solenoid', label: 'Solenoids, to a set stroke' },
+      ],
+    },
+    {
+      kind: 'number',
+      key: 'qNom',
+      label: 'Rated flow at full stroke (L/min at Δp 15 bar)',
+      min: 0.1,
+      max: 2000,
+      step: 1,
+    },
+    { kind: 'checkbox', key: 'compensated', label: 'Section pressure compensator' },
+    { kind: 'text', key: 'keyLeft', label: 'Left solenoid (P→A)' },
+    { kind: 'text', key: 'keyRight', label: 'Right solenoid (P→B)' },
+    {
+      kind: 'number',
+      key: 'solenoidStroke',
+      label: 'Solenoid stroke (%)',
+      min: 0,
+      max: 100,
+      step: 5,
     },
   ],
   [HYD_ACCUMULATOR_TYPE]: [

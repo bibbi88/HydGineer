@@ -68,7 +68,24 @@ export type HydElement =
   /** Pump drawing from tank: delivers q·f − leak·p_out into `out`. f = 1 for a fixed pump; with
    * a pressure compensator (`comp`, bar) the displacement is swivelled back over the last
    * `band` bar below the setting, so the pump delivers only what the circuit takes there. */
-  | { kind: 'pump'; out: string; q: number; leak: number; comp?: number; band?: number }
+  | {
+      kind: 'pump';
+      out: string;
+      q: number;
+      leak: number;
+      comp?: number;
+      band?: number;
+      /** Load-sensing control: the pump holds its outlet at p_x + `margin` - the highest load
+       * pressure fed back on its LS port `x`, plus the margin (standby pressure) - swivelling
+       * back once the outlet rises above that. No flow passes through `x` itself. */
+      x?: string;
+      margin?: number;
+    }
+  /**
+   * Shuttle valve: outlet `x` is connected to whichever of inlets `a`, `b` has the higher
+   * pressure (the ball seals the lower one) - selects the highest of two load-sensing signals.
+   */
+  | { kind: 'shuttle'; a: string; b: string; x: string; k: number }
   /**
    * Gas-loaded (bladder/piston) accumulator on node `a`. Below the pre-charge pressure it holds
    * no oil; above it the gas is compressed polytropically, (p + 1)·V_gas^n = (p0 + 1)·V0^n in
@@ -226,6 +243,9 @@ export function accumulatorOil(
   const pabs = p0abs + ramp(p - e.precharge);
   return e.volume * (1 - Math.pow(p0abs / pabs, 1 / Math.max(e.n, 1)));
 }
+
+/** Pressure difference (bar) over which a shuttle valve's ball moves from one seat to the other. */
+const SHUTTLE_BAND = 0.5;
 
 /** End-stop stiffness of a flow divider's compensating sleeve (bar per unit overtravel). */
 const SPOOL_END_STIFFNESS = 2000;
@@ -506,7 +526,12 @@ export function solveHydraulics(input: HydInput): HydSolution {
         return { qa: q, qb: -q, value: q };
       }
       case 'pump': {
-        const f = e.comp === undefined ? 1 : smoothstep((e.comp - pb) / (e.band ?? 5));
+        const band = e.band ?? 5;
+        let f = e.comp === undefined ? 1 : smoothstep((e.comp - pb) / band);
+        if (e.margin !== undefined && tX[i]) {
+          const pls = pressureOf(xx, tX[i]!);
+          f *= smoothstep((pls + e.margin - pb) / band);
+        }
         const q = e.q * f - e.leak * Math.max(0, pb);
         // `qa` is the (nonexistent) suction side - the pump draws from the tank.
         return { qa: 0, qb: -q, value: q };
@@ -521,6 +546,13 @@ export function solveHydraulics(input: HydInput): HydSolution {
         const n = xx[varOfElement[i]!]!;
         const q = e.disp * n * 0.06;
         return { qa: q, qb: -q, value: n };
+      }
+      case 'shuttle': {
+        const px = pressureOf(xx, tX[i]!);
+        const w = smoothstep(0.5 + (pa - pb) / (2 * SHUTTLE_BAND));
+        const q1 = w * orificeFlow(e.k, pa - px);
+        const q2 = (1 - w) * orificeFlow(e.k, pb - px);
+        return { qa: q1, qb: q2, qx: -(q1 + q2), value: w };
       }
       case 'accumulator': {
         if (input.dt === undefined) return { qa: 0, qb: 0, value: 0 };

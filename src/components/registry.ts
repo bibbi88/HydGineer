@@ -7,6 +7,7 @@ import {
   createHydGauge,
   createHydPressureSwitch,
   createHydAccumulator,
+  HYD_PUMP_LS_TYPE,
   HYD_ACCUMULATOR_TYPE,
   HYD_PUMP_TYPE,
   HYD_TANK_TYPE,
@@ -24,6 +25,10 @@ import {
   createHydFlowControl,
   createHydReducing,
   createHydCounterbalance,
+  createHydValveLS,
+  createHydShuttle,
+  HYD_VALVE_LS_TYPE,
+  HYD_SHUTTLE_TYPE,
   HYD_COUNTERBALANCE_TYPE,
   HYD_VALVE_43_TYPE,
   HYD_VALVE_42_TYPE,
@@ -119,6 +124,15 @@ export const componentRegistry = new Map<string, RegistryEntry>([
     },
   ],
   [
+    HYD_PUMP_LS_TYPE,
+    {
+      factory: (ctx, x, y) => createHydPump(ctx.compLayer, x, y, 'ls'),
+      label: 'Load-sensing pump',
+      placeable: true,
+      category: ComponentCategory.SUPPLY,
+    },
+  ],
+  [
     HYD_ACCUMULATOR_TYPE,
     {
       factory: (ctx, x, y) => createHydAccumulator(ctx.compLayer, x, y),
@@ -141,6 +155,24 @@ export const componentRegistry = new Map<string, RegistryEntry>([
     {
       factory: (ctx, x, y) => createHydValve42(ctx.compLayer, x, y),
       label: '4/2 valve',
+      placeable: true,
+      category: ComponentCategory.DIRECTIONAL,
+    },
+  ],
+  [
+    HYD_VALVE_LS_TYPE,
+    {
+      factory: (ctx, x, y) => createHydValveLS(ctx.compLayer, x, y),
+      label: 'Load-sensing valve (proportional)',
+      placeable: true,
+      category: ComponentCategory.DIRECTIONAL,
+    },
+  ],
+  [
+    HYD_SHUTTLE_TYPE,
+    {
+      factory: (ctx, x, y) => createHydShuttle(ctx.compLayer, x, y),
+      label: 'Shuttle valve (LS signal)',
       placeable: true,
       category: ComponentCategory.DIRECTIONAL,
     },

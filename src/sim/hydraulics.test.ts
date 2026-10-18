@@ -574,6 +574,76 @@ describe('moving mass', () => {
   });
 });
 
+describe('load sensing', () => {
+  /** LS pump (60 L/min max, 20 bar margin, 250 bar cut-off) → metering orifice k → load at A,
+   * whose pressure is fed back to the pump's LS port. The LS line bleeds to tank. */
+  function ls(k: number, loadSet: number) {
+    return solve(
+      ['P', 'A', 'LS', 'T'],
+      [],
+      [
+        { kind: 'pump', out: 'P', q: 60, leak: 0, comp: 250, band: 3, x: 'LS', margin: 20 },
+        { kind: 'orifice', a: 'P', b: 'A', k },
+        { kind: 'orifice', a: 'A', b: 'LS', k: 1 }, // LS signal line
+        { kind: 'orifice', a: 'LS', b: 'T', k: 0.02 }, // LS bleed
+        { kind: 'relief', a: 'A', b: 'T', set: loadSet, gain: 10 }, // the load
+        { kind: 'tank', a: 'T' },
+      ],
+    );
+  }
+
+  it('pump pressure follows the load plus the margin', () => {
+    const s = ls(4, 80);
+    const pA = s.pressure.get('A')!;
+    const pP = s.pressure.get('P')!;
+    expect(pP - pA).toBeGreaterThan(16);
+    expect(pP - pA).toBeLessThan(20.1);
+  });
+
+  it('flow is set by the valve opening, not by the load', () => {
+    const light = ls(4, 30).elementValue[0]!;
+    const heavy = ls(4, 150).elementValue[0]!;
+    expect(Math.abs(light - heavy) / light).toBeLessThan(0.03);
+    // Q = k·√Δp with Δp ≈ the margin.
+    expect(light).toBeGreaterThan(4 * Math.sqrt(16));
+    expect(light).toBeLessThan(4 * Math.sqrt(20.1));
+  });
+
+  it('stands by at the margin pressure with no demand, delivering only the leakage', () => {
+    const s = solve(
+      ['P', 'LS', 'T'],
+      [],
+      [
+        { kind: 'pump', out: 'P', q: 60, leak: 0, comp: 250, band: 3, x: 'LS', margin: 20 },
+        { kind: 'orifice', a: 'LS', b: 'T', k: 0.02 },
+        { kind: 'orifice', a: 'P', b: 'T', k: 0.05 }, // some leakage
+        { kind: 'tank', a: 'T' },
+      ],
+    );
+    expect(s.pressure.get('P')!).toBeGreaterThan(16);
+    expect(s.pressure.get('P')!).toBeLessThan(20.1);
+    expect(s.elementValue[0]!).toBeLessThan(0.3);
+  });
+
+  it('shuttle valve passes on the higher of two signals', () => {
+    const s = solve(
+      ['A', 'B', 'X', 'T'],
+      [],
+      [
+        { kind: 'pump', out: 'A', q: 1, leak: 0 },
+        { kind: 'relief', a: 'A', b: 'T', set: 90, gain: 10 },
+        { kind: 'pump', out: 'B', q: 1, leak: 0 },
+        { kind: 'relief', a: 'B', b: 'T', set: 40, gain: 10 },
+        { kind: 'shuttle', a: 'A', b: 'B', x: 'X', k: 1 },
+        { kind: 'orifice', a: 'X', b: 'T', k: 0.02 },
+        { kind: 'tank', a: 'T' },
+      ],
+    );
+    expect(s.pressure.get('X')!).toBeGreaterThan(89);
+    expect(s.elementValue[4]!).toBeGreaterThan(0.99); // ball on the B seat
+  });
+});
+
 describe('wireFlows', () => {
   it('splits flow along a branched net', () => {
     // pump -> J, J -> a, J -> b (a takes 3, b takes 7)

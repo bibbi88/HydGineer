@@ -32,6 +32,9 @@ continuation, see `src/sim/hydraulics.ts`):
   compensator setting, so it delivers only what the circuit takes.
 - **Inertia**: optional moving mass per cylinder, m·dv/dt = net force, solved in 2 ms substeps -
   shows acceleration and the pressure peaks when a moving load is stopped.
+- **Load sensing**: the LS pump holds its outlet at the highest load pressure (fed back on its
+  LS port, through shuttle valves for several sections) plus a margin, with a pressure cut-off;
+  proportional LS valves meter flow by spool stroke, optionally with a section compensator.
 - **Compressibility** (bulk modulus 10 000 bar): trapped oil keeps its pressure and pressure
   builds up over time; steady states are the exact incompressible ones.
 
@@ -39,9 +42,10 @@ Units: bar (gauge), L/min, N, Nm, mm, cm³/rev.
 
 ## Components
 
-- Power supply: pump unit, fixed or pressure-compensated variable displacement (motor can be
+- Power supply: pump unit, fixed, pressure-compensated or load-sensing variable displacement (motor can be
   switched by a relay or pressure switch), tank, gas-loaded accumulator
-- Directional valves: 4/3 (closed / tandem / float / open centre) and 4/2, solenoid or hand lever
+- Directional valves: 4/3 (closed / tandem / float / open centre) and 4/2, solenoid or hand lever;
+  proportional load-sensing valve (lever slider or solenoids) with LS port; shuttle valve
 - Pressure control: relief valve, pressure-reducing valve, counterbalance valve
 - Flow & check: check valve, pilot-operated check valve, throttle, one-way flow control,
   pressure-compensated flow control (optional bypass check), flow divider (spool with
@@ -53,7 +57,8 @@ Units: bar (gauge), L/min, N, Nm, mm, cm³/rev.
 The **Examples** menu in the toolbar loads ready-made circuits (meter-out speed control,
 electro-hydraulic control, motor speed control, load holding, and synchronising two
 cylinders with each type of flow divider, accumulator charging, counterbalance valve,
-pressure-compensated pump, inertia and pressure peaks). Flow dividers and directional valves
+pressure-compensated pump, inertia and pressure peaks, load sensing with one and two
+sections). Flow dividers and directional valves
 can be swapped type in place from the inspector, or by dropping the other type onto them.
 
 ## Running

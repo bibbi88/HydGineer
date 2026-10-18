@@ -137,4 +137,68 @@ describe('example circuits behave as described', () => {
     expect(peakB).toBeGreaterThan(80);
     expect(peakB).toBeLessThan(250);
   });
+
+  /** Sets an LS valve's lever slider (−100 … 100) as the viewer would. */
+  function setLever(valve: Component, pct: number): void {
+    const input = valve.el.querySelector<HTMLInputElement>('input.lsLever')!;
+    input.value = String(pct);
+    input.dispatchEvent(new Event('input'));
+  }
+  const flowOut = (f: HydFrame, c: Component, port: string): number =>
+    f.solution.portFlow.get(portKey(c.id, port)) ?? NaN;
+
+  it('load sensing: standby in neutral; working, pump = load + margin, flow set by the lever', () => {
+    const comps = load('Load sensing: one');
+    const pump = byType(comps, 'hydPumpLS');
+    const valve = byType(comps, 'hydValveLS');
+    const cyl = byType(comps, 'hydCylinderDouble');
+    const idle = run(1);
+    expect(p(idle, pump, 'P')).toBeGreaterThan(15);
+    expect(p(idle, pump, 'P')).toBeLessThan(21);
+    expect(flowOut(idle, pump, 'P')).toBeLessThan(1);
+
+    setLever(valve, -50);
+    const working = run(0.5);
+    const pLoad = p(working, cyl, 'A');
+    expect(pLoad).toBeGreaterThan(15000 / (31.17 * 10)); // carrying the 15 kN
+    const margin = p(working, pump, 'P') - pLoad;
+    expect(margin).toBeGreaterThan(15);
+    expect(margin).toBeLessThan(21);
+    const q50 = flowOut(working, pump, 'P');
+
+    // Same lever, a much lighter load: (nearly) the same flow.
+    cyl.restore({ ...cyl.snapshot(), load: 2000 });
+    const light = run(0.3);
+    expect(Math.abs(flowOut(light, pump, 'P') - q50) / q50).toBeLessThan(0.05);
+    // Lever further: more flow.
+    setLever(valve, -100);
+    const full = run(0.3);
+    expect(flowOut(full, pump, 'P')).toBeGreaterThan(q50 * 1.6);
+  });
+
+  it('two LS sections: compensators share the flow by lever position, not by load', () => {
+    const comps = load('Load sensing: two');
+    const valves = comps.filter((c) => c.type === 'hydValveLS');
+    const cyls = comps.filter((c) => c.type === 'hydCylinderDouble');
+    for (const v of valves) setLever(v, -60);
+    let f = run(0.4);
+    const qa = flowOut(f, cyls[0]!, 'A') * -1;
+    const qb = flowOut(f, cyls[1]!, 'A') * -1;
+    expect(qa).toBeGreaterThan(1);
+    expect(Math.abs(qa - qb) / qa).toBeLessThan(0.1);
+
+    // Without compensators the lightly loaded cylinder takes far more.
+    resetHydraulics();
+    const comps2 = load('Load sensing: two');
+    const valves2 = comps2.filter((c) => c.type === 'hydValveLS');
+    const cyls2 = comps2.filter((c) => c.type === 'hydCylinderDouble');
+    for (const v of valves2) {
+      v.restore({ ...v.snapshot(), compensated: false });
+      setLever(v, -60);
+    }
+    f = run(0.4);
+    const qa2 = -flowOut(f, cyls2[0]!, 'A');
+    const qb2 = -flowOut(f, cyls2[1]!, 'A');
+    expect(qa2).toBeGreaterThan(qb2 * 2);
+  });
 });
