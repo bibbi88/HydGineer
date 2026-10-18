@@ -1109,6 +1109,71 @@ export const LS_SECTION_COMP_DP = 10;
 /** LS signal passage (L/min per √bar): work port ↔ LS port, or LS port ↔ tank in neutral. */
 const LS_SIGNAL_K = 1;
 
+/** Box width of the load-sensing valve: wider than a plain 4/3's, as it carries a fifth port
+ * (LS) beside P and T. Ports sit 10, 30 and 50 px into a box; LS_MID_X is the neutral box. */
+const LS_CELL = 60;
+const LS_MID_X = 110;
+
+/**
+ * One box of the load-sensing valve, in ISO form: the working paths as on a 4/3 valve, plus the
+ * LS passage - a thin line from the LS port (bottom right of the box) to the open work port,
+ * with a dot where it joins it; in neutral it joins T, venting the LS line. Keys as drawCell's,
+ * with the LS passage keyed like the solver element that models it ("A>LS", "B>LS", "LS>T").
+ */
+function drawLSCell(g: SVGElement, x0: number, kind: 'parallel' | 'closed' | 'cross'): CellPaths {
+  const top = BODY_Y;
+  const bot = BODY_Y + CELL;
+  g.appendChild(
+    createSvgEl('rect', {
+      x: x0,
+      y: top,
+      width: LS_CELL,
+      height: CELL,
+      fill: '#fff',
+      stroke: INK,
+      'stroke-width': STROKE,
+    }),
+  );
+  const xa = x0 + 10;
+  const xb = x0 + 30;
+  const xl = x0 + 50;
+  const signal = { 'stroke-width': 1.5, class: 'lsPassage' };
+  const dot = (cx: number, cy: number): SVGElement => {
+    const c = createSvgEl('circle', { cx, cy, r: 2.5, fill: INK });
+    g.appendChild(c);
+    return c;
+  };
+  switch (kind) {
+    case 'parallel': {
+      const yJ = top + 12;
+      return {
+        'P>A': arrowLine(g, xa, bot, xa, top + 1),
+        'B>T': arrowLine(g, xb, top, xb, bot - 1),
+        // Drawn from the work port's junction to the LS port, the way the signal goes.
+        'A>LS': [path(g, `M ${xa} ${yJ} H ${xl} V ${bot}`, signal), dot(xa, yJ)],
+      };
+    }
+    case 'cross': {
+      const yJ = top + 12;
+      // Where the P→B arrow passes that height.
+      const xJ = xa + ((xb - xa) * (bot - yJ)) / (bot - top);
+      return {
+        'P>B': arrowLine(g, xa, bot, xb, top + 1),
+        'A>T': arrowLine(g, xa, top, xb, bot - 1),
+        'B>LS': [path(g, `M ${xJ} ${yJ} H ${xl} V ${bot}`, signal), dot(xJ, yJ)],
+      };
+    }
+    case 'closed':
+      blocked(g, xa, top, 1);
+      blocked(g, xb, top, 1);
+      blocked(g, xa, bot, -1);
+      return {
+        // Neutral: LS joined to T inside the box, so the LS line vents to tank.
+        'LS>T': [path(g, `M ${xl} ${bot} V ${bot - 12} H ${xb} V ${bot}`, signal)],
+      };
+  }
+}
+
 /**
  * Load-sensing proportional directional valve (4/3, closed centre, with LS port). The spool is
  * proportional: its stroke (−100 % … +100 %) opens the metering notch P→A or P→B - and the
@@ -1125,33 +1190,48 @@ const LS_SIGNAL_K = 1;
  * driving it to a set stroke.
  */
 export function createHydValveLS(compLayer: HTMLElement, x: number, y: number): Component {
-  const svgW = 240;
+  const svgW = 280;
   const svgH = 120;
+  const left = LS_MID_X - LS_CELL; // left edge of the left box when in neutral
+  const right = LS_MID_X + 2 * LS_CELL;
   const shell = createHydShell(compLayer, HYD_VALVE_LS_TYPE, x, y, svgW, svgH, 'LS valve', {
-    x: 60,
+    x: left,
     y: 34,
-    w: 120,
+    w: right - left,
     h: 52,
   });
   const slide = createSvgEl('g');
   shell.g.appendChild(slide);
-  const leads = drawValveLeads(shell.g);
-  const ports = makeValvePorts(shell);
+  const g = shell.g;
+  // Port leads, drawn port → body (into the valve), under the neutral box.
+  const xa = LS_MID_X + 10;
+  const xb = LS_MID_X + 30;
+  const xl = LS_MID_X + 50;
+  const bot = BODY_Y + CELL;
+  const leads: Record<string, SVGElement[]> = {
+    A: [line(g, xa, 20, xa, BODY_Y)],
+    B: [line(g, xb, 20, xb, BODY_Y)],
+    P: [line(g, xa, 100, xa, bot)],
+    T: [line(g, xb, 100, xb, bot)],
+    LS: [line(g, xl, 100, xl, bot, { 'stroke-width': 1.5, class: 'lsPassage' })],
+  };
+  createPortLabel(g, xa - 8, 24, 'A', { anchor: 'end', fontSize: 10 });
+  createPortLabel(g, xb + 8, 24, 'B', { anchor: 'start', fontSize: 10 });
+  createPortLabel(g, xa - 8, 102, 'P', { anchor: 'end', fontSize: 10 });
+  createPortLabel(g, xb + 6, 102, 'T', { anchor: 'start', fontSize: 10 });
+  createPortLabel(g, xl + 8, 102, 'LS', { anchor: 'start', fontSize: 10 });
+  const ports: Record<string, ReturnType<typeof createPort>> = {
+    A: createPort(g, 'A', xa, 20, 'V'),
+    B: createPort(g, 'B', xb, 20, 'V'),
+    P: createPort(g, 'P', xa, 100, 'V'),
+    T: createPort(g, 'T', xb, 100, 'V'),
+    LS: createPort(g, 'LS', xl, 100, 'V'),
+  };
   // Proportional valve: a line above and below the body.
-  line(shell.g, 60, BODY_Y - 5, 180, BODY_Y - 5, { 'stroke-width': 1.5 });
-  line(shell.g, 60, BODY_Y + CELL + 5, 180, BODY_Y + CELL + 5, { 'stroke-width': 1.5 });
-  // LS port, bottom right, with its signal line into the body.
-  const lsLead = [
-    path(shell.g, `M 170 100 V ${BODY_Y + CELL + 5}`, {
-      'stroke-dasharray': '4 3',
-      'stroke-width': 1.5,
-    }),
-  ];
-  lsLead[0]!.dataset.nodash = '1';
-  createPortLabel(shell.g, 178, 102, 'LS', { anchor: 'start', fontSize: 10 });
-  ports.LS = createPort(shell.g, 'LS', 170, 100, 'V');
-  const compLabel = createSvgEl('text', { x: 60, y: 30, 'font-size': 9 });
-  shell.g.appendChild(compLabel);
+  line(g, left, BODY_Y - 5, right, BODY_Y - 5, { 'stroke-width': 1.5 });
+  line(g, left, bot + 5, right, bot + 5, { 'stroke-width': 1.5 });
+  const compLabel = createSvgEl('text', { x: left, y: 30, 'font-size': 9 });
+  g.appendChild(compLabel);
   shell.setInfoSide('right');
   let cells: CellPaths[] = [];
 
@@ -1183,25 +1263,25 @@ export function createHydValveLS(compLayer: HTMLElement, x: number, y: number): 
   function draw(): void {
     slide.replaceChildren();
     cells = [
-      drawCell(slide, 60, 'parallel'),
-      drawCell(slide, 100, 'closed'),
-      drawCell(slide, 140, 'cross'),
+      drawLSCell(slide, left, 'parallel'),
+      drawLSCell(slide, LS_MID_X, 'closed'),
+      drawLSCell(slide, LS_MID_X + LS_CELL, 'cross'),
     ];
     if (actuation === 'solenoid') {
-      drawSolenoid(slide, 60, -1, keyLeft);
-      drawSolenoid(slide, 180, 1, keyRight);
+      drawSolenoid(slide, left, -1, keyLeft);
+      drawSolenoid(slide, right, 1, keyRight);
     } else {
-      drawLever(slide, 60, -1);
+      drawLever(slide, left, -1);
     }
-    drawSpring(slide, 60, -1);
-    drawSpring(slide, 180, 1);
+    drawSpring(slide, left, -1);
+    drawSpring(slide, right, 1);
     lever.style.display = actuation === 'lever' ? '' : 'none';
     compLabel.textContent = compensated ? 'comp.' : '';
     applyState();
   }
   function applyState(): void {
     // Proportional: the boxes slide as far as the spool actually strokes.
-    slide.setAttribute('transform', `translate(${(stroke * CELL).toFixed(1)},0)`);
+    slide.setAttribute('transform', `translate(${(stroke * LS_CELL).toFixed(1)},0)`);
   }
   draw();
 
@@ -1261,7 +1341,6 @@ export function createHydValveLS(compLayer: HTMLElement, x: number, y: number): 
       shell.setInfo(lines);
       const active = stroke < -0.005 ? 0 : stroke > 0.005 ? 2 : 1;
       paintValve(ctx, cells, active, lastElements, leads);
-      paintFlow(lsLead, ctx.pressureAt('LS'), 0);
     },
     snapshot: () => ({
       ...nameSnapshot(shell),
@@ -1287,7 +1366,7 @@ export function createHydValveLS(compLayer: HTMLElement, x: number, y: number): 
       lever.value = '0';
       applyState();
       shell.setInfo([]);
-      clearFlow([...allCellEls(cells), ...Object.values(leads).flat(), ...lsLead]);
+      clearFlow([...allCellEls(cells), ...Object.values(leads).flat()]);
     },
   });
 }

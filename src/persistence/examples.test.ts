@@ -159,6 +159,8 @@ describe('example circuits behave as described', () => {
 
     setLever(valve, -50);
     const working = run(0.5);
+    // The LS passage inside the open box (A → LS) carries the load pressure, lit like a path.
+    expect(valve.el.querySelectorAll('.lsPassage.hydPathP').length).toBeGreaterThanOrEqual(2);
     const pLoad = p(working, cyl, 'A');
     expect(pLoad).toBeGreaterThan(15000 / (31.17 * 10)); // carrying the 15 kN
     const margin = p(working, pump, 'P') - pLoad;

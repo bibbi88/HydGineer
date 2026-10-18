@@ -22,7 +22,9 @@ export function paintFlow(els: SVGElement[], p: number, q: number): void {
     el.classList.toggle('hydPathP', pressurized);
     el.classList.toggle('hydPathReturn', !pressurized && flowing);
     if (color) el.style.setProperty('--wp', color);
-    const dashes = flowing && el.tagName !== 'polygon' && el.dataset.nodash !== '1';
+    // Arrowheads and junction dots only take the colour; lines and paths get the dashes.
+    const solid = el.tagName === 'polygon' || el.tagName === 'circle';
+    const dashes = flowing && !solid && el.dataset.nodash !== '1';
     el.classList.toggle('hydPathFlow', dashes);
     el.classList.toggle('hydPathFlowReverse', dashes && q < 0);
     if (dashes) el.style.setProperty('--flowDur', flowDuration(q));
