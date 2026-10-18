@@ -1,6 +1,7 @@
 import type { Component, SimStepContext } from '../../core/types';
 import type { HydElement } from '../../sim/hydraulics';
 import { createPort, createPortLabel, createSvgEl } from '../shared/svgHelpers';
+import { clearFlow, paintFlow } from './flowPaint';
 import { getSignal } from '../../sim/signals';
 import {
   INK,
@@ -219,16 +220,20 @@ export function createHydRelief(compLayer: HTMLElement, x: number, y: number): C
       'stroke-width': STROKE,
     }),
   );
-  line(g, 40, 10, 40, 30);
-  line(g, 40, 70, 40, 90);
+  // Flow path drawn P (top) → T (bottom).
+  const pLead = [line(g, 40, 10, 40, 30)];
+  const tLead = [line(g, 40, 70, 40, 90)];
   const arrowG = createSvgEl('g', { class: 'hydSpool' });
   g.appendChild(arrowG);
   // Normally closed: the flow arrow sits off the P-T line until the valve opens.
-  arrowLine(arrowG, 47, 36, 47, 64);
+  const throughArrow = arrowLine(arrowG, 47, 36, 47, 64);
   springH(g, 55, 75, 50);
   adjustArrow(g, 65, 50, 10);
   // Pilot line from the inlet.
-  path(g, 'M 40 20 H 14 V 60 H 25', { 'stroke-dasharray': '4 3', 'stroke-width': 1.5 });
+  const pilotLine = [
+    path(g, 'M 40 20 H 14 V 60 H 25', { 'stroke-dasharray': '4 3', 'stroke-width': 1.5 }),
+  ];
+  pilotLine[0]!.dataset.nodash = '1';
   createPortLabel(g, 47, 14, 'P', { anchor: 'start', fontSize: 10 });
   createPortLabel(g, 47, 96, 'T', { anchor: 'start', fontSize: 10 });
   const setText = createSvgEl('text', { x: 58, y: 34, 'font-size': 10 });
@@ -256,6 +261,11 @@ export function createHydRelief(compLayer: HTMLElement, x: number, y: number): C
       shell.setInfo(
         open ? [`Q ${fmtFlow(q)}`, `Δp ${fmtBar(ctx.pressureAt('P') - ctx.pressureAt('T'))}`] : [],
       );
+      const pP = ctx.pressureAt('P');
+      paintFlow(pLead, pP, q);
+      paintFlow(throughArrow, pP, q);
+      paintFlow(tLead, ctx.pressureAt('T'), q);
+      paintFlow(pilotLine, pP, 0);
     },
     snapshot: () => ({ ...nameSnapshot(shell), setting }),
     restore(data: Record<string, unknown>): void {
@@ -266,6 +276,7 @@ export function createHydRelief(compLayer: HTMLElement, x: number, y: number): C
     reset(): void {
       arrowG.setAttribute('transform', '');
       shell.setInfo([]);
+      clearFlow([...pLead, ...tLead, ...throughArrow, ...pilotLine]);
     },
   });
 }

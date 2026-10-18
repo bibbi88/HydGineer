@@ -2,11 +2,7 @@ import { appState } from '../app/AppState';
 import { portKey } from './ports';
 import { isElectricallyLive } from './electrical';
 import type { HydFrame } from './engine';
-
-/** Below this (bar) a line counts as unpressurised - a return or idle line. */
-const PRESSURE_THRESHOLD = 1;
-/** Flow (L/min) below which a line counts as standing still. */
-const FLOW_THRESHOLD = 0.005;
+import { FLOW_THRESHOLD, PRESSURE_THRESHOLD, flowDuration, pressureColor } from './pressureScale';
 
 function fmtP(p: number): string {
   return `${(Math.abs(p) < 0.05 ? 0 : p).toFixed(1)} bar`;
@@ -15,14 +11,6 @@ function fmtP(p: number): string {
 function fmtQ(q: number): string {
   const a = Math.abs(q);
   return `${a.toFixed(a < 10 ? 2 : 1)} L/min`;
-}
-
-/** Pressure line colour: pale red at low pressure to deep red at the highest pressure in the
- * circuit, the usual hydraulic convention. */
-function pressureColor(p: number, pMax: number): string {
-  const t = Math.max(0, Math.min(1, p / Math.max(pMax, 1)));
-  const light = 72 - 42 * t;
-  return `hsl(0 85% ${light.toFixed(0)}%)`;
 }
 
 /**
@@ -127,14 +115,10 @@ export function applyToDom(frame: HydFrame | null): void {
     const pressurized = p > PRESSURE_THRESHOLD;
     pathEl.classList.toggle('hydP', pressurized);
     pathEl.classList.toggle('hydReturn', !pressurized && flowing);
-    if (pressurized) pathEl.style.setProperty('--wp', pressureColor(p, pMax));
+    if (pressurized) pathEl.style.setProperty('--wp', pressureColor(p));
     pathEl.classList.toggle('hydFlow', flowing);
     pathEl.classList.toggle('hydFlowReverse', flowing && q < 0);
-    if (flowing) {
-      // Faster marching dashes for more flow, within a readable range.
-      const dur = Math.max(0.15, Math.min(2.5, 3 / Math.sqrt(Math.abs(q) + 0.1)));
-      pathEl.style.setProperty('--flowDur', `${dur.toFixed(2)}s`);
-    }
+    if (flowing) pathEl.style.setProperty('--flowDur', flowDuration(q));
     const text = flowing ? `${fmtP(p)} · ${fmtQ(q)}` : fmtP(p);
     conn.labelEl.textContent = labelWires.has(conn.id) ? text : '';
     setWireTitle(conn.hitEl, text);

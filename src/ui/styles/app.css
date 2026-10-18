@@ -1613,3 +1613,47 @@ rect.wireHandle.wireStubHandle {
     overflow-y: auto;
   }
 }
+
+/* ---------- Flow inside valve symbols (components/hyd/flowPaint.ts) ---------- */
+
+.hydPathP {
+  stroke: var(--wp);
+  stroke-width: 3;
+}
+
+polygon.hydPathP {
+  fill: var(--wp);
+  stroke: none;
+}
+
+.hydPathReturn {
+  stroke: #1f6fd1;
+  stroke-width: 3;
+}
+
+polygon.hydPathReturn {
+  fill: #1f6fd1;
+  stroke: none;
+}
+
+.hydPathFlow {
+  stroke-dasharray: 5 3;
+  animation: hydPathFlow var(--flowDur, 1s) linear infinite;
+}
+
+.hydPathFlow.hydPathFlowReverse {
+  animation-direction: reverse;
+}
+
+@keyframes hydPathFlow {
+  to {
+    stroke-dashoffset: -8;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hydPathFlow,
+  .wire.hydFlow {
+    animation: none;
+  }
+}

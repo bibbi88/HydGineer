@@ -5,6 +5,8 @@ import { appState } from '../../app/AppState';
 import { Modes } from '../../app/modes';
 import { createPort, createPortLabel, createSvgEl } from '../shared/svgHelpers';
 import { drawBallCheckSymbol } from '../shared/checkValveSymbol';
+import { clearFlow, paintFlow, paintPaths } from './flowPaint';
+import { FLOW_THRESHOLD } from '../../sim/pressureScale';
 import {
   INK,
   STROKE,
@@ -78,7 +80,11 @@ export function cellElements(kind: CellKind, k: number): HydElement[] {
   }
 }
 
-function drawCell(g: SVGElement, x0: number, kind: CellKind): void {
+/** The drawn lines of one valve box, keyed by the flow path they show ("P>A" = from P to A,
+ * matching cellElements' orifices), each drawn in that path's own direction. */
+type CellPaths = Record<string, SVGElement[]>;
+
+function drawCell(g: SVGElement, x0: number, kind: CellKind): CellPaths {
   const y0 = BODY_Y;
   g.appendChild(
     createSvgEl('rect', {
@@ -97,34 +103,82 @@ function drawCell(g: SVGElement, x0: number, kind: CellKind): void {
   const bot = y0 + CELL;
   switch (kind) {
     case 'parallel':
-      arrowLine(g, xa, bot, xa, top + 1);
-      arrowLine(g, xb, top, xb, bot - 1);
-      break;
+      return {
+        'P>A': arrowLine(g, xa, bot, xa, top + 1),
+        'B>T': arrowLine(g, xb, top, xb, bot - 1),
+      };
     case 'cross':
-      arrowLine(g, xa, bot, xb, top + 1);
-      arrowLine(g, xa, top, xb, bot - 1);
-      break;
+      return {
+        'P>B': arrowLine(g, xa, bot, xb, top + 1),
+        'A>T': arrowLine(g, xa, top, xb, bot - 1),
+      };
     case 'closed':
       blocked(g, xa, top, 1);
       blocked(g, xb, top, 1);
       blocked(g, xa, bot, -1);
       blocked(g, xb, bot, -1);
-      break;
+      return {};
     case 'tandem':
       blocked(g, xa, top, 1);
       blocked(g, xb, top, 1);
-      path(g, `M ${xa} ${bot} V ${bot - 12} H ${xb} V ${bot}`);
-      break;
-    case 'float':
+      return { 'P>T': [path(g, `M ${xa} ${bot} V ${bot - 12} H ${xb} V ${bot}`)] };
+    case 'float': {
       blocked(g, xa, bot, -1);
-      path(g, `M ${xa} ${top} V ${top + 14} H ${xb}`);
-      line(g, xb, top, xb, bot);
-      break;
-    case 'open':
-      line(g, xa, top, xa, bot);
-      line(g, xb, top, xb, bot);
-      line(g, xa, top + CELL / 2, xb, top + CELL / 2);
-      break;
+      const fromA = path(g, `M ${xa} ${top} V ${top + 14} H ${xb}`);
+      const fromB = line(g, xb, top, xb, top + 14);
+      const toT = line(g, xb, top + 14, xb, bot);
+      return { 'A>T': [fromA, toT], 'B>T': [fromB, toT] };
+    }
+    case 'open': {
+      const mid = top + CELL / 2;
+      const bar = line(g, xa, mid, xb, mid);
+      bar.dataset.nodash = '1';
+      return {
+        'P>_C': [line(g, xa, bot, xa, mid), bar],
+        'A>_C': [line(g, xa, top, xa, mid), bar],
+        'B>_C': [line(g, xb, top, xb, mid), bar],
+        'T>_C': [line(g, xb, bot, xb, mid), bar],
+      };
+    }
+  }
+}
+
+function allCellEls(cells: CellPaths[]): SVGElement[] {
+  return cells.flatMap((c) => Object.values(c).flat());
+}
+
+/**
+ * Lights up the box currently over the ports with the solved flows: each open path in the
+ * colour of the pressure it carries, dashes marching the way the oil actually moves through it
+ * (against the printed arrow if it flows backwards). The other boxes go back to plain ink, and
+ * so do any paths of the active box carrying nothing. The port leads show what enters/leaves.
+ */
+function paintValve(
+  ctx: SimStepContext,
+  cells: CellPaths[],
+  active: number,
+  elements: HydElement[],
+  leads: Record<string, SVGElement[]>,
+): void {
+  cells.forEach((c, i) => {
+    if (i !== active) clearFlow(Object.values(c).flat());
+  });
+  const cell = cells[active] ?? {};
+  const items: Array<{ els: SVGElement[]; p: number; q: number }> = [];
+  elements.forEach((e, i) => {
+    if (e.kind !== 'orifice') return;
+    const els = cell[`${e.a}>${e.b}`];
+    if (!els) return;
+    const q = ctx.elementValue(i);
+    const pa = ctx.pressureAt(e.a);
+    const pb = ctx.pressureAt(e.b);
+    const p = Math.abs(q) >= FLOW_THRESHOLD ? (q >= 0 ? pa : pb) : Math.max(pa, pb);
+    items.push({ els, p, q });
+  });
+  paintPaths(items);
+  // Leads are drawn from the port into the valve body.
+  for (const [port, els] of Object.entries(leads)) {
+    paintFlow(els, ctx.pressureAt(port), -ctx.flowAt(port));
   }
 }
 
@@ -183,15 +237,23 @@ function drawLever(g: SVGElement, edgeX: number, dir: 1 | -1): void {
   }
 }
 
+/** Lead lines from each port into the valve body, drawn port → body (into the valve). */
+function drawValveLeads(g: SVGElement): Record<string, SVGElement[]> {
+  const xa = PORT_CELL_X + 10;
+  const xb = PORT_CELL_X + 30;
+  return {
+    A: [line(g, xa, 20, xa, BODY_Y)],
+    B: [line(g, xb, 20, xb, BODY_Y)],
+    P: [line(g, xa, 100, xa, BODY_Y + CELL)],
+    T: [line(g, xb, 100, xb, BODY_Y + CELL)],
+  };
+}
+
 /** Shared port setup: A, B on top, P, T underneath the cell at PORT_CELL_X. */
 function makeValvePorts(shell: HydShell): Record<string, ReturnType<typeof createPort>> {
   const g = shell.g;
   const xa = PORT_CELL_X + 10;
   const xb = PORT_CELL_X + 30;
-  line(g, xa, 20, xa, BODY_Y);
-  line(g, xb, 20, xb, BODY_Y);
-  line(g, xa, 100, xa, BODY_Y + CELL);
-  line(g, xb, 100, xb, BODY_Y + CELL);
   createPortLabel(g, xa - 8, 24, 'A', { anchor: 'end', fontSize: 10 });
   createPortLabel(g, xb + 8, 24, 'B', { anchor: 'start', fontSize: 10 });
   createPortLabel(g, xa - 8, 102, 'P', { anchor: 'end', fontSize: 10 });
@@ -265,8 +327,10 @@ export function createHydValve43(compLayer: HTMLElement, x: number, y: number): 
   });
   const slide = createSvgEl('g', { class: 'hydSpool' });
   shell.g.appendChild(slide);
+  const leads = drawValveLeads(shell.g);
   const ports = makeValvePorts(shell);
   shell.setInfoSide('right');
+  let cells: CellPaths[] = [];
 
   const [k1, k2] = nextFreeSolenoidKeys(2);
   let keyLeft = k1 ?? 'Y1';
@@ -280,9 +344,11 @@ export function createHydValve43(compLayer: HTMLElement, x: number, y: number): 
 
   function draw(): void {
     slide.replaceChildren();
-    drawCell(slide, 60, 'parallel');
-    drawCell(slide, 100, center);
-    drawCell(slide, 140, 'cross');
+    cells = [
+      drawCell(slide, 60, 'parallel'),
+      drawCell(slide, 100, center),
+      drawCell(slide, 140, 'cross'),
+    ];
     if (actuation === 'solenoid') {
       drawSolenoid(slide, 60, -1, keyLeft);
       drawSolenoid(slide, 180, 1, keyRight);
@@ -327,6 +393,7 @@ export function createHydValve43(compLayer: HTMLElement, x: number, y: number): 
     },
     step(_dt: number, ctx: SimStepContext): void {
       shell.setInfo(valveInfo(ctx, lastElements));
+      paintValve(ctx, cells, state + 1, lastElements, leads);
     },
     snapshot: () => ({ ...nameSnapshot(shell), keyLeft, keyRight, center, actuation, qNom }),
     restore(data: Record<string, unknown>): void {
@@ -342,6 +409,7 @@ export function createHydValve43(compLayer: HTMLElement, x: number, y: number): 
       state = 0;
       applyState();
       shell.setInfo([]);
+      clearFlow([...allCellEls(cells), ...Object.values(leads).flat()]);
     },
   });
 }
@@ -361,8 +429,10 @@ export function createHydValve42(compLayer: HTMLElement, x: number, y: number): 
   });
   const slide = createSvgEl('g', { class: 'hydSpool' });
   shell.g.appendChild(slide);
+  const leads = drawValveLeads(shell.g);
   const ports = makeValvePorts(shell);
   shell.setInfoSide('right');
+  let cells: CellPaths[] = [];
 
   let key = nextFreeSolenoidKeys(1)[0] ?? 'Y1';
   let actuation: Actuation = 'solenoid';
@@ -375,8 +445,7 @@ export function createHydValve42(compLayer: HTMLElement, x: number, y: number): 
     slide.replaceChildren();
     // Boxes sit at 100 (left, shifted) and 140 (right, rest); at rest the whole slide is moved
     // left one box so the rest box is over the ports.
-    drawCell(slide, 100, 'parallel');
-    drawCell(slide, 140, 'cross');
+    cells = [drawCell(slide, 100, 'parallel'), drawCell(slide, 140, 'cross')];
     if (actuation === 'solenoid') {
       drawSolenoid(slide, 100, -1, key);
       drawSpring(slide, 180, 1, BODY_Y + 20);
@@ -414,6 +483,7 @@ export function createHydValve42(compLayer: HTMLElement, x: number, y: number): 
     },
     step(_dt: number, ctx: SimStepContext): void {
       shell.setInfo(valveInfo(ctx, lastElements));
+      paintValve(ctx, cells, shifted ? 0 : 1, lastElements, leads);
     },
     snapshot: () => ({ ...nameSnapshot(shell), key, actuation, qNom }),
     restore(data: Record<string, unknown>): void {
@@ -427,6 +497,7 @@ export function createHydValve42(compLayer: HTMLElement, x: number, y: number): 
       shifted = false;
       applyState();
       shell.setInfo([]);
+      clearFlow([...allCellEls(cells), ...Object.values(leads).flat()]);
     },
   });
 }
@@ -456,8 +527,9 @@ export function createHydCheck(compLayer: HTMLElement, x: number, y: number): Co
   });
   const g = shell.g;
   const glyph = drawBallCheckSymbol(g, 20, 40, 'vertical', 1, 0.8);
-  line(g, 20, 10, glyph.outPoint.x, glyph.outPoint.y, { 'stroke-width': 2.4 });
-  line(g, 20, glyph.inPoint.y, 20, 70, { 'stroke-width': 2.4 });
+  // Both leads drawn in the free-flow direction, IN (bottom) → OUT (top).
+  const inLead = [line(g, 20, 70, 20, glyph.inPoint.y, { 'stroke-width': 2.4 })];
+  const outLead = [line(g, glyph.outPoint.x, glyph.outPoint.y, 20, 10, { 'stroke-width': 2.4 })];
   const ports = inlinePorts(g, 20);
   shell.setInfoSide('right');
   let crack = 0.5;
@@ -467,14 +539,20 @@ export function createHydCheck(compLayer: HTMLElement, x: number, y: number): Co
       { kind: 'check', a: 'IN', b: 'OUT', crack, k: orificeKFromRating(40, 2) },
     ],
     step(_dt: number, ctx: SimStepContext): void {
-      shell.setInfo(throughInfo(ctx, ctx.elementValue(0)));
+      const q = ctx.elementValue(0);
+      shell.setInfo(throughInfo(ctx, q));
+      paintFlow(inLead, ctx.pressureAt('IN'), q);
+      paintFlow(outLead, ctx.pressureAt('OUT'), q);
     },
     snapshot: () => ({ ...nameSnapshot(shell), crack }),
     restore(data: Record<string, unknown>): void {
       restoreName(shell, data);
       crack = readNum(data, 'crack', crack, 0, 50);
     },
-    reset: () => shell.setInfo([]),
+    reset(): void {
+      shell.setInfo([]);
+      clearFlow([...inLead, ...outLead]);
+    },
   });
 }
 
@@ -497,9 +575,13 @@ export function createHydPilotCheck(compLayer: HTMLElement, x: number, y: number
   );
   const g = shell.g;
   const glyph = drawBallCheckSymbol(g, 40, 40, 'vertical', 1, 0.8);
-  line(g, 40, 10, glyph.outPoint.x, glyph.outPoint.y, { 'stroke-width': 2.4 });
-  line(g, 40, glyph.inPoint.y, 40, 70, { 'stroke-width': 2.4 });
-  path(g, 'M 10 50 H 22 V 38 H 32', { 'stroke-dasharray': '4 3', 'stroke-width': 1.5 });
+  // Leads drawn in the free-flow direction, A (bottom) → B (top).
+  const aLead = [line(g, 40, 70, 40, glyph.inPoint.y, { 'stroke-width': 2.4 })];
+  const bLead = [line(g, glyph.outPoint.x, glyph.outPoint.y, 40, 10, { 'stroke-width': 2.4 })];
+  const pilotLine = [
+    path(g, 'M 10 50 H 22 V 38 H 32', { 'stroke-dasharray': '4 3', 'stroke-width': 1.5 }),
+  ];
+  pilotLine[0]!.dataset.nodash = '1';
   createPortLabel(g, 47, 72, 'A', { anchor: 'start', fontSize: 10 });
   createPortLabel(g, 47, 16, 'B', { anchor: 'start', fontSize: 10 });
   createPortLabel(g, 8, 62, 'X', { anchor: 'middle', fontSize: 10 });
@@ -526,13 +608,19 @@ export function createHydPilotCheck(compLayer: HTMLElement, x: number, y: number
     step(_dt: number, ctx: SimStepContext): void {
       const q = ctx.elementValue(0);
       shell.setInfo(Math.abs(q) >= 0.005 ? [`Q ${fmtFlow(q)}`] : []);
+      paintFlow(aLead, ctx.pressureAt('A'), q);
+      paintFlow(bLead, ctx.pressureAt('B'), q);
+      paintFlow(pilotLine, ctx.pressureAt('X'), 0);
     },
     snapshot: () => ({ ...nameSnapshot(shell), ratio }),
     restore(data: Record<string, unknown>): void {
       restoreName(shell, data);
       ratio = readNum(data, 'ratio', ratio, 1, 20);
     },
-    reset: () => shell.setInfo([]),
+    reset(): void {
+      shell.setInfo([]);
+      clearFlow([...aLead, ...bLead, ...pilotLine]);
+    },
   });
 }
 
@@ -552,7 +640,9 @@ export function createHydThrottle(compLayer: HTMLElement, x: number, y: number):
     h: 36,
   });
   const g = shell.g;
-  line(g, 20, 10, 20, 70);
+  // Two halves drawn IN (bottom) → OUT (top), so the drop across the orifice shows.
+  const inHalf = [line(g, 20, 70, 20, 40)];
+  const outHalf = [line(g, 20, 40, 20, 10)];
   drawThrottle(g, 20, 40);
   adjustArrow(g, 20, 40, 14);
   const ports = inlinePorts(g, 20);
@@ -570,7 +660,10 @@ export function createHydThrottle(compLayer: HTMLElement, x: number, y: number):
       { kind: 'orifice', a: 'IN', b: 'OUT', k: orificeKFromDiameter(diameter) },
     ],
     step(_dt: number, ctx: SimStepContext): void {
-      shell.setInfo(throughInfo(ctx, ctx.elementValue(0)));
+      const q = ctx.elementValue(0);
+      shell.setInfo(throughInfo(ctx, q));
+      paintFlow(inHalf, ctx.pressureAt('IN'), q);
+      paintFlow(outHalf, ctx.pressureAt('OUT'), q);
     },
     snapshot: () => ({ ...nameSnapshot(shell), diameter }),
     restore(data: Record<string, unknown>): void {
@@ -578,7 +671,10 @@ export function createHydThrottle(compLayer: HTMLElement, x: number, y: number):
       diameter = readNum(data, 'diameter', diameter, 0, 50);
       refresh();
     },
-    reset: () => shell.setInfo([]),
+    reset(): void {
+      shell.setInfo([]);
+      clearFlow([...inHalf, ...outHalf]);
+    },
   });
 }
 
@@ -602,15 +698,21 @@ export function createHydOneWayFlowControl(
     { x: 4, y: 14, w: 66, h: 52 },
   );
   const g = shell.g;
-  line(g, 20, 10, 20, 70);
+  // Throttled path drawn IN (top) → OUT (bottom), in two halves either side of the orifice.
+  const inHalf = [line(g, 20, 10, 20, 40)];
+  const outHalf = [line(g, 20, 40, 20, 70)];
   drawThrottle(g, 20, 40);
   adjustArrow(g, 20, 40, 14);
-  path(g, 'M 20 18 H 52 V 26');
-  path(g, 'M 20 62 H 52 V 54');
-  // Free flow upwards (OUT → IN) through the check.
+  // Free flow upwards (OUT → IN) through the check; the bypass is drawn in that direction.
   const glyph = drawBallCheckSymbol(g, 52, 40, 'vertical', 1, 0.6);
-  line(g, 52, 26, 52, Math.min(glyph.inPoint.y, glyph.outPoint.y) + 0);
-  line(g, 52, 54, 52, Math.max(glyph.inPoint.y, glyph.outPoint.y));
+  const bypassOut = [
+    path(g, 'M 20 62 H 52 V 54'),
+    line(g, 52, 54, 52, Math.max(glyph.inPoint.y, glyph.outPoint.y)),
+  ];
+  const bypassIn = [
+    line(g, 52, Math.min(glyph.inPoint.y, glyph.outPoint.y), 52, 26),
+    path(g, 'M 52 26 V 18 H 20'),
+  ];
   // IN on top, OUT underneath: throttled flow runs downwards, which is meter-out for a
   // cylinder drawn above its valve.
   const ports = {
@@ -632,7 +734,15 @@ export function createHydOneWayFlowControl(
       { kind: 'check', a: 'OUT', b: 'IN', crack: 0.5, k: orificeKFromRating(40, 2) },
     ],
     step(_dt: number, ctx: SimStepContext): void {
-      shell.setInfo(throughInfo(ctx, ctx.elementValue(0) - ctx.elementValue(1)));
+      const qThrottle = ctx.elementValue(0);
+      const qBypass = ctx.elementValue(1);
+      shell.setInfo(throughInfo(ctx, qThrottle - qBypass));
+      const pIn = ctx.pressureAt('IN');
+      const pOut = ctx.pressureAt('OUT');
+      paintFlow(inHalf, pIn, qThrottle);
+      paintFlow(outHalf, pOut, qThrottle);
+      paintFlow(bypassOut, pOut, qBypass);
+      paintFlow(bypassIn, pIn, qBypass);
     },
     snapshot: () => ({ ...nameSnapshot(shell), diameter }),
     restore(data: Record<string, unknown>): void {
@@ -640,7 +750,10 @@ export function createHydOneWayFlowControl(
       diameter = readNum(data, 'diameter', diameter, 0, 50);
       refresh();
     },
-    reset: () => shell.setInfo([]),
+    reset(): void {
+      shell.setInfo([]);
+      clearFlow([...inHalf, ...outHalf, ...bypassOut, ...bypassIn]);
+    },
   });
 }
 
@@ -674,7 +787,9 @@ export function createHydFlowControl(compLayer: HTMLElement, x: number, y: numbe
       'stroke-width': STROKE,
     }),
   );
-  line(g, 40, 10, 40, 70);
+  // Controlled path drawn IN (bottom) → OUT (top), in two halves.
+  const inHalf = [line(g, 40, 70, 40, 40)];
+  const outHalf = [line(g, 40, 40, 40, 10)];
   drawThrottle(g, 40, 40);
   adjustArrow(g, 40, 40, 12);
   // Compensator: a short arrow beside the throttle.
@@ -687,15 +802,24 @@ export function createHydFlowControl(compLayer: HTMLElement, x: number, y: numbe
   g.appendChild(qText);
   let qSet = 5;
   let bypass = false;
+  // Bypass drawn in its free-flow direction, OUT (top) → IN (bottom).
+  let bypassOut: SVGElement[] = [];
+  let bypassIn: SVGElement[] = [];
   function refresh(): void {
     qText.textContent = `${qSet} L/min`;
     bypassG.replaceChildren();
+    bypassOut = [];
+    bypassIn = [];
     if (bypass) {
-      path(bypassG, 'M 40 14 H 72 V 26');
-      path(bypassG, 'M 40 66 H 72 V 54');
       const glyph = drawBallCheckSymbol(bypassG, 72, 40, 'vertical', -1, 0.6);
-      line(bypassG, 72, 26, 72, Math.min(glyph.inPoint.y, glyph.outPoint.y));
-      line(bypassG, 72, 54, 72, Math.max(glyph.inPoint.y, glyph.outPoint.y));
+      bypassOut = [
+        path(bypassG, 'M 40 14 H 72 V 26'),
+        line(bypassG, 72, 26, 72, Math.min(glyph.inPoint.y, glyph.outPoint.y)),
+      ];
+      bypassIn = [
+        line(bypassG, 72, Math.max(glyph.inPoint.y, glyph.outPoint.y), 72, 54),
+        path(bypassG, 'M 72 54 V 66 H 40'),
+      ];
     }
   }
   refresh();
@@ -709,8 +833,15 @@ export function createHydFlowControl(compLayer: HTMLElement, x: number, y: numbe
       return els;
     },
     step(_dt: number, ctx: SimStepContext): void {
-      const q = ctx.elementValue(0) - (bypass ? ctx.elementValue(1) : 0);
-      shell.setInfo(throughInfo(ctx, q));
+      const qMain = ctx.elementValue(0);
+      const qBypass = bypass ? ctx.elementValue(1) : 0;
+      shell.setInfo(throughInfo(ctx, qMain - qBypass));
+      const pIn = ctx.pressureAt('IN');
+      const pOut = ctx.pressureAt('OUT');
+      paintFlow(inHalf, pIn, qMain);
+      paintFlow(outHalf, pOut, qMain);
+      paintFlow(bypassOut, pOut, qBypass);
+      paintFlow(bypassIn, pIn, qBypass);
     },
     snapshot: () => ({ ...nameSnapshot(shell), qSet, bypass }),
     restore(data: Record<string, unknown>): void {
@@ -719,7 +850,10 @@ export function createHydFlowControl(compLayer: HTMLElement, x: number, y: numbe
       if ('bypass' in data) bypass = Boolean(data.bypass);
       refresh();
     },
-    reset: () => shell.setInfo([]),
+    reset(): void {
+      shell.setInfo([]);
+      clearFlow([...inHalf, ...outHalf, ...bypassOut, ...bypassIn]);
+    },
   });
 }
 
@@ -752,14 +886,18 @@ export function createHydReducing(compLayer: HTMLElement, x: number, y: number):
       'stroke-width': STROKE,
     }),
   );
-  line(g, 40, 90, 40, 70);
-  line(g, 40, 10, 40, 30);
+  // Flow path drawn P (bottom) → A (top).
+  const pLead = [line(g, 40, 90, 40, 70)];
+  const aLead = [line(g, 40, 30, 40, 10)];
   const arrowG = createSvgEl('g', { class: 'hydSpool' });
   g.appendChild(arrowG);
-  arrowLine(arrowG, 40, 66, 40, 34);
+  const throughArrow = arrowLine(arrowG, 40, 66, 40, 34);
   springH(g, 55, 75, 50);
   adjustArrow(g, 65, 50, 10);
-  path(g, 'M 40 20 H 14 V 60 H 25', { 'stroke-dasharray': '4 3', 'stroke-width': 1.5 });
+  const pilotLine = [
+    path(g, 'M 40 20 H 14 V 60 H 25', { 'stroke-dasharray': '4 3', 'stroke-width': 1.5 }),
+  ];
+  pilotLine[0]!.dataset.nodash = '1';
   createPortLabel(g, 47, 96, 'P', { anchor: 'start', fontSize: 10 });
   createPortLabel(g, 47, 14, 'A', { anchor: 'start', fontSize: 10 });
   const setText = createSvgEl('text', { x: 58, y: 86, 'font-size': 10 });
@@ -792,6 +930,11 @@ export function createHydReducing(compLayer: HTMLElement, x: number, y: number):
       arrowG.setAttribute('transform', regulating ? 'translate(7,0)' : '');
       const q = ctx.elementValue(0);
       shell.setInfo([`out ${fmtBar(pA)}`, ...(Math.abs(q) >= 0.005 ? [`Q ${fmtFlow(q)}`] : [])]);
+      const pP = ctx.pressureAt('P');
+      paintFlow(pLead, pP, q);
+      paintFlow(throughArrow, pP, q);
+      paintFlow(aLead, pA, q);
+      paintFlow(pilotLine, pA, 0);
     },
     snapshot: () => ({ ...nameSnapshot(shell), setting }),
     restore(data: Record<string, unknown>): void {
@@ -802,6 +945,7 @@ export function createHydReducing(compLayer: HTMLElement, x: number, y: number):
     reset(): void {
       arrowG.setAttribute('transform', '');
       shell.setInfo([]);
+      clearFlow([...pLead, ...aLead, ...throughArrow, ...pilotLine]);
     },
   });
 }

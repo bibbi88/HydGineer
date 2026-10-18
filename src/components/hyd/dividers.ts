@@ -15,6 +15,7 @@ import {
   readNum,
   restoreName,
 } from './base';
+import { clearFlow, paintFlow } from './flowPaint';
 
 export const HYD_SPOOL_DIVIDER_TYPE = 'hydSpoolDivider';
 export const HYD_ROTARY_DIVIDER_TYPE = 'hydRotaryDivider';
@@ -76,8 +77,10 @@ export function createHydSpoolDivider(compLayer: HTMLElement, x: number, y: numb
     }),
   );
   // Inlet up the middle, splitting to the two outlets.
-  line(g, 50, 90, 50, 64);
-  path(g, 'M 30 10 V 64 H 70 V 10');
+  // Drawn in the dividing direction: inlet P upwards, then out along each branch.
+  const inlet = [line(g, 50, 90, 50, 64)];
+  const branchA = [path(g, 'M 50 64 H 30 V 10')];
+  const branchB = [path(g, 'M 50 64 H 70 V 10')];
   drawThrottleV(g, 30, 52);
   drawThrottleV(g, 70, 52);
   // The compensating sleeve: a double arrow across the two branches, between the chambers.
@@ -137,6 +140,11 @@ export function createHydSpoolDivider(compLayer: HTMLElement, x: number, y: numb
       const qA = ctx.flowAt('A');
       const qB = ctx.flowAt('B');
       const sleeve = ctx.elementValue(2);
+      // Each branch in its outlet's pressure, so the sleeve's throttling shows as the lighter
+      // branch turning paler than the inlet.
+      paintFlow(inlet, ctx.pressureAt('P'), -ctx.flowAt('P'));
+      paintFlow(branchA, ctx.pressureAt('A'), qA);
+      paintFlow(branchB, ctx.pressureAt('B'), qB);
       if (Math.abs(qA) + Math.abs(qB) < 0.01) {
         shell.setInfo([]);
         return;
@@ -159,7 +167,10 @@ export function createHydSpoolDivider(compLayer: HTMLElement, x: number, y: numb
       qNom = readNum(data, 'qNom', qNom, 0.5, 2000);
       refresh();
     },
-    reset: () => shell.setInfo([]),
+    reset(): void {
+      shell.setInfo([]);
+      clearFlow([...inlet, ...branchA, ...branchB]);
+    },
   });
 }
 
@@ -216,9 +227,12 @@ export function createHydRotaryDivider(compLayer: HTMLElement, x: number, y: num
   line(g, 30 + r, 52, 90 - r, 52, { 'stroke-width': 1.5 });
   const shaftMark = line(g, 60, 42, 60, 58, { 'stroke-width': 1.5 });
   // Inlet branching to both sections; outlets straight up.
-  path(g, `M 60 90 V 78 M 30 ${50 + r} V 78 H 90 V ${50 + r}`);
-  line(g, 30, 10, 30, 50 - r);
-  line(g, 90, 10, 90, 50 - r);
+  // Drawn in the dividing direction: inlet up, branches to each section, outlets up.
+  const inlet = [line(g, 60, 90, 60, 78)];
+  const branchA = [path(g, `M 60 78 H 30 V ${50 + r}`)];
+  const branchB = [path(g, `M 60 78 H 90 V ${50 + r}`)];
+  const outA = [line(g, 30, 50 - r, 30, 10)];
+  const outB = [line(g, 90, 50 - r, 90, 10)];
   createPortLabel(g, 22, 14, 'A', { anchor: 'end', fontSize: 10 });
   createPortLabel(g, 98, 14, 'B', { anchor: 'start', fontSize: 10 });
   createPortLabel(g, 67, 96, 'P', { anchor: 'start', fontSize: 10 });
@@ -256,6 +270,12 @@ export function createHydRotaryDivider(compLayer: HTMLElement, x: number, y: num
       shaftMark.setAttribute('transform', `rotate(${angle} 60 50)`);
       const qA = ctx.flowAt('A');
       const qB = ctx.flowAt('B');
+      const pP = ctx.pressureAt('P');
+      paintFlow(inlet, pP, -ctx.flowAt('P'));
+      paintFlow(branchA, pP, qA);
+      paintFlow(branchB, pP, qB);
+      paintFlow(outA, ctx.pressureAt('A'), qA);
+      paintFlow(outB, ctx.pressureAt('B'), qB);
       if (Math.abs(n) < 1e-4 && Math.abs(qA) + Math.abs(qB) < 0.01) {
         shell.setInfo([]);
         return;
@@ -287,6 +307,7 @@ export function createHydRotaryDivider(compLayer: HTMLElement, x: number, y: num
       angle = 0;
       shaftMark.setAttribute('transform', '');
       shell.setInfo([]);
+      clearFlow([...inlet, ...branchA, ...branchB, ...outA, ...outB]);
     },
   });
 }

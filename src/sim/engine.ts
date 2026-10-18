@@ -3,6 +3,7 @@ import { appState } from '../app/AppState';
 import { getSignal, setSignal } from './signals';
 import { solveElectrical } from './electrical';
 import { portKey } from './ports';
+import { setPressureScale } from './pressureScale';
 import { solveHydraulics, wireFlows, type HydElement, type HydSolution } from './hydraulics';
 
 /** Everything render.ts needs from one simulation frame. */
@@ -79,6 +80,9 @@ export function stepSimulation(dt: number): HydFrame {
   }
   const solution = solveHydraulics({ ports, links, elements, guess: lastSolution, dt });
   lastSolution = solution;
+  let pMax = 0;
+  for (const p of solution.pressure.values()) pMax = Math.max(pMax, p);
+  setPressureScale(pMax);
 
   for (const c of appState.components) {
     if (!c.step) continue;

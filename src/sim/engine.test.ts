@@ -120,4 +120,19 @@ describe('hydraulic engine on real components', () => {
     const areaB = areaA - circleAreaCm2(30);
     expect(Math.abs((pA * areaA - pB * areaB) * 10 - 10000)).toBeLessThan(5);
   });
+
+  it('lights up the open path inside the shifted valve, with flow dashes', () => {
+    const { valve } = buildCircuit();
+    setSignal('Y1', true);
+    for (let i = 0; i < 10; i++) stepSimulation(0.002);
+    const lit = valve.el.querySelectorAll('.hydPathP');
+    const flowing = valve.el.querySelectorAll('.hydPathFlow');
+    // P→A arrow (line + head) and the P and A leads are pressurised; P→A and B→T carry flow.
+    expect(lit.length).toBeGreaterThanOrEqual(4);
+    expect(flowing.length).toBeGreaterThanOrEqual(4);
+    // Nothing on the two boxes that aren't over the ports.
+    setSignal('Y1', false);
+    for (let i = 0; i < 10; i++) stepSimulation(0.02);
+    expect(valve.el.querySelectorAll('.hydPathFlow').length).toBe(0);
+  });
 });

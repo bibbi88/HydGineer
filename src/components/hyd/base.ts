@@ -186,12 +186,17 @@ export function arrowHead(
 }
 
 /** Line from (x1,y1) to (x2,y2) ending in an arrowhead at (x2,y2). */
-export function arrowLine(g: SVGElement, x1: number, y1: number, x2: number, y2: number): void {
+export function arrowLine(
+  g: SVGElement,
+  x1: number,
+  y1: number,
+  x2: number,
+  y2: number,
+): SVGElement[] {
   const deg = (Math.atan2(y2 - y1, x2 - x1) * 180) / Math.PI;
   const len = Math.hypot(x2 - x1, y2 - y1);
   const k = Math.max(0, (len - 6) / len);
-  line(g, x1, y1, x1 + (x2 - x1) * k, y1 + (y2 - y1) * k);
-  arrowHead(g, x2, y2, deg);
+  return [line(g, x1, y1, x1 + (x2 - x1) * k, y1 + (y2 - y1) * k), arrowHead(g, x2, y2, deg)];
 }
 
 /** ISO "blocked port" mark: a short stub from (x, y) along `dir` with a cross-bar. */
