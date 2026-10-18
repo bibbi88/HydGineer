@@ -10,6 +10,38 @@ import {
 } from '../wires/connection';
 import { selectOnly } from './selection';
 import { ELEC_COIL_TYPE, ELEC_SOLENOID_TYPE } from '../components/electrical';
+import {
+  getComponentRotation,
+  setComponentMirrored,
+  setComponentRotation,
+} from './componentContextMenu';
+import { HYD_ROTARY_DIVIDER_TYPE, HYD_SPOOL_DIVIDER_TYPE } from '../components/hyd/dividers';
+import { HYD_VALVE_42_TYPE, HYD_VALVE_43_TYPE } from '../components/hyd/valves';
+
+/**
+ * Groups of interchangeable component types: same job, same port names, so one can replace the
+ * other in place with every wire kept - from the inspector's type dropdown, or by dropping one
+ * from the library onto the other.
+ */
+export const SWAP_FAMILIES: Array<Array<{ type: string; label: string }>> = [
+  [
+    { type: HYD_SPOOL_DIVIDER_TYPE, label: 'Spool (pressure-compensated sleeve)' },
+    { type: HYD_ROTARY_DIVIDER_TYPE, label: 'Rotary (gear)' },
+  ],
+  [
+    { type: HYD_VALVE_43_TYPE, label: '4/3 (three positions)' },
+    { type: HYD_VALVE_42_TYPE, label: '4/2 (two positions)' },
+  ],
+];
+
+/** The other types `type` can be swapped with (empty if it has no family). */
+export function swapFamilyOf(type: string): Array<{ type: string; label: string }> {
+  return SWAP_FAMILIES.find((f) => f.some((m) => m.type === type)) ?? [];
+}
+
+export function canSwap(fromType: string, toType: string): boolean {
+  return fromType !== toType && swapFamilyOf(fromType).some((m) => m.type === toType);
+}
 
 let ctxRef: ComponentFactoryContext | null = null;
 let viewportRef: ViewportAdapter | null = null;
@@ -39,7 +71,9 @@ export function swapComponentType(comp: Component, newType: string): void {
   const { x, y } = comp;
   // Contact <-> push button keeps its NO/NC choice, relay coil <-> solenoid keeps its name;
   // other swaps have no such fields.
-  const { normallyClosed, key } = comp.snapshot() as Record<string, unknown>;
+  const { normallyClosed, key, showName, customName } = comp.snapshot() as Record<string, unknown>;
+  const rotation = getComponentRotation(comp);
+  const mirrored = comp.el.dataset.mirror === '1';
   const keepsKey =
     (comp.type === ELEC_COIL_TYPE || comp.type === ELEC_SOLENOID_TYPE) &&
     (newType === ELEC_COIL_TYPE || newType === ELEC_SOLENOID_TYPE);
@@ -59,6 +93,12 @@ export function swapComponentType(comp: Component, newType: string): void {
     const next = spawnComponent(newType, ctxRef!, viewportRef!, x, y);
     if (normallyClosed !== undefined) next.restore({ ...next.snapshot(), normallyClosed });
     if (keepsKey && typeof key === 'string') next.restore({ ...next.snapshot(), key });
+    // Same place on the drawing: orientation and naming carry over to the replacement.
+    if (rotation) setComponentRotation(next, rotation);
+    if (mirrored) setComponentMirrored(next, true);
+    if (showName !== undefined || customName !== undefined) {
+      next.restore({ ...next.snapshot(), showName, customName });
+    }
 
     for (const saved of related) {
       const fromMoved = saved.from.id === comp.id;

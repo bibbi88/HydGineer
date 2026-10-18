@@ -1,5 +1,6 @@
 import type { Component, SimStepContext } from '../../core/types';
-import type { HydElement } from '../../sim/hydraulics';
+import { accumulatorOil, type HydElement } from '../../sim/hydraulics';
+import { uid } from '../../core/ids';
 import { createPort, createPortLabel, createSvgEl } from '../shared/svgHelpers';
 import { clearFlow, paintFlow } from './flowPaint';
 import { getSignal } from '../../sim/signals';
@@ -26,10 +27,14 @@ export const HYD_TANK_TYPE = 'hydTank';
 export const HYD_RELIEF_TYPE = 'hydRelief';
 export const HYD_GAUGE_TYPE = 'hydGauge';
 export const HYD_PRESSURE_SWITCH_TYPE = 'hydPressureSwitch';
+export const HYD_ACCUMULATOR_TYPE = 'hydAccumulator';
 
 /** Pressure (bar) at which an unprotected pump outlet is capped - standing in for whatever
  * would burst first. A circuit reaching it has no working pressure relief. */
 export const PUMP_BURST_PRESSURE = 1000;
+
+/** Pressure band (bar) below its setting over which a compensated pump swivels back to zero. */
+export const PC_BAND = 5;
 
 /** Relief valve characteristic: flow per bar above the cracking pressure (pressure override). */
 export const RELIEF_GAIN = 10;
@@ -99,6 +104,18 @@ export function createHydPump(compLayer: HTMLElement, x: number, y: number): Com
     'font-size': 10,
   });
   g.appendChild(signalText);
+  // Variable displacement with pressure compensator: the swash-plate arrow through the pump,
+  // and the compensator's pilot line from the outlet against its spring.
+  const pcG = createSvgEl('g');
+  g.appendChild(pcG);
+  adjustArrow(pcG, cx, cy, 22);
+  path(pcG, `M ${cx} 20 H 8 V ${cy + 22} H ${cx - 12}`, {
+    'stroke-dasharray': '4 3',
+    'stroke-width': 1.5,
+  });
+  springH(pcG, cx - 30, cx - 12, cy + 30, 4);
+  const compText = createSvgEl('text', { x: 4, y: 16, 'font-size': 9 });
+  pcG.appendChild(compText);
 
   const ports = { P: createPort(g, 'P', cx, 10, 'V') };
   shell.setInfoSide('right');
@@ -109,20 +126,34 @@ export function createHydPump(compLayer: HTMLElement, x: number, y: number): Com
   let ratedPressure = 250; // bar
   let signal = '';
   let running = true;
+  /** 'fixed' displacement, or 'pc': variable displacement with a pressure compensator. */
+  let control: 'fixed' | 'pc' = 'fixed';
+  let compSetting = 150; // bar
 
   function theoreticalFlow(): number {
     return (displacement * speed) / 1000;
   }
+  /** The motor runs with no signal set, while the named signal is on, or - written "!S1" -
+   * while it is off (e.g. charging an accumulator until a pressure switch cuts the pump out). */
+  function signalSaysRun(): boolean {
+    const sig = signal.trim();
+    if (sig === '') return true;
+    if (sig.startsWith('!')) return !getSignal(sig.slice(1));
+    return getSignal(sig);
+  }
   function refresh(): void {
     signalText.textContent = signal.trim();
     motor.setAttribute('fill', running ? '#d8f5dc' : '#fff');
+    pcG.style.display = control === 'pc' ? '' : 'none';
+    compText.textContent = control === 'pc' ? `${compSetting} bar` : '';
+    shell.setDefaultName(control === 'pc' ? 'Pump (pressure compensated)' : 'Pump');
   }
   refresh();
 
   const comp = hydComponentBase(shell, HYD_PUMP_TYPE, x, y, svgW, svgH, ports);
   return Object.assign(comp, {
     recompute(): void {
-      const next = signal.trim() === '' || getSignal(signal);
+      const next = signalSaysRun();
       if (next !== running) {
         running = next;
         refresh();
@@ -133,7 +164,9 @@ export function createHydPump(compLayer: HTMLElement, x: number, y: number): Com
       const q = theoreticalFlow();
       const leak = (q * (1 - etaV / 100)) / Math.max(1, ratedPressure);
       return [
-        { kind: 'pump', out: 'P', q, leak },
+        control === 'pc'
+          ? { kind: 'pump', out: 'P', q, leak, comp: compSetting, band: PC_BAND }
+          : { kind: 'pump', out: 'P', q, leak },
         { kind: 'tank', a: '_S' },
         { kind: 'relief', a: 'P', b: '_S', set: PUMP_BURST_PRESSURE, gain: 100 },
       ];
@@ -144,12 +177,28 @@ export function createHydPump(compLayer: HTMLElement, x: number, y: number): Com
       const lines = running
         ? [`Q ${fmtFlow(q)}`, `p ${fmtBar(p)}`, `P ${((p * q) / 600).toFixed(2)} kW`]
         : ['motor off'];
+      if (running && control === 'pc') {
+        // Swivel angle as a share of full displacement: what's delivered plus what leaks.
+        const qTheo = theoreticalFlow();
+        const leak = (qTheo * (1 - etaV / 100)) / Math.max(1, ratedPressure);
+        const share = qTheo > 0 ? (q + leak * Math.max(0, p)) / qTheo : 0;
+        lines.splice(1, 0, `displacement ${(Math.min(1, share) * 100).toFixed(0)} %`);
+      }
       if (running && p > ratedPressure) lines.push('⚠ above rated pressure');
       if (running && p > PUMP_BURST_PRESSURE * 0.95) lines.push('⚠ no pressure relief!');
       shell.setInfo(lines);
     },
     snapshot(): Record<string, unknown> {
-      return { ...nameSnapshot(shell), displacement, speed, etaV, ratedPressure, signal };
+      return {
+        ...nameSnapshot(shell),
+        displacement,
+        speed,
+        etaV,
+        ratedPressure,
+        signal,
+        control,
+        compSetting,
+      };
     },
     restore(data: Record<string, unknown>): void {
       restoreName(shell, data);
@@ -158,11 +207,13 @@ export function createHydPump(compLayer: HTMLElement, x: number, y: number): Com
       etaV = readNum(data, 'etaV', etaV, 50, 100);
       ratedPressure = readNum(data, 'ratedPressure', ratedPressure, 1, 1000);
       if (typeof data.signal === 'string') signal = data.signal;
-      running = signal.trim() === '';
+      if (data.control === 'fixed' || data.control === 'pc') control = data.control;
+      compSetting = readNum(data, 'compSetting', compSetting, 1, 1000);
+      running = signal.trim() === '' || signal.trim().startsWith('!');
       refresh();
     },
     reset(): void {
-      running = signal.trim() === '';
+      running = signal.trim() === '' || signal.trim().startsWith('!');
       refresh();
       shell.setInfo([]);
     },
@@ -406,6 +457,124 @@ export function createHydPressureSwitch(compLayer: HTMLElement, x: number, y: nu
       on = false;
       refresh();
       shell.setInfo([]);
+    },
+  });
+}
+
+/**
+ * Gas-loaded (bladder) accumulator. Pre-charged with nitrogen to p0, it takes in oil only once the
+ * line pressure exceeds p0, compressing the gas: (p + 1)·V_gas^n = (p0 + 1)·V0^n in absolute bar
+ * (n = 1 isothermal for slow charging, 1.4 adiabatic for fast cycles). When the line pressure
+ * falls it gives the oil back - an energy store that can briefly deliver far more flow than the
+ * pump. Starts empty.
+ */
+export function createHydAccumulator(compLayer: HTMLElement, x: number, y: number): Component {
+  const svgW = 60;
+  const svgH = 100;
+  const shell = createHydShell(compLayer, HYD_ACCUMULATOR_TYPE, x, y, svgW, svgH, 'Accumulator', {
+    x: 10,
+    y: 12,
+    w: 40,
+    h: 70,
+  });
+  const g = shell.g;
+  const top = 14;
+  const bot = 80;
+  const clipId = `acc-clip-${uid()}`;
+  const defs = createSvgEl('defs');
+  const clip = createSvgEl('clipPath', { id: clipId });
+  clip.appendChild(createSvgEl('rect', { x: 12, y: top, width: 36, height: bot - top, rx: 18 }));
+  defs.appendChild(clip);
+  g.appendChild(defs);
+  g.appendChild(
+    createSvgEl('rect', { x: 12, y: top, width: 36, height: bot - top, rx: 18, fill: '#fff' }),
+  );
+  // Oil (below the separator) and the separating bladder/piston line, moved with the oil level.
+  const oilRect = createSvgEl('rect', {
+    x: 12,
+    y: bot,
+    width: 36,
+    height: 0,
+    fill: '#cfe1f7',
+    'clip-path': `url(#${clipId})`,
+  });
+  g.appendChild(oilRect);
+  const separator = line(g, 12, 50, 48, 50);
+  const gasLabel = createSvgEl('text', {
+    x: 30,
+    y: 32,
+    'text-anchor': 'middle',
+    'font-size': 9,
+    fill: '#555',
+  });
+  gasLabel.textContent = 'N₂';
+  g.appendChild(gasLabel);
+  g.appendChild(
+    createSvgEl('rect', {
+      x: 12,
+      y: top,
+      width: 36,
+      height: bot - top,
+      rx: 18,
+      fill: 'none',
+      stroke: INK,
+      'stroke-width': STROKE,
+    }),
+  );
+  const lead = [line(g, 30, 90, 30, bot)];
+  const ports = { P: createPort(g, 'P', 30, 90, 'V') };
+  shell.setInfoSide('left');
+
+  let volume = 2; // L, nominal (gas) volume
+  let precharge = 60; // bar
+  let n = 1.4;
+  let oil = 0; // L currently held
+
+  function params(): { volume: number; precharge: number; n: number } {
+    return { volume, precharge, n };
+  }
+  function drawLevel(): void {
+    // The separator sits at the oil level; with no oil it rests on the bottom (fully expanded
+    // bladder at pre-charge pressure).
+    const frac = Math.max(0, Math.min(1, oil / volume));
+    const yLevel = bot - 6 - frac * (bot - top - 12);
+    separator.setAttribute('y1', String(yLevel));
+    separator.setAttribute('y2', String(yLevel));
+    oilRect.setAttribute('y', String(yLevel));
+    oilRect.setAttribute('height', String(Math.max(0, bot - yLevel)));
+  }
+  drawLevel();
+
+  const comp = hydComponentBase(shell, HYD_ACCUMULATOR_TYPE, x, y, svgW, svgH, ports);
+  return Object.assign(comp, {
+    hydElements: (): HydElement[] => [
+      { kind: 'accumulator', a: 'P', volume, precharge, n, oilPrev: oil },
+    ],
+    step(_dt: number, ctx: SimStepContext): void {
+      const p = ctx.pressureAt('P');
+      oil = accumulatorOil(params(), p);
+      drawLevel();
+      const q = ctx.elementValue(0);
+      const lines = [`p ${fmtBar(p)}`, `oil ${oil.toFixed(2)} L of ${volume} L`];
+      if (Math.abs(q) >= 0.005)
+        lines.push(`${q > 0 ? 'charging' : 'discharging'} ${fmtFlow(Math.abs(q))}`);
+      else if (p < precharge) lines.push(`below pre-charge (${precharge} bar)`);
+      shell.setInfo(lines);
+      paintFlow(lead, p, q);
+    },
+    snapshot: () => ({ ...nameSnapshot(shell), volume, precharge, n }),
+    restore(data: Record<string, unknown>): void {
+      restoreName(shell, data);
+      volume = readNum(data, 'volume', volume, 0.01, 1000);
+      precharge = readNum(data, 'precharge', precharge, 0, 700);
+      n = readNum(data, 'n', n, 1, 1.4);
+      drawLevel();
+    },
+    reset(): void {
+      oil = 0;
+      drawLevel();
+      shell.setInfo([]);
+      clearFlow(lead);
     },
   });
 }

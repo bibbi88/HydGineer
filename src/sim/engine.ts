@@ -28,6 +28,7 @@ function globalize(id: number, e: HydElement): HydElement {
     case 'pump':
       return { ...e, out: k(e.out) };
     case 'tank':
+    case 'accumulator':
       return { ...e, a: k(e.a) };
     case 'piston':
       return {
@@ -37,6 +38,7 @@ function globalize(id: number, e: HydElement): HydElement {
       };
     case 'pilotCheck':
     case 'rotaryDivider':
+    case 'counterbalance':
       return { ...e, a: k(e.a), b: k(e.b), x: k(e.x) };
     case 'compensator':
       return { ...e, a: k(e.a), b: k(e.b), x: k(e.x), y: k(e.y) };
@@ -45,6 +47,11 @@ function globalize(id: number, e: HydElement): HydElement {
   }
 }
 
+/** Longest time step (s) the hydraulics are solved over. A frame is split into substeps of at
+ * most this, so a moving mass against the springy oil column (oscillating at tens of Hz) and an
+ * accumulator's gas spring are integrated finely enough to show real pressure peaks. */
+export const MAX_SUBSTEP = 0.002;
+
 export function stepSimulation(dt: number): HydFrame {
   // Electrical first, so solenoid valves/pump motors see this frame's coil states.
   solveElectrical(dt);
@@ -52,8 +59,6 @@ export function stepSimulation(dt: number): HydFrame {
 
   const ports: string[] = [];
   const isHydraulic = new Set<string>();
-  const elements: HydElement[] = [];
-  const firstElement = new Map<number, number>();
   for (const c of appState.components) {
     for (const p of Object.values(c.ports)) {
       if (p.electrical) continue;
@@ -61,8 +66,6 @@ export function stepSimulation(dt: number): HydFrame {
       ports.push(key);
       isHydraulic.add(key);
     }
-    firstElement.set(c.id, elements.length);
-    for (const e of c.hydElements?.() ?? []) elements.push(globalize(c.id, e));
   }
   const links: Array<[string, string]> = [];
   const wires: Array<{ id: number; from: string; to: string }> = [];
@@ -78,27 +81,42 @@ export function stepSimulation(dt: number): HydFrame {
     lastTopology = appState.topologyVersion;
     lastSolution = undefined;
   }
-  const solution = solveHydraulics({ ports, links, elements, guess: lastSolution, dt });
-  lastSolution = solution;
-  let pMax = 0;
-  for (const p of solution.pressure.values()) pMax = Math.max(pMax, p);
-  setPressureScale(pMax);
 
-  for (const c of appState.components) {
-    if (!c.step) continue;
-    const base = firstElement.get(c.id) ?? 0;
-    const ctx: SimStepContext = {
-      dt,
-      pressureAt: (p) => solution.pressure.get(portKey(c.id, p)) ?? 0,
-      flowAt: (p) => solution.portFlow.get(portKey(c.id, p)) ?? 0,
-      elementValue: (i) => solution.elementValue[base + i] ?? 0,
-      elementLocked: (i) => solution.elementLocked[base + i] ?? false,
-      isPressurized: (p) => (solution.pressure.get(portKey(c.id, p)) ?? 0) > 1,
-      emitSignal: setSignal,
-      readSignal: getSignal,
-    };
-    c.step(dt, ctx);
+  const substeps = Math.max(1, Math.ceil(dt / MAX_SUBSTEP - 1e-9));
+  const h = dt / substeps;
+  let solution = lastSolution;
+  for (let sub = 0; sub < substeps; sub++) {
+    // Re-read every substep: cylinder positions, accumulator contents etc. have moved on.
+    const elements: HydElement[] = [];
+    const firstElement = new Map<number, number>();
+    for (const c of appState.components) {
+      firstElement.set(c.id, elements.length);
+      for (const e of c.hydElements?.() ?? []) elements.push(globalize(c.id, e));
+    }
+    const sol = solveHydraulics({ ports, links, elements, guess: solution, dt: h });
+    solution = sol;
+    if (sub === substeps - 1) {
+      let pMax = 0;
+      for (const p of sol.pressure.values()) pMax = Math.max(pMax, p);
+      setPressureScale(pMax);
+    }
+    for (const c of appState.components) {
+      if (!c.step) continue;
+      const base = firstElement.get(c.id) ?? 0;
+      const ctx: SimStepContext = {
+        dt: h,
+        pressureAt: (p) => sol.pressure.get(portKey(c.id, p)) ?? 0,
+        flowAt: (p) => sol.portFlow.get(portKey(c.id, p)) ?? 0,
+        elementValue: (i) => sol.elementValue[base + i] ?? 0,
+        elementLocked: (i) => sol.elementLocked[base + i] ?? false,
+        isPressurized: (p) => (sol.pressure.get(portKey(c.id, p)) ?? 0) > 1,
+        emitSignal: setSignal,
+        readSignal: getSignal,
+      };
+      c.step(h, ctx);
+    }
   }
-
-  return { solution, wireFlow: wireFlows(wires, solution.portFlow) };
+  lastSolution = solution;
+  const final = solution!;
+  return { solution: final, wireFlow: wireFlows(wires, final.portFlow) };
 }

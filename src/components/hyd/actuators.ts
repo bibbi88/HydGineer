@@ -181,6 +181,11 @@ export function createHydCylinderDouble(compLayer: HTMLElement, x: number, y: nu
   let stroke = 200;
   let load = 0;
   let friction = 100;
+  /** Moving mass (kg): 0 = inertia ignored (the piston follows the flow instantly). */
+  let mass = 0;
+  let vLast = 0;
+  let peakA = 0;
+  let peakB = 0;
 
   const comp = hydComponentBase(shell, HYD_CYLINDER_DOUBLE_TYPE, x, y, svgW, svgH, ports);
   const areaA = (): number => circleAreaCm2(bore);
@@ -201,14 +206,24 @@ export function createHydCylinderDouble(compLayer: HTMLElement, x: number, y: nu
         atMax: pos >= 1,
         volA: 0.01 + areaA() * pos * stroke * 1e-4,
         volB: 0.01 + areaB() * (1 - pos) * stroke * 1e-4,
+        mass,
+        vPrev: vLast,
       },
     ],
     step(dt: number, ctx: SimStepContext): void {
       const v = ctx.elementValue(0);
       pos = Math.max(0, Math.min(1, pos + (v * dt * 1000) / Math.max(1, stroke)));
       drawing.update(pos);
-      const force = (ctx.pressureAt('A') * areaA() - ctx.pressureAt('B') * areaB()) * 10;
-      shell.setInfo([`${fmtVel(v)} · x ${(pos * stroke).toFixed(0)} mm`, `F ${fmtForce(force)}`]);
+      vLast = ctx.elementLocked(0) ? 0 : v;
+      const pA = ctx.pressureAt('A');
+      const pB = ctx.pressureAt('B');
+      peakA = Math.max(peakA, pA);
+      peakB = Math.max(peakB, pB);
+      const force = (pA * areaA() - pB * areaB()) * 10;
+      const lines = [`${fmtVel(v)} · x ${(pos * stroke).toFixed(0)} mm`, `F ${fmtForce(force)}`];
+      // With a mass, stopping it suddenly compresses the trapped oil: show the peaks reached.
+      if (mass > 0) lines.push(`peak A ${peakA.toFixed(0)} · B ${peakB.toFixed(0)} bar`);
+      shell.setInfo(lines);
       for (const s of state.sensors) ctx.emitSignal(s.label, isInSensorRange(pos, s));
     },
     snapshot: () => ({
@@ -221,6 +236,7 @@ export function createHydCylinderDouble(compLayer: HTMLElement, x: number, y: nu
       stroke,
       load,
       friction,
+      mass,
     }),
     restore(data: Record<string, unknown>): void {
       restoreName(shell, data);
@@ -233,10 +249,14 @@ export function createHydCylinderDouble(compLayer: HTMLElement, x: number, y: nu
       stroke = readNum(data, 'stroke', stroke, 1, 10000);
       load = readNum(data, 'load', load, -1e7, 1e7);
       friction = readNum(data, 'friction', friction, 0, 1e6);
+      mass = readNum(data, 'mass', mass, 0, 1e6);
       drawing.update(pos);
     },
     reset(): void {
       pos = 0;
+      vLast = 0;
+      peakA = 0;
+      peakB = 0;
       drawing.update(pos);
       shell.setInfo([]);
     },
@@ -275,6 +295,9 @@ export function createHydCylinderSingle(compLayer: HTMLElement, x: number, y: nu
   let friction = 50;
   let springPreload = 300;
   let springRate = 2;
+  let mass = 0;
+  let vLast = 0;
+  let peakA = 0;
 
   const springForce = (): number => springPreload + springRate * pos * stroke;
   const areaA = (): number => circleAreaCm2(bore);
@@ -292,17 +315,24 @@ export function createHydCylinderSingle(compLayer: HTMLElement, x: number, y: nu
         atMin: pos <= 0,
         atMax: pos >= 1,
         volA: 0.01 + areaA() * pos * stroke * 1e-4,
+        mass,
+        vPrev: vLast,
       },
     ],
     step(dt: number, ctx: SimStepContext): void {
       const v = ctx.elementValue(0);
       pos = Math.max(0, Math.min(1, pos + (v * dt * 1000) / Math.max(1, stroke)));
       drawing.update(pos);
-      const force = ctx.pressureAt('A') * areaA() * 10;
-      shell.setInfo([
+      vLast = ctx.elementLocked(0) ? 0 : v;
+      const pA = ctx.pressureAt('A');
+      peakA = Math.max(peakA, pA);
+      const force = pA * areaA() * 10;
+      const lines = [
         `${fmtVel(v)} · x ${(pos * stroke).toFixed(0)} mm`,
         `F ${fmtForce(force)} (spring ${fmtForce(springForce())})`,
-      ]);
+      ];
+      if (mass > 0) lines.push(`peak A ${peakA.toFixed(0)} bar`);
+      shell.setInfo(lines);
       for (const s of state.sensors) ctx.emitSignal(s.label, isInSensorRange(pos, s));
     },
     snapshot: () => ({
@@ -316,6 +346,7 @@ export function createHydCylinderSingle(compLayer: HTMLElement, x: number, y: nu
       friction,
       springPreload,
       springRate,
+      mass,
     }),
     restore(data: Record<string, unknown>): void {
       restoreName(shell, data);
@@ -329,10 +360,13 @@ export function createHydCylinderSingle(compLayer: HTMLElement, x: number, y: nu
       friction = readNum(data, 'friction', friction, 0, 1e6);
       springPreload = readNum(data, 'springPreload', springPreload, 0, 1e7);
       springRate = readNum(data, 'springRate', springRate, 0, 1e6);
+      mass = readNum(data, 'mass', mass, 0, 1e6);
       drawing.update(pos);
     },
     reset(): void {
       pos = 0;
+      vLast = 0;
+      peakA = 0;
       drawing.update(pos);
       shell.setInfo([]);
     },

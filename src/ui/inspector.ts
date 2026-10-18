@@ -19,6 +19,7 @@ import {
   HYD_RELIEF_TYPE,
   HYD_GAUGE_TYPE,
   HYD_PRESSURE_SWITCH_TYPE,
+  HYD_ACCUMULATOR_TYPE,
 } from '../components/hyd/supply';
 import {
   CENTER_OPTIONS,
@@ -30,6 +31,7 @@ import {
   HYD_ONE_WAY_FC_TYPE,
   HYD_FLOW_CONTROL_TYPE,
   HYD_REDUCING_TYPE,
+  HYD_COUNTERBALANCE_TYPE,
 } from '../components/hyd/valves';
 import {
   HYD_CYLINDER_DOUBLE_TYPE,
@@ -44,7 +46,7 @@ import {
   listAllSensorLabels,
   type CylinderSensor,
 } from '../components/shared/sensorPositions';
-import { swapComponentType } from '../interaction/valveActuatorSwap';
+import { swapComponentType, swapFamilyOf } from '../interaction/valveActuatorSwap';
 import { JUNCTION_TYPE } from '../components/junction';
 import { PLC_TYPE } from '../components/plc';
 import {
@@ -217,7 +219,59 @@ const INSPECTOR_FIELDS: Record<string, InspectorField[]> = {
       max: 1000,
       step: 10,
     },
-    { kind: 'text', key: 'signal', label: 'Motor signal (empty = always on, e.g. K1)' },
+    {
+      kind: 'select',
+      key: 'control',
+      label: 'Displacement',
+      options: [
+        { value: 'fixed', label: 'Fixed' },
+        { value: 'pc', label: 'Variable, pressure compensated' },
+      ],
+    },
+    {
+      kind: 'number',
+      key: 'compSetting',
+      label: 'Compensator setting (bar) - variable pump only',
+      min: 1,
+      max: 1000,
+      step: 5,
+    },
+    {
+      kind: 'text',
+      key: 'signal',
+      label: 'Motor signal (empty = always on; K1 = runs while K1 is on; !S1 = while S1 is off)',
+    },
+  ],
+  [HYD_ACCUMULATOR_TYPE]: [
+    { kind: 'number', key: 'volume', label: 'Nominal volume (L)', min: 0.01, max: 1000, step: 0.1 },
+    { kind: 'number', key: 'precharge', label: 'Gas pre-charge (bar)', min: 0, max: 700, step: 5 },
+    {
+      kind: 'number',
+      key: 'n',
+      label: 'Polytropic exponent (1 = slow/isothermal, 1.4 = fast/adiabatic)',
+      min: 1,
+      max: 1.4,
+      step: 0.05,
+    },
+  ],
+  [HYD_COUNTERBALANCE_TYPE]: [
+    {
+      kind: 'number',
+      key: 'setting',
+      label: 'Setting (bar) - about 1.3 × holding pressure',
+      min: 1,
+      max: 700,
+      step: 5,
+    },
+    { kind: 'number', key: 'ratio', label: 'Pilot ratio', min: 1, max: 20, step: 0.5 },
+    {
+      kind: 'number',
+      key: 'qNom',
+      label: 'Nominal flow (L/min at Δp 5 bar)',
+      min: 0.5,
+      max: 2000,
+      step: 1,
+    },
   ],
   [HYD_RELIEF_TYPE]: [
     { kind: 'number', key: 'setting', label: 'Cracking pressure (bar)', min: 0, max: 700, step: 5 },
@@ -240,6 +294,7 @@ const INSPECTOR_FIELDS: Record<string, InspectorField[]> = {
     { kind: 'text', key: 'key', label: 'Signal name (e.g. S1)' },
   ],
   [HYD_VALVE_43_TYPE]: [
+    { kind: 'actuatorMode', label: 'Valve type', options: swapFamilyOf(HYD_VALVE_43_TYPE) },
     { kind: 'select', key: 'actuation', label: 'Actuation', options: ACTUATION_OPTIONS },
     { kind: 'select', key: 'center', label: 'Centre position', options: CENTER_OPTIONS },
     { kind: 'text', key: 'keyLeft', label: 'Left solenoid (P→A, B→T)' },
@@ -247,6 +302,7 @@ const INSPECTOR_FIELDS: Record<string, InspectorField[]> = {
     VALVE_FLOW_FIELD,
   ],
   [HYD_VALVE_42_TYPE]: [
+    { kind: 'actuatorMode', label: 'Valve type', options: swapFamilyOf(HYD_VALVE_42_TYPE) },
     { kind: 'select', key: 'actuation', label: 'Actuation', options: ACTUATION_OPTIONS },
     { kind: 'text', key: 'key', label: 'Solenoid (energized: P→A, B→T)' },
     VALVE_FLOW_FIELD,
@@ -275,6 +331,7 @@ const INSPECTOR_FIELDS: Record<string, InspectorField[]> = {
     { kind: 'checkbox', key: 'bypass', label: 'Bypass check valve (free OUT→IN)' },
   ],
   [HYD_SPOOL_DIVIDER_TYPE]: [
+    { kind: 'actuatorMode', label: 'Divider type', options: swapFamilyOf(HYD_SPOOL_DIVIDER_TYPE) },
     {
       kind: 'number',
       key: 'ratioA',
@@ -293,6 +350,7 @@ const INSPECTOR_FIELDS: Record<string, InspectorField[]> = {
     },
   ],
   [HYD_ROTARY_DIVIDER_TYPE]: [
+    { kind: 'actuatorMode', label: 'Divider type', options: swapFamilyOf(HYD_ROTARY_DIVIDER_TYPE) },
     {
       kind: 'number',
       key: 'dispA',
@@ -333,6 +391,13 @@ const INSPECTOR_FIELDS: Record<string, InspectorField[]> = {
     { kind: 'number', key: 'stroke', label: 'Stroke (mm)', min: 1, max: 10000, step: 10 },
     { kind: 'number', key: 'load', label: 'Load force (N, + opposes extension)', step: 100 },
     { kind: 'number', key: 'friction', label: 'Seal friction (N)', min: 0, step: 10 },
+    {
+      kind: 'number',
+      key: 'mass',
+      label: 'Moving mass (kg) - 0 = inertia ignored',
+      min: 0,
+      step: 10,
+    },
     { kind: 'sensorList', arrayKey: 'sensors', min: 0, max: 100, step: 1 },
   ],
   [HYD_CYLINDER_SINGLE_TYPE]: [
@@ -343,6 +408,13 @@ const INSPECTOR_FIELDS: Record<string, InspectorField[]> = {
     { kind: 'number', key: 'springPreload', label: 'Spring preload (N)', min: 0, step: 10 },
     { kind: 'number', key: 'springRate', label: 'Spring rate (N/mm)', min: 0, step: 0.5 },
     { kind: 'number', key: 'friction', label: 'Seal friction (N)', min: 0, step: 10 },
+    {
+      kind: 'number',
+      key: 'mass',
+      label: 'Moving mass (kg) - 0 = inertia ignored',
+      min: 0,
+      step: 10,
+    },
     { kind: 'sensorList', arrayKey: 'sensors', min: 0, max: 100, step: 1 },
   ],
   [HYD_MOTOR_TYPE]: [

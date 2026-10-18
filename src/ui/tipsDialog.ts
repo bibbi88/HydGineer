@@ -85,6 +85,23 @@ const TIP_SECTIONS: TipSection[] = [
         '(gear) type splits by displacement on a common shaft: the inlet sees the mean of the ' +
         'outlet pressures, and one outlet can rise above the inlet pressure (intensification). ' +
         'With either type, blocking one outlet stops the other, and both combine flow in reverse.',
+      'Accumulator: holds no oil below its gas pre-charge; above it the nitrogen is ' +
+        'compressed by the gas law, so it stores oil under pressure and gives it back when the ' +
+        'line pressure falls - far more flow than the pump, for a short time.',
+      'Counterbalance valve: fit it between the directional valve (V) and the side of the ' +
+        'cylinder that carries the load (L), with its pilot X from the other cylinder line. It ' +
+        'lets oil in freely, holds the load, and lets it down only while the pump drives it ' +
+        'down - so the load can never run away.',
+      'Pump: set Displacement to "Variable, pressure compensated" and the pump swivels back ' +
+        'near its compensator setting, delivering only what the circuit takes - compare the ' +
+        'power with a fixed pump dumping over its relief valve. Its Motor signal "!S1" runs it ' +
+        'while signal S1 is off, e.g. until a pressure switch says the accumulator is charged.',
+      'Cylinders: give the moving mass (kg) to include inertia. The piston then accelerates ' +
+        'and decelerates by F = m·a against the springy oil, and stopping it suddenly shows the ' +
+        'pressure peak it causes ("peak" in its readout). Each frame is solved in steps of 2 ms.',
+      'Flow dividers and directional valves can be switched type in place: pick another type ' +
+        'in the inspector, or drag the other type from the library onto it (it outlines green). ' +
+        'Wires, position and rotation are kept.',
       'Hand-lever valves are switched by clicking the left or right half of the symbol while the ' +
         'simulation runs; click the same side again to return to centre.',
     ],

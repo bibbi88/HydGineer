@@ -34,6 +34,7 @@ export const HYD_THROTTLE_TYPE = 'hydThrottle';
 export const HYD_ONE_WAY_FC_TYPE = 'hydOneWayFlowControl';
 export const HYD_FLOW_CONTROL_TYPE = 'hydFlowControl';
 export const HYD_REDUCING_TYPE = 'hydReducing';
+export const HYD_COUNTERBALANCE_TYPE = 'hydCounterbalance';
 
 /** Directional valves driven by named solenoids - also what project loading and the electrical
  * coil components use to pair coil names with valves. */
@@ -946,6 +947,148 @@ export function createHydReducing(compLayer: HTMLElement, x: number, y: number):
       arrowG.setAttribute('transform', '');
       shell.setInfo([]);
       clearFlow([...pLead, ...aLead, ...throughArrow, ...pilotLine]);
+    },
+  });
+}
+
+/**
+ * Counterbalance valve (overcentre valve) for an overrunning load - a load that would run away
+ * if its return oil were let out freely, like a lifted weight being lowered. Fitted between the
+ * directional valve (V) and the load-holding side of the actuator (L). Lifting: free flow V → L
+ * through the check. Holding: shut, as long as the load pressure is below the setting (set
+ * ~1.3 × the holding pressure). Lowering: the pilot (X), taken from the other side of the
+ * actuator, opens it together with the load pressure, p_L + ratio·p_X ≥ setting - so the load
+ * only comes down while the pump is actively driving it down, and never faster.
+ */
+export function createHydCounterbalance(compLayer: HTMLElement, x: number, y: number): Component {
+  const svgW = 100;
+  const svgH = 100;
+  const shell = createHydShell(
+    compLayer,
+    HYD_COUNTERBALANCE_TYPE,
+    x,
+    y,
+    svgW,
+    svgH,
+    'Counterbalance valve',
+    { x: 12, y: 18, w: 82, h: 64 },
+  );
+  const g = shell.g;
+  g.appendChild(
+    createSvgEl('rect', {
+      x: 25,
+      y: 30,
+      width: 30,
+      height: 40,
+      fill: '#fff',
+      stroke: INK,
+      'stroke-width': STROKE,
+    }),
+  );
+  // Controlled path drawn L (top) → V (bottom), the lowering direction.
+  const lLead = [line(g, 40, 10, 40, 30)];
+  const vLead = [line(g, 40, 70, 40, 90)];
+  const arrowG = createSvgEl('g', { class: 'hydSpool' });
+  g.appendChild(arrowG);
+  const throughArrow = arrowLine(arrowG, 47, 36, 47, 64);
+  springH(g, 55, 70, 40, 4);
+  adjustArrow(g, 63, 40, 8);
+  // Internal pilot from the load side, external pilot X.
+  const pilotL = [
+    path(g, 'M 40 20 H 18 V 40 H 25', { 'stroke-dasharray': '4 3', 'stroke-width': 1.5 }),
+  ];
+  const pilotX = [
+    path(g, 'M 10 50 H 18 V 60 H 25', { 'stroke-dasharray': '4 3', 'stroke-width': 1.5 }),
+  ];
+  for (const el of [...pilotL, ...pilotX]) el.dataset.nodash = '1';
+  // Bypass check for free flow V → L, drawn in that direction.
+  const glyph = drawBallCheckSymbol(g, 84, 50, 'vertical', 1, 0.6);
+  const bypassV = [
+    path(g, 'M 40 80 H 84 V 66'),
+    line(g, 84, 66, 84, Math.max(glyph.inPoint.y, glyph.outPoint.y)),
+  ];
+  const bypassL = [
+    line(g, 84, Math.min(glyph.inPoint.y, glyph.outPoint.y), 84, 34),
+    path(g, 'M 84 34 V 20 H 40'),
+  ];
+  createPortLabel(g, 47, 14, 'L', { anchor: 'start', fontSize: 10 });
+  createPortLabel(g, 47, 96, 'V', { anchor: 'start', fontSize: 10 });
+  createPortLabel(g, 8, 62, 'X', { anchor: 'middle', fontSize: 10 });
+  const setText = createSvgEl('text', { x: 2, y: 86, 'font-size': 9 });
+  g.appendChild(setText);
+  const ports = {
+    L: createPort(g, 'L', 40, 10, 'V'),
+    V: createPort(g, 'V', 40, 90, 'V'),
+    X: createPort(g, 'X', 10, 50, 'H', { isPilot: true, pilotDir: -1 }),
+  };
+  shell.setInfoSide('right');
+
+  let setting = 100;
+  let ratio = 4;
+  let qNom = 30;
+  function refresh(): void {
+    setText.textContent = `${setting} bar`;
+  }
+  refresh();
+
+  const comp = hydComponentBase(shell, HYD_COUNTERBALANCE_TYPE, x, y, svgW, svgH, ports);
+  return Object.assign(comp, {
+    hydElements: (): HydElement[] => [
+      {
+        kind: 'counterbalance',
+        a: 'V',
+        b: 'L',
+        x: 'X',
+        set: setting,
+        ratio,
+        k: orificeKFromRating(qNom, VALVE_RATING_DP),
+        band: 5,
+      },
+    ],
+    step(_dt: number, ctx: SimStepContext): void {
+      const q = ctx.elementValue(0); // + = free V → L, − = controlled L → V
+      const pL = ctx.pressureAt('L');
+      const pV = ctx.pressureAt('V');
+      const pX = ctx.pressureAt('X');
+      const lowering = q < -FLOW_THRESHOLD;
+      arrowG.setAttribute('transform', lowering ? 'translate(-7,0)' : '');
+      const lines: string[] = [];
+      if (lowering) lines.push(`lowering ${fmtFlow(-q)}`);
+      else if (q > FLOW_THRESHOLD) lines.push(`free flow ${fmtFlow(q)}`);
+      else if (pL > 1) lines.push(`holding ${fmtBar(pL)}`);
+      if (pL > 1 && !lowering) {
+        const pilotNeeded = Math.max(0, (setting - pL) / ratio);
+        lines.push(`opens at X ${fmtBar(pilotNeeded)}`);
+      }
+      shell.setInfo(lines);
+      paintFlow(lLead, pL, -q);
+      paintFlow(vLead, pV, -q);
+      paintFlow(throughArrow, pL, lowering ? -q : 0);
+      paintFlow(bypassV, pV, Math.max(0, q));
+      paintFlow(bypassL, pL, Math.max(0, q));
+      paintFlow(pilotL, pL, 0);
+      paintFlow(pilotX, pX, 0);
+    },
+    snapshot: () => ({ ...nameSnapshot(shell), setting, ratio, qNom }),
+    restore(data: Record<string, unknown>): void {
+      restoreName(shell, data);
+      setting = readNum(data, 'setting', setting, 1, 700);
+      ratio = readNum(data, 'ratio', ratio, 1, 20);
+      qNom = readNum(data, 'qNom', qNom, 0.5, 2000);
+      refresh();
+    },
+    reset(): void {
+      arrowG.setAttribute('transform', '');
+      shell.setInfo([]);
+      clearFlow([
+        ...lLead,
+        ...vLead,
+        ...throughArrow,
+        ...bypassV,
+        ...bypassL,
+        ...pilotL,
+        ...pilotX,
+      ]);
     },
   });
 }

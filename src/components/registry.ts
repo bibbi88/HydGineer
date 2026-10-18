@@ -6,6 +6,8 @@ import {
   createHydRelief,
   createHydGauge,
   createHydPressureSwitch,
+  createHydAccumulator,
+  HYD_ACCUMULATOR_TYPE,
   HYD_PUMP_TYPE,
   HYD_TANK_TYPE,
   HYD_RELIEF_TYPE,
@@ -21,6 +23,8 @@ import {
   createHydOneWayFlowControl,
   createHydFlowControl,
   createHydReducing,
+  createHydCounterbalance,
+  HYD_COUNTERBALANCE_TYPE,
   HYD_VALVE_43_TYPE,
   HYD_VALVE_42_TYPE,
   HYD_CHECK_TYPE,
@@ -115,6 +119,15 @@ export const componentRegistry = new Map<string, RegistryEntry>([
     },
   ],
   [
+    HYD_ACCUMULATOR_TYPE,
+    {
+      factory: (ctx, x, y) => createHydAccumulator(ctx.compLayer, x, y),
+      label: 'Accumulator (gas-loaded)',
+      placeable: true,
+      category: ComponentCategory.SUPPLY,
+    },
+  ],
+  [
     HYD_VALVE_43_TYPE,
     {
       factory: (ctx, x, y) => createHydValve43(ctx.compLayer, x, y),
@@ -146,6 +159,15 @@ export const componentRegistry = new Map<string, RegistryEntry>([
     {
       factory: (ctx, x, y) => createHydReducing(ctx.compLayer, x, y),
       label: 'Pressure reducing valve',
+      placeable: true,
+      category: ComponentCategory.PRESSURE,
+    },
+  ],
+  [
+    HYD_COUNTERBALANCE_TYPE,
+    {
+      factory: (ctx, x, y) => createHydCounterbalance(ctx.compLayer, x, y),
+      label: 'Counterbalance valve',
       placeable: true,
       category: ComponentCategory.PRESSURE,
     },

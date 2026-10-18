@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  accumulatorOil,
   circleAreaCm2,
   orificeKFromDiameter,
   orificeKFromRating,
@@ -423,6 +424,153 @@ describe('flow dividers', () => {
     const qB = s.elementValue[5]!;
     expect(qA).toBeGreaterThan(qB);
     expect(qA + qB).toBeCloseTo(20, 2);
+  });
+});
+
+describe('pressure-compensated pump', () => {
+  it('destrokes at its setting instead of dumping over the relief valve', () => {
+    const s = solve(
+      ['P', 'T'],
+      [],
+      [
+        { kind: 'pump', out: 'P', q: 30, leak: 0.002, comp: 100, band: 5 },
+        { kind: 'relief', a: 'P', b: 'T', set: 120, gain: 10 },
+        { kind: 'orifice', a: 'P', b: 'T', k: 0.5 }, // a small consumer: ~5 L/min at 100 bar
+        { kind: 'tank', a: 'T' },
+      ],
+    );
+    const p = s.pressure.get('P')!;
+    expect(p).toBeGreaterThan(95);
+    expect(p).toBeLessThan(100);
+    expect(s.elementValue[1]).toBeCloseTo(0, 6); // relief stays shut
+    expect(s.elementValue[0]).toBeCloseTo(0.5 * Math.sqrt(p), 3); // delivers only what's taken
+  });
+
+  it('delivers full flow well below its setting', () => {
+    const s = solve(
+      ['P', 'T'],
+      [],
+      [
+        { kind: 'pump', out: 'P', q: 30, leak: 0, comp: 100, band: 5 },
+        { kind: 'orifice', a: 'P', b: 'T', k: 10 },
+        { kind: 'tank', a: 'T' },
+      ],
+    );
+    expect(s.elementValue[0]).toBeCloseTo(30, 3);
+    expect(s.pressure.get('P')).toBeCloseTo(9, 2);
+  });
+});
+
+describe('accumulator', () => {
+  const acc = { volume: 2, precharge: 60, n: 1.4 };
+
+  it('holds no oil below pre-charge and follows the gas law above it', () => {
+    expect(accumulatorOil(acc, 40)).toBe(0);
+    const expected = 2 * (1 - Math.pow(61 / 121, 1 / 1.4));
+    expect(accumulatorOil(acc, 120)).toBeCloseTo(expected, 4);
+  });
+
+  it('charges from a pump over time: oil taken in equals pump flow × time', () => {
+    let oil = 0;
+    let guess;
+    const dt = 0.05;
+    for (let i = 0; i < 400; i++) {
+      const s = solveHydraulics({
+        ports: ['P', 'T'],
+        links: [],
+        elements: [
+          { kind: 'pump', out: 'P', q: 6, leak: 0 },
+          { kind: 'relief', a: 'P', b: 'T', set: 150, gain: 10 },
+          { kind: 'accumulator', a: 'P', ...acc, oilPrev: oil },
+          { kind: 'tank', a: 'T' },
+        ],
+        guess,
+        dt,
+      });
+      expect(s.converged).toBe(true);
+      guess = s;
+      oil = accumulatorOil(acc, s.pressure.get('P')!);
+      if (i === 39) {
+        // 2 s at 6 L/min = 0.2 L (less the line volume's own share).
+        expect(oil).toBeGreaterThan(0.18);
+        expect(oil).toBeLessThan(0.2);
+      }
+    }
+    // Full: the relief valve takes over at 150 bar.
+    expect(oil).toBeCloseTo(accumulatorOil(acc, 150.6), 1);
+  });
+});
+
+describe('counterbalance valve', () => {
+  const areaA = circleAreaCm2(63);
+  // A 20 kN load hangs on the cap side: 63.7 bar holds it. Valve set at 85 bar, pilot 4:1.
+  function lowering(pilot: number) {
+    return solve(
+      ['V', 'L', 'X', 'T'],
+      [],
+      [
+        { kind: 'counterbalance', a: 'V', b: 'L', x: 'X', set: 85, ratio: 4, k: 10, band: 5 },
+        { kind: 'orifice', a: 'V', b: 'T', k: 10 },
+        {
+          kind: 'piston',
+          a: 'L',
+          areaA,
+          areaB: 0,
+          load: 20000,
+          friction: 0,
+          atMin: false,
+          atMax: false,
+        },
+        { kind: 'pump', out: 'X', q: 1, leak: 0 },
+        { kind: 'relief', a: 'X', b: 'T', set: pilot, gain: 10 },
+        { kind: 'tank', a: 'T' },
+      ],
+    );
+  }
+
+  it('holds the load with no pilot pressure', () => {
+    const s = lowering(0);
+    expect(Math.abs(s.elementValue[2]!)).toBeLessThan(1e-5);
+    expect(s.pressure.get('L')).toBeCloseTo(20000 / (areaA * 10), 1);
+  });
+
+  it('lets it down under control once piloted, never faster than the opening allows', () => {
+    const s = lowering(8);
+    const v = s.elementValue[2]!;
+    expect(v).toBeLessThan(-0.005);
+    // Load-side pressure stays at the holding pressure: the load is still carried by the oil.
+    expect(s.pressure.get('L')!).toBeGreaterThan(60);
+  });
+});
+
+describe('moving mass', () => {
+  it('accelerates under a net force as F = m·a, then a stop builds a pressure spike', () => {
+    const areaA = circleAreaCm2(50);
+    const step = (vPrev: number, dt: number) =>
+      solveHydraulics({
+        ports: ['A'],
+        links: [],
+        elements: [
+          {
+            kind: 'piston',
+            a: 'A',
+            areaA,
+            areaB: 0,
+            load: -1000, // 1 kN pulls the rod out, A is shut off: only the oil holds it
+            friction: 0,
+            atMin: false,
+            atMax: false,
+            volA: 0.2,
+            mass: 500,
+            vPrev,
+          },
+        ],
+        dt,
+      });
+    // Released from rest with the trapped oil at 0 bar: the 1 kN accelerates 500 kg at 2 m/s²
+    // until the oil column (cavitating at first) pulls it back - first step ≈ free acceleration.
+    const s = step(0, 0.001);
+    expect(s.elementValue[0]!).toBeCloseTo(0.002, 3);
   });
 });
 

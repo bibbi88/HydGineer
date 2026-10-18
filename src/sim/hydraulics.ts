@@ -65,8 +65,43 @@ export type HydElement =
   | { kind: 'reducing'; a: string; b: string; set: number; k: number; band: number }
   /** Pressure-compensated 2-way flow control a→b: holds `q` once Δp exceeds about `dpMin`. */
   | { kind: 'flowControl'; a: string; b: string; q: number; dpMin: number }
-  /** Fixed-displacement pump drawing from tank: delivers q − leak·p_out into `out`. */
-  | { kind: 'pump'; out: string; q: number; leak: number }
+  /** Pump drawing from tank: delivers q·f − leak·p_out into `out`. f = 1 for a fixed pump; with
+   * a pressure compensator (`comp`, bar) the displacement is swivelled back over the last
+   * `band` bar below the setting, so the pump delivers only what the circuit takes there. */
+  | { kind: 'pump'; out: string; q: number; leak: number; comp?: number; band?: number }
+  /**
+   * Gas-loaded (bladder/piston) accumulator on node `a`. Below the pre-charge pressure it holds
+   * no oil; above it the gas is compressed polytropically, (p + 1)·V_gas^n = (p0 + 1)·V0^n in
+   * absolute bar, so the oil it holds is V0·(1 − ((p0 + 1)/(p + 1))^(1/n)). `oilPrev` is what it
+   * held a time step ago; the flow into it is the change over the step (needs HydInput.dt -
+   * without it the accumulator is treated as shut off).
+   */
+  | {
+      kind: 'accumulator';
+      a: string;
+      volume: number;
+      precharge: number;
+      n: number;
+      oilPrev: number;
+    }
+  /**
+   * Counterbalance valve between the directional valve (`a`) and an overrunning load (`b`), pilot
+   * `x`. Free flow a → b through its check. Flow b → a only once
+   *   p_b + ratio·p_x ≥ set
+   * - the load pressure alone (set above the load-holding pressure) or the pilot from the other
+   * side of the actuator opens it, modulating over `band` bar, so the load can only be driven
+   * down, never run away.
+   */
+  | {
+      kind: 'counterbalance';
+      a: string;
+      b: string;
+      x: string;
+      set: number;
+      ratio: number;
+      k: number;
+      band: number;
+    }
   /** Tank (reservoir) connection: holds this node at 0 bar. */
   | { kind: 'tank'; a: string }
   /** Linear actuator. Extending (v > 0) draws areaA·v from `a` and pushes areaB·v into `b`.
@@ -84,6 +119,10 @@ export type HydElement =
       /** Oil volume (L) of each chamber, for compressibility (see HydInput.dt). */
       volA?: number;
       volB?: number;
+      /** Moving mass (kg) and its velocity a time step ago (m/s): with both and HydInput.dt the
+       * piston accelerates, m·dv/dt = net force, instead of being in force balance at once. */
+      mass?: number;
+      vPrev?: number;
     }
   /** Rotary actuator: forward rotation (n > 0) passes D·n from `a` to `b`. `torque` (Nm)
    * opposes rotation in either direction. */
@@ -175,6 +214,19 @@ const ORIFICE_DELTA = 0.1;
 const EDGE_EPS = 0.1;
 /** Pressure band (bar) over which a pilot-operated check valve goes from shut to fully open. */
 const PILOT_BAND = 2;
+/** Velocity (m/s) over which a moving mass's Coulomb friction is smoothed. */
+const FRICTION_V0 = 2e-4;
+
+/** Oil volume (L) a gas-loaded accumulator holds at gauge pressure `p` - see its HydElement. */
+export function accumulatorOil(
+  e: { volume: number; precharge: number; n: number },
+  p: number,
+): number {
+  const p0abs = Math.max(e.precharge, 0) + 1;
+  const pabs = p0abs + ramp(p - e.precharge);
+  return e.volume * (1 - Math.pow(p0abs / pabs, 1 / Math.max(e.n, 1)));
+}
+
 /** End-stop stiffness of a flow divider's compensating sleeve (bar per unit overtravel). */
 const SPOOL_END_STIFFNESS = 2000;
 /** Viscous damping of a piston, as the extra pressure (bar) it takes per m/s - small. */
@@ -332,6 +384,7 @@ export function solveHydraulics(input: HydInput): HydSolution {
         tB.push(term(e.out));
         break;
       case 'tank':
+      case 'accumulator':
         tA.push(term(e.a));
         tB.push(null);
         break;
@@ -453,7 +506,8 @@ export function solveHydraulics(input: HydInput): HydSolution {
         return { qa: q, qb: -q, value: q };
       }
       case 'pump': {
-        const q = e.q - e.leak * Math.max(0, pb);
+        const f = e.comp === undefined ? 1 : smoothstep((e.comp - pb) / (e.band ?? 5));
+        const q = e.q * f - e.leak * Math.max(0, pb);
         // `qa` is the (nonexistent) suction side - the pump draws from the tank.
         return { qa: 0, qb: -q, value: q };
       }
@@ -467,6 +521,18 @@ export function solveHydraulics(input: HydInput): HydSolution {
         const n = xx[varOfElement[i]!]!;
         const q = e.disp * n * 0.06;
         return { qa: q, qb: -q, value: n };
+      }
+      case 'accumulator': {
+        if (input.dt === undefined) return { qa: 0, qb: 0, value: 0 };
+        const q = ((accumulatorOil(e, pa) - e.oilPrev) * 60) / Math.max(input.dt, 1e-4);
+        return { qa: q, qb: 0, value: q };
+      }
+      case 'counterbalance': {
+        const px = pressureOf(xx, tX[i]!);
+        const free = seatFlow(e.k, pa - pb - 1);
+        const opening = smoothstep((pb + e.ratio * Math.max(0, px) - e.set) / e.band);
+        const q = free - opening * orificeFlow(e.k, pb - pa);
+        return { qa: q, qb: -q, value: q };
       }
       case 'compensator': {
         const sp = xx[varOfElement[i]!]!;
@@ -497,8 +563,15 @@ export function solveHydraulics(input: HydInput): HydSolution {
       const pa = pressureOf(xx, tA[i]!);
       const pb = pressureOf(xx, tB[i]!);
       const aRef = Math.max(e.areaA, e.areaB, 1e-6);
-      const netBar = (pa * e.areaA * 10 - pb * e.areaB * 10 - e.load) / (10 * aRef);
-      return PISTON_VISCOUS_BAR * v - deadZone(netBar, e.friction / (10 * aRef));
+      const net = pa * e.areaA * 10 - pb * e.areaB * 10 - e.load;
+      if (e.mass && e.mass > 0 && input.dt !== undefined) {
+        // Newton's second law, implicit Euler: m·(v − v_prev)/dt = net − friction. Coulomb
+        // friction is smoothed over ±FRICTION_V0 so a stopped piston can't creep noticeably.
+        const accel = (e.mass * (v - (e.vPrev ?? 0))) / Math.max(input.dt, 1e-4);
+        const friction = e.friction * Math.tanh(v / FRICTION_V0);
+        return PISTON_VISCOUS_BAR * v + (accel + friction - net) / (10 * aRef);
+      }
+      return PISTON_VISCOUS_BAR * v - deadZone(net / (10 * aRef), e.friction / (10 * aRef));
     }
     if (e.kind === 'motor') {
       const n = xx[varOfElement[i]!]!;

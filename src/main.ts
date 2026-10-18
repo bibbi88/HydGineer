@@ -13,7 +13,8 @@ import {
   isWireInsertableType,
 } from './interaction/wireInsertion';
 import { placeComponent } from './interaction/spawn';
-import { initValveActuatorSwap } from './interaction/valveActuatorSwap';
+import { initValveActuatorSwap, canSwap, swapComponentType } from './interaction/valveActuatorSwap';
+import type { Component } from './core/types';
 import { initClipboard } from './interaction/clipboard';
 import { initWires } from './wires/connection';
 import { initWireHandles } from './wires/handles';
@@ -81,6 +82,33 @@ initHistory(factoryCtx, viewport);
 initValveActuatorSwap(factoryCtx, viewport);
 initClipboard(factoryCtx, viewport, workspaceEl);
 
+/** The component a library tile of `type` is being dropped onto, if it is one `type` can
+ * replace in place (e.g. a rotary flow divider dropped on a spool one) - see SWAP_FAMILIES. */
+function findReplaceTarget(type: string, world: { x: number; y: number }): Component | null {
+  for (const c of appState.components) {
+    if (!canSwap(c.type, type)) continue;
+    const b = c.getBounds();
+    const pad = 10;
+    if (
+      world.x >= b.x - pad &&
+      world.x <= b.x + b.w + pad &&
+      world.y >= b.y - pad &&
+      world.y <= b.y + b.h + pad
+    ) {
+      return c;
+    }
+  }
+  return null;
+}
+
+let replaceHighlight: Component | null = null;
+function setReplaceHighlight(c: Component | null): void {
+  if (c === replaceHighlight) return;
+  replaceHighlight?.el.classList.remove('replaceTarget');
+  replaceHighlight = c;
+  c?.el.classList.add('replaceTarget');
+}
+
 function addComponentAtViewCenter(type: string): void {
   const rect = workspaceEl.getBoundingClientRect();
   const world = viewport.clientToWorld(rect.left + rect.width / 2, rect.top + rect.height / 2);
@@ -103,7 +131,12 @@ workspaceEl.addEventListener('dragover', (e) => {
   e.dataTransfer.dropEffect = 'copy';
 
   const draggedType = getDraggedComponentType();
-  if (draggedType && isWireInsertableType(draggedType)) {
+  const overWorld = viewport.clientToWorld(e.clientX, e.clientY);
+  const replacing = draggedType ? findReplaceTarget(draggedType, overWorld) : null;
+  setReplaceHighlight(replacing);
+  if (replacing) {
+    setWireInsertHighlight(null);
+  } else if (draggedType && isWireInsertableType(draggedType)) {
     const world = viewport.clientToWorld(e.clientX, e.clientY);
     const hit = findNearestWireHit(viewport, workspaceEl, world);
     setWireInsertHighlight(hit?.conn ?? null);
@@ -114,6 +147,7 @@ workspaceEl.addEventListener('dragover', (e) => {
 workspaceEl.addEventListener('dragleave', (e) => {
   if (e.relatedTarget === null || !workspaceEl.contains(e.relatedTarget as Node)) {
     setWireInsertHighlight(null);
+    setReplaceHighlight(null);
   }
 });
 workspaceEl.addEventListener('drop', (e) => {
@@ -123,6 +157,13 @@ workspaceEl.addEventListener('drop', (e) => {
   if (!canEdit(appState.mode)) return;
   e.preventDefault();
   const world = viewport.clientToWorld(e.clientX, e.clientY);
+  // Dropping onto an interchangeable component replaces it in place, keeping its wires.
+  setReplaceHighlight(null);
+  const target = findReplaceTarget(type, world);
+  if (target) {
+    swapComponentType(target, type);
+    return;
+  }
   // Dropping a check/throttle/one-way-flow valve close enough to an existing wire splices it
   // into that wire (two new connections either side of it) instead of landing unconnected on
   // top of it - see interaction/wireInsertion.ts for which types support this and why.

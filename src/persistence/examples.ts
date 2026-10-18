@@ -32,8 +32,14 @@ interface Builder {
 
 /** Pump with relief valve and gauge, feeding P of a valve; returns the junction on the supply
  * line so the caller can wire the valve to it. Pump at (px, py). */
-function powerUnit(b: Builder, px: number, py: number, setting = 100): number {
-  const pump = b.add('hydPump', px, py, { displacement: 10, speed: 1450, etaV: 95 });
+function powerUnit(
+  b: Builder,
+  px: number,
+  py: number,
+  setting = 100,
+  pumpData: Record<string, unknown> = {},
+): number {
+  const pump = b.add('hydPump', px, py, { displacement: 10, speed: 1450, etaV: 95, ...pumpData });
   const j = b.add('junction', px - 10, py - 110, { orientation: 'H' });
   const relief = b.add('hydRelief', px - 130, py - 60, { setting });
   const tank = b.add('hydTank', px - 130, py + 40);
@@ -172,6 +178,131 @@ export const EXAMPLES: Array<{ title: string; file: () => ProjectFileV1 }> = [
         dispB: 8,
         leakAt100: 0.3,
         friction: 0.5,
+      }),
+  },
+  {
+    title: 'Accumulator: charging, cut-out by pressure switch, fast stroke',
+    file: () =>
+      circuit('Example - accumulator', (b) => {
+        // A small pump (4 L/min) charges a 2 L accumulator through a check valve until the
+        // pressure switch S1 trips at 120 bar and stops it ("!S1" = run while S1 is off). The
+        // cylinder then strokes much faster than the pump alone could drive it.
+        const supply = powerUnit(b, 160, 560, 140, { displacement: 2.8, signal: '!S1' });
+        const check = b.add('hydCheck', 300, 450, {}, 90);
+        const js = b.add('junction', 410, 450, { orientation: 'V' });
+        const acc = b.add('hydAccumulator', 380, 340, { volume: 2, precharge: 60, n: 1.4 });
+        const ps = b.add('hydPressureSwitch', 470, 380, { setting: 120, key: 'S1' });
+        const valve = b.add('hydValve43', 640, 340, {
+          actuation: 'lever',
+          center: 'closed',
+          qNom: 60,
+        });
+        const tank = b.add('hydTank', 700, 430);
+        const cyl = b.add('hydCylinderDouble', 680, 120, {
+          bore: 50,
+          rodD: 30,
+          stroke: 300,
+          load: 5000,
+          friction: 150,
+          showName: true,
+        });
+        b.wire(supply, 'P', check, 'IN');
+        b.wire(check, 'OUT', js, 'P');
+        b.wire(js, 'P', acc, 'P');
+        b.wire(js, 'P', ps, 'P');
+        b.wire(js, 'P', valve, 'P');
+        b.wire(valve, 'T', tank, 'T');
+        b.wire(valve, 'A', cyl, 'A');
+        b.wire(valve, 'B', cyl, 'B');
+      }),
+  },
+  {
+    title: 'Lifting and lowering a load: counterbalance valve',
+    file: () =>
+      circuit('Example - counterbalance valve', (b) => {
+        // 20 kN hangs on the cap side (63.7 bar holds it); the valve is set at 85 bar with a 4:1
+        // pilot from the rod-side line, so lowering needs the pump to drive the load down.
+        const supply = powerUnit(b, 260, 600, 160);
+        const valve = b.add('hydValve43', 420, 420, {
+          actuation: 'lever',
+          center: 'tandem',
+          qNom: 30,
+        });
+        const tank = b.add('hydTank', 520, 500);
+        const cbv = b.add('hydCounterbalance', 400, 260, { setting: 85, ratio: 4, qNom: 30 });
+        const cyl = b.add('hydCylinderDouble', 470, 70, {
+          bore: 63,
+          rodD: 36,
+          stroke: 400,
+          load: 20000,
+          friction: 200,
+          showName: true,
+        });
+        const jb = b.add('junction', 560, 300, { orientation: 'H' });
+        b.wire(supply, 'P', valve, 'P');
+        b.wire(valve, 'T', tank, 'T');
+        b.wire(valve, 'A', cbv, 'V');
+        b.wire(cbv, 'L', cyl, 'A');
+        b.wire(valve, 'B', jb, 'P');
+        b.wire(jb, 'P', cyl, 'B');
+        b.wire(jb, 'P', cbv, 'X');
+      }),
+  },
+  {
+    title: 'Clamping with a pressure-compensated pump',
+    file: () =>
+      circuit('Example - pressure-compensated pump', (b) => {
+        // Once clamped, the variable pump swivels back to almost zero flow at 100 bar instead of
+        // dumping its whole flow over the relief valve (now only a safety valve at 140 bar).
+        // Switch the pump's Displacement to "Fixed" in the inspector to compare the power.
+        const supply = powerUnit(b, 260, 560, 140, { control: 'pc', compSetting: 100 });
+        const valve = b.add('hydValve43', 420, 380, {
+          actuation: 'lever',
+          center: 'closed',
+          qNom: 30,
+        });
+        const tank = b.add('hydTank', 520, 460);
+        const cyl = b.add('hydCylinderDouble', 450, 160, {
+          bore: 63,
+          rodD: 36,
+          stroke: 150,
+          load: 2000,
+          friction: 200,
+          showName: true,
+        });
+        b.wire(supply, 'P', valve, 'P');
+        b.wire(valve, 'T', tank, 'T');
+        b.wire(valve, 'A', cyl, 'A');
+        b.wire(valve, 'B', cyl, 'B');
+      }),
+  },
+  {
+    title: 'Inertia: stopping a 5 t mass mid-stroke',
+    file: () =>
+      circuit('Example - inertia and pressure peaks', (b) => {
+        // A 5000 kg slide moving at ~0.12 m/s. Return the lever to centre mid-stroke: the mass
+        // runs on into the trapped oil on the rod side and the pressure there peaks far above
+        // anything the pump delivers, while the cap side pressure collapses.
+        const supply = powerUnit(b, 260, 560, 100);
+        const valve = b.add('hydValve43', 420, 380, {
+          actuation: 'lever',
+          center: 'closed',
+          qNom: 30,
+        });
+        const tank = b.add('hydTank', 520, 460);
+        const cyl = b.add('hydCylinderDouble', 450, 160, {
+          bore: 50,
+          rodD: 30,
+          stroke: 600,
+          load: 0,
+          friction: 300,
+          mass: 5000,
+          showName: true,
+        });
+        b.wire(supply, 'P', valve, 'P');
+        b.wire(valve, 'T', tank, 'T');
+        b.wire(valve, 'A', cyl, 'A');
+        b.wire(valve, 'B', cyl, 'B');
       }),
   },
 ];

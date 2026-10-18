@@ -1657,3 +1657,11 @@ polygon.hydPathReturn {
     animation: none;
   }
 }
+
+/* Dragging a library tile over a component it can replace (e.g. one flow divider over the
+   other) - see findReplaceTarget in main.ts. */
+.comp.replaceTarget .boundsBox {
+  outline: 3px solid var(--insert);
+  outline-offset: 4px;
+  background: color-mix(in srgb, var(--insert) 8%, transparent);
+}
