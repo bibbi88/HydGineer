@@ -42,7 +42,8 @@ Units: bar (gauge), L/min, N, Nm, mm, cm³/rev.
 - Electrical: +24 V / 0 V, push buttons, contacts, relay coils, solenoids, lamps, PLC
 
 The **Examples** menu in the toolbar loads ready-made circuits (meter-out speed control,
-electro-hydraulic control, motor speed control, load holding).
+electro-hydraulic control, motor speed control, load holding, and synchronising two
+cylinders with each type of flow divider).
 
 ## Running
 
