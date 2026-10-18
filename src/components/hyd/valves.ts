@@ -37,6 +37,7 @@ export const HYD_REDUCING_TYPE = 'hydReducing';
 export const HYD_COUNTERBALANCE_TYPE = 'hydCounterbalance';
 export const HYD_VALVE_LS_TYPE = 'hydValveLS';
 export const HYD_SHUTTLE_TYPE = 'hydShuttle';
+export const HYD_PRESSURE_COMP_TYPE = 'hydPressureCompensator';
 
 /** Directional valves driven by named solenoids - also what project loading and the electrical
  * coil components use to pair coil names with valves. */
@@ -1441,6 +1442,127 @@ export function createHydShuttle(compLayer: HTMLElement, x: number, y: number): 
       ball.setAttribute('cx', '40');
       shell.setInfo([]);
       clearFlow([...in1, ...in2, ...out]);
+    },
+  });
+}
+
+/**
+ * 2-way pressure compensator (as fitted ahead of a load-sensing valve section). Normally open
+ * IN → OUT; the outlet pressure pushes it towards closing, the spring and the LS pilot (the load
+ * pressure of its section) push it open. It settles where
+ *   p_OUT = p_LS + Δp setting
+ * so the section's metering notch, between OUT and the load, always sees the same Δp - and the
+ * section gets the flow its lever asks for, whatever the other sections or the pump pressure do.
+ * The surplus pressure is throttled away here (as heat).
+ */
+export function createHydPressureCompensator(
+  compLayer: HTMLElement,
+  x: number,
+  y: number,
+): Component {
+  const svgW = 80;
+  const svgH = 100;
+  const shell = createHydShell(
+    compLayer,
+    HYD_PRESSURE_COMP_TYPE,
+    x,
+    y,
+    svgW,
+    svgH,
+    'Pressure compensator',
+    { x: 10, y: 26, w: 66, h: 48 },
+  );
+  const g = shell.g;
+  g.appendChild(
+    createSvgEl('rect', {
+      x: 25,
+      y: 30,
+      width: 30,
+      height: 40,
+      fill: '#fff',
+      stroke: INK,
+      'stroke-width': STROKE,
+    }),
+  );
+  // Flow path drawn IN (bottom) → OUT (top); normally open, so the arrow sits on the line.
+  const inLead = [line(g, 40, 90, 40, 70)];
+  const outLead = [line(g, 40, 30, 40, 10)];
+  const arrowG = createSvgEl('g', { class: 'hydSpool' });
+  g.appendChild(arrowG);
+  const throughArrow = arrowLine(arrowG, 40, 66, 40, 34);
+  // Outlet pressure pilot against the spring side's LS pilot + spring.
+  const pilotOut = [
+    path(g, 'M 40 20 H 14 V 40 H 25', { 'stroke-dasharray': '4 3', 'stroke-width': 1.5 }),
+  ];
+  springH(g, 55, 72, 44, 4);
+  adjustArrow(g, 63, 44, 8);
+  const pilotLS = [
+    path(g, 'M 70 80 V 60 H 55', { 'stroke-dasharray': '4 3', 'stroke-width': 1.5 }),
+  ];
+  for (const el of [...pilotOut, ...pilotLS]) el.dataset.nodash = '1';
+  createPortLabel(g, 33, 96, 'IN', { anchor: 'end', fontSize: 10 });
+  createPortLabel(g, 47, 14, 'OUT', { anchor: 'start', fontSize: 10 });
+  createPortLabel(g, 76, 92, 'LS', { anchor: 'start', fontSize: 10 });
+  const setText = createSvgEl('text', { x: 58, y: 34, 'font-size': 9 });
+  g.appendChild(setText);
+  const ports = {
+    IN: createPort(g, 'IN', 40, 90, 'V'),
+    OUT: createPort(g, 'OUT', 40, 10, 'V'),
+    LS: createPort(g, 'LS', 70, 80, 'V', { isPilot: true, pilotDir: 1 }),
+  };
+  shell.setInfoSide('left');
+
+  let setting = 10; // bar held above the LS pressure
+  let qNom = 40; // L/min fully open at Δp 5 bar
+  function refresh(): void {
+    setText.textContent = `Δp ${setting}`;
+  }
+  refresh();
+
+  const comp = hydComponentBase(shell, HYD_PRESSURE_COMP_TYPE, x, y, svgW, svgH, ports);
+  return Object.assign(comp, {
+    hydElements: (): HydElement[] => [
+      {
+        kind: 'reducing',
+        a: 'IN',
+        b: 'OUT',
+        set: setting,
+        k: orificeKFromRating(qNom, VALVE_RATING_DP),
+        band: 1,
+        x: 'LS',
+      },
+    ],
+    step(_dt: number, ctx: SimStepContext): void {
+      const q = ctx.elementValue(0);
+      const pIn = ctx.pressureAt('IN');
+      const pOut = ctx.pressureAt('OUT');
+      const pLS = ctx.pressureAt('LS');
+      const throttled = pIn - pOut;
+      const regulating = pOut > pLS + setting - 1 && throttled > 0.5;
+      arrowG.setAttribute('transform', regulating ? 'translate(7,0)' : '');
+      const lines: string[] = [];
+      if (Math.abs(q) >= FLOW_THRESHOLD) lines.push(`Q ${fmtFlow(q)}`);
+      if (pIn > 1 || pLS > 1) lines.push(`OUT − LS ${fmtBar(pOut - pLS)}`);
+      if (throttled >= 0.5 && Math.abs(q) >= FLOW_THRESHOLD)
+        lines.push(`throttles ${fmtBar(throttled)}`);
+      shell.setInfo(lines);
+      paintFlow(inLead, pIn, q);
+      paintFlow(throughArrow, pIn, q);
+      paintFlow(outLead, pOut, q);
+      paintFlow(pilotOut, pOut, 0);
+      paintFlow(pilotLS, pLS, 0);
+    },
+    snapshot: () => ({ ...nameSnapshot(shell), setting, qNom }),
+    restore(data: Record<string, unknown>): void {
+      restoreName(shell, data);
+      setting = readNum(data, 'setting', setting, 0.5, 100);
+      qNom = readNum(data, 'qNom', qNom, 0.5, 2000);
+      refresh();
+    },
+    reset(): void {
+      arrowG.setAttribute('transform', '');
+      shell.setInfo([]);
+      clearFlow([...inLead, ...outLead, ...throughArrow, ...pilotOut, ...pilotLS]);
     },
   });
 }

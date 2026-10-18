@@ -178,29 +178,53 @@ describe('example circuits behave as described', () => {
     expect(flowOut(full, pump, 'P')).toBeGreaterThan(q50 * 1.6);
   });
 
-  it('two LS sections: compensators share the flow by lever position, not by load', () => {
-    const comps = load('Load sensing: two');
+  it('two LS sections: without compensators the light load takes most of the oil', () => {
+    const comps = load('Load sensing: two sections and');
+    const valves = comps.filter((c) => c.type === 'hydValveLS');
+    const cyls = comps.filter((c) => c.type === 'hydCylinderDouble');
+    for (const v of valves) {
+      expect((v.snapshot() as { compensated: boolean }).compensated).toBe(false);
+      setLever(v, -60);
+    }
+    const f = run(0.4);
+    expect(-flowOut(f, cyls[0]!, 'A')).toBeGreaterThan(-flowOut(f, cyls[1]!, 'A') * 2);
+  });
+
+  it('two LS sections: built-in section compensators share by lever position', () => {
+    const comps = load('Load sensing: two sections and');
+    const valves = comps.filter((c) => c.type === 'hydValveLS');
+    const cyls = comps.filter((c) => c.type === 'hydCylinderDouble');
+    for (const v of valves) {
+      v.restore({ ...v.snapshot(), compensated: true });
+      setLever(v, -60);
+    }
+    const f = run(0.4);
+    const qa = -flowOut(f, cyls[0]!, 'A');
+    const qb = -flowOut(f, cyls[1]!, 'A');
+    expect(qa).toBeGreaterThan(1);
+    expect(Math.abs(qa - qb) / qa).toBeLessThan(0.1);
+  });
+
+  it('separate pressure compensators: equal speeds, unchanged when the other cylinder stalls', () => {
+    const comps = load('Load sensing: two sections with separate');
     const valves = comps.filter((c) => c.type === 'hydValveLS');
     const cyls = comps.filter((c) => c.type === 'hydCylinderDouble');
     for (const v of valves) setLever(v, -60);
     let f = run(0.4);
-    const qa = flowOut(f, cyls[0]!, 'A') * -1;
-    const qb = flowOut(f, cyls[1]!, 'A') * -1;
+    const qa = -flowOut(f, cyls[0]!, 'A');
+    const qb = -flowOut(f, cyls[1]!, 'A');
     expect(qa).toBeGreaterThan(1);
     expect(Math.abs(qa - qb) / qa).toBeLessThan(0.1);
-
-    // Without compensators the lightly loaded cylinder takes far more.
-    resetHydraulics();
-    const comps2 = load('Load sensing: two');
-    const valves2 = comps2.filter((c) => c.type === 'hydValveLS');
-    const cyls2 = comps2.filter((c) => c.type === 'hydCylinderDouble');
-    for (const v of valves2) {
-      v.restore({ ...v.snapshot(), compensated: false });
-      setLever(v, -60);
-    }
-    f = run(0.4);
-    const qa2 = -flowOut(f, cyls2[0]!, 'A');
-    const qb2 = -flowOut(f, cyls2[1]!, 'A');
-    expect(qa2).toBeGreaterThan(qb2 * 2);
+    // Slow the light one down, run the heavy one into its end stop: the pump goes to its
+    // cut-off, but the light one keeps exactly its speed.
+    setLever(valves[0]!, -20);
+    f = run(0.3);
+    const qSlow = -flowOut(f, cyls[0]!, 'A');
+    setLever(valves[1]!, -100);
+    f = run(3);
+    expect(snap(cyls[1]!).pos).toBe(1);
+    expect(snap(cyls[0]!).pos).toBeLessThan(1);
+    expect(p(f, byType(comps, 'hydPumpLS'), 'P')).toBeGreaterThan(240);
+    expect(Math.abs(-flowOut(f, cyls[0]!, 'A') - qSlow) / qSlow).toBeLessThan(0.05);
   });
 });

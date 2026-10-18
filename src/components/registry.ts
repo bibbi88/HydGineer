@@ -29,6 +29,8 @@ import {
   createHydShuttle,
   HYD_VALVE_LS_TYPE,
   HYD_SHUTTLE_TYPE,
+  createHydPressureCompensator,
+  HYD_PRESSURE_COMP_TYPE,
   HYD_COUNTERBALANCE_TYPE,
   HYD_VALVE_43_TYPE,
   HYD_VALVE_42_TYPE,
@@ -200,6 +202,15 @@ export const componentRegistry = new Map<string, RegistryEntry>([
     {
       factory: (ctx, x, y) => createHydCounterbalance(ctx.compLayer, x, y),
       label: 'Counterbalance valve',
+      placeable: true,
+      category: ComponentCategory.PRESSURE,
+    },
+  ],
+  [
+    HYD_PRESSURE_COMP_TYPE,
+    {
+      factory: (ctx, x, y) => createHydPressureCompensator(ctx.compLayer, x, y),
+      label: 'Pressure compensator (LS)',
       placeable: true,
       category: ComponentCategory.PRESSURE,
     },

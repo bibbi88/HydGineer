@@ -62,7 +62,18 @@ export type HydElement =
   | { kind: 'pilotCheck'; a: string; b: string; x: string; crack: number; ratio: number; k: number }
   /** Pressure-reducing valve a(in)→b(out): an orifice whose opening closes as p_b approaches
    * `set`, across a regulating band of `band` bar. */
-  | { kind: 'reducing'; a: string; b: string; set: number; k: number; band: number }
+  | {
+      kind: 'reducing';
+      a: string;
+      b: string;
+      set: number;
+      k: number;
+      band: number;
+      /** If given, the setting is relative to this pilot port's pressure - p_b is held at
+       * p_x + set. That's a 2-way pressure compensator: it holds a fixed Δp above a load
+       * (LS) pressure. No flow passes through `x`. */
+      x?: string;
+    }
   /** Pressure-compensated 2-way flow control a→b: holds `q` once Δp exceeds about `dpMin`. */
   | { kind: 'flowControl'; a: string; b: string; q: number; dpMin: number }
   /** Pump drawing from tank: delivers q·f − leak·p_out into `out`. f = 1 for a fixed pump; with
@@ -517,7 +528,8 @@ export function solveHydraulics(input: HydInput): HydSolution {
         return { qa: q, qb: -q, value: q };
       }
       case 'reducing': {
-        const opening = smoothstep((e.set - pb) / e.band);
+        const ref = tX[i] ? pressureOf(xx, tX[i]!) : 0;
+        const opening = smoothstep((ref + e.set - pb) / e.band);
         const q = opening * orificeFlow(e.k, pa - pb);
         return { qa: q, qb: -q, value: q };
       }

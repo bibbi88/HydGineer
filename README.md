@@ -34,7 +34,9 @@ continuation, see `src/sim/hydraulics.ts`):
   shows acceleration and the pressure peaks when a moving load is stopped.
 - **Load sensing**: the LS pump holds its outlet at the highest load pressure (fed back on its
   LS port, through shuttle valves for several sections) plus a margin, with a pressure cut-off;
-  proportional LS valves meter flow by spool stroke, optionally with a section compensator.
+  proportional LS valves meter flow by spool stroke; a section compensator - built into the
+  valve (off by default) or as a separate 2-way pressure compensator - holds a fixed Δp across
+  each section's metering notch, so several sections share flow by lever position, not by load.
 - **Compressibility** (bulk modulus 10 000 bar): trapped oil keeps its pressure and pressure
   builds up over time; steady states are the exact incompressible ones.
 
@@ -46,7 +48,8 @@ Units: bar (gauge), L/min, N, Nm, mm, cm³/rev.
   switched by a relay or pressure switch), tank, gas-loaded accumulator
 - Directional valves: 4/3 (closed / tandem / float / open centre) and 4/2, solenoid or hand lever;
   proportional load-sensing valve (lever slider or solenoids) with LS port; shuttle valve
-- Pressure control: relief valve, pressure-reducing valve, counterbalance valve
+- Pressure control: relief valve, pressure-reducing valve, counterbalance valve, 2-way pressure
+  compensator (LS)
 - Flow & check: check valve, pilot-operated check valve, throttle, one-way flow control,
   pressure-compensated flow control (optional bypass check), flow divider (spool with
   compensating sleeve, and rotary gear type)
@@ -58,7 +61,7 @@ The **Examples** menu in the toolbar loads ready-made circuits (meter-out speed 
 electro-hydraulic control, motor speed control, load holding, and synchronising two
 cylinders with each type of flow divider, accumulator charging, counterbalance valve,
 pressure-compensated pump, inertia and pressure peaks, load sensing with one and two
-sections). Flow dividers and directional valves
+sections, with and without pressure compensators). Flow dividers and directional valves
 can be swapped type in place from the inspector, or by dropping the other type onto them.
 
 ## Running

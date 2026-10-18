@@ -34,6 +34,7 @@ import {
   HYD_REDUCING_TYPE,
   HYD_COUNTERBALANCE_TYPE,
   HYD_VALVE_LS_TYPE,
+  HYD_PRESSURE_COMP_TYPE,
 } from '../components/hyd/valves';
 import {
   HYD_CYLINDER_DOUBLE_TYPE,
@@ -316,6 +317,24 @@ const INSPECTOR_FIELDS: Record<string, InspectorField[]> = {
       min: 0,
       max: 100,
       step: 5,
+    },
+  ],
+  [HYD_PRESSURE_COMP_TYPE]: [
+    {
+      kind: 'number',
+      key: 'setting',
+      label: 'Δp held above LS pressure (bar)',
+      min: 0.5,
+      max: 100,
+      step: 0.5,
+    },
+    {
+      kind: 'number',
+      key: 'qNom',
+      label: 'Nominal flow (L/min at Δp 5 bar, fully open)',
+      min: 0.5,
+      max: 2000,
+      step: 1,
     },
   ],
   [HYD_ACCUMULATOR_TYPE]: [

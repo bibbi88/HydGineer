@@ -351,23 +351,23 @@ export const EXAMPLES: Array<{ title: string; file: () => ProjectFileV1 }> = [
       }),
   },
   {
-    title: 'Load sensing: two sections, shuttle valve, compensators',
+    title: 'Load sensing: two sections and a shuttle valve',
     file: () =>
       circuit('Example - load sensing, two sections', (b) => {
         // Two sections on one LS pump; the shuttle valve sends the higher load signal to the
-        // pump. With their section compensators each cylinder gets the flow its lever asks for,
-        // although one carries 5 kN and the other 25 kN. Untick "Section compensator" on both
-        // valves to see the light load take most of the oil.
+        // pump. Without compensators the pump only holds Δp across the heavier section, so the
+        // light one (5 kN against 25 kN) gets a far bigger Δp and takes most of the oil. Tick
+        // "Section pressure compensator" on both valves - or see the next example - to fix it.
         const supply = lsUnit(b, 200, 620);
         const v1 = b.add('hydValveLS', 420, 420, {
           actuation: 'lever',
           qNom: 30,
-          compensated: true,
+          compensated: false,
         });
         const v2 = b.add('hydValveLS', 840, 420, {
           actuation: 'lever',
           qNom: 30,
-          compensated: true,
+          compensated: false,
         });
         const t1 = b.add('hydTank', 500, 510);
         const t2 = b.add('hydTank', 920, 510);
@@ -386,6 +386,46 @@ export const EXAMPLES: Array<{ title: string; file: () => ProjectFileV1 }> = [
         b.wire(v1, 'B', c1, 'B');
         b.wire(v2, 'A', c2, 'A');
         b.wire(v2, 'B', c2, 'B');
+      }),
+  },
+  {
+    title: 'Load sensing: two sections with separate pressure compensators',
+    file: () =>
+      circuit('Example - load sensing with pressure compensators', (b) => {
+        // The same two sections, each with a 2-way pressure compensator in front of its P port,
+        // piloted by its own LS line. Each compensator holds its valve's inlet 10 bar above that
+        // section's load, so both cylinders move at their levers' speed whatever the other one
+        // does - try running one into its end stop.
+        const supply = lsUnit(b, 200, 700);
+        const sections = [
+          { x: 420, load: 5000 },
+          { x: 880, load: 25000 },
+        ].map(({ x, load }) => {
+          const valve = b.add('hydValveLS', x, 420, { actuation: 'lever', qNom: 30 });
+          const comp = b.add('hydPressureCompensator', x - 20, 540, { setting: 10, qNom: 40 });
+          const ls = b.add('junction', x + 20, 540, { orientation: 'H' });
+          const tank = b.add('hydTank', x + 80, 510);
+          const cyl = b.add('hydCylinderDouble', x + 40, 170, {
+            bore: 50,
+            rodD: 30,
+            stroke: 400,
+            friction: 150,
+            load,
+            showName: true,
+          });
+          b.wire(supply.p, 'P', comp, 'IN');
+          b.wire(comp, 'OUT', valve, 'P');
+          b.wire(valve, 'T', tank, 'T');
+          b.wire(valve, 'LS', ls, 'P');
+          b.wire(ls, 'P', comp, 'LS');
+          b.wire(valve, 'A', cyl, 'A');
+          b.wire(valve, 'B', cyl, 'B');
+          return ls;
+        });
+        const shuttle = b.add('hydShuttle', 700, 640);
+        b.wire(sections[0]!, 'P', shuttle, 'X1');
+        b.wire(sections[1]!, 'P', shuttle, 'X2');
+        b.wire(shuttle, 'OUT', supply.pump, 'LS');
       }),
   },
 ];

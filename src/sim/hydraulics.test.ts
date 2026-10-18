@@ -625,6 +625,31 @@ describe('load sensing', () => {
     expect(s.elementValue[0]!).toBeLessThan(0.3);
   });
 
+  it('2-way pressure compensator holds a fixed Δp across the metering orifice after it', () => {
+    const run = (supply: number, load: number) =>
+      solve(
+        ['P', 'C', 'A', 'T'],
+        [],
+        [
+          { kind: 'pump', out: 'P', q: 60, leak: 0 },
+          { kind: 'relief', a: 'P', b: 'T', set: supply, gain: 10 },
+          { kind: 'reducing', a: 'P', b: 'C', set: 10, k: 20, band: 1, x: 'A' },
+          { kind: 'orifice', a: 'C', b: 'A', k: 3 }, // the valve's metering notch
+          { kind: 'relief', a: 'A', b: 'T', set: load, gain: 10 },
+          { kind: 'tank', a: 'T' },
+        ],
+      );
+    const s1 = run(150, 40);
+    const s2 = run(250, 120);
+    const dp1 = s1.pressure.get('C')! - s1.pressure.get('A')!;
+    const dp2 = s2.pressure.get('C')! - s2.pressure.get('A')!;
+    expect(dp1).toBeGreaterThan(9);
+    expect(dp1).toBeLessThan(10.01);
+    expect(Math.abs(dp1 - dp2)).toBeLessThan(0.2);
+    // So the flow through the notch is the same, whatever the supply and load pressures.
+    expect(Math.abs(s1.elementValue[3]! - s2.elementValue[3]!)).toBeLessThan(0.2);
+  });
+
   it('shuttle valve passes on the higher of two signals', () => {
     const s = solve(
       ['A', 'B', 'X', 'T'],

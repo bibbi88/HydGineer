@@ -104,9 +104,11 @@ const TIP_SECTIONS: TipSection[] = [
         'then holds its outlet at the highest load pressure plus its margin, so the flow follows ' +
         'the lever and not the load, and the pump only makes the pressure that’s needed. In ' +
         'neutral the LS line is vented and the pump idles at standby pressure.',
-      'Load-sensing valve lever: drag the slider beside the valve while simulating - left = ' +
+      'Load-sensing valve lever: drag the slider above the valve while simulating - left = ' +
         'P→A, right = P→B, middle = closed (double-click it to centre). With several sections, ' +
-        'tick "Section pressure compensator" so a lightly loaded section doesn’t take all the oil.',
+        'a lightly loaded section takes most of the oil unless each one has a pressure ' +
+        'compensator: either tick "Section pressure compensator" on the valve, or fit a separate ' +
+        'Pressure compensator in front of its P port with its LS port on that section’s LS line.',
       'Flow dividers, pumps and directional valves can be switched type in place: pick another type ' +
         'in the inspector, or drag the other type from the library onto it (it outlines green). ' +
         'Wires, position and rotation are kept.',

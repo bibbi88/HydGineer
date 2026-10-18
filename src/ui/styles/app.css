@@ -1671,11 +1671,10 @@ circle.hydPathReturn {
 /* Proportional lever of a load-sensing valve: under the symbol, only while simulating. */
 .lsLever {
   position: absolute;
-  /* Beside the valve's own lever, on its left: the side no ports or readout use. */
-  top: 50%;
-  right: calc(100% - 22px);
-  transform: translateY(-50%);
-  width: 90px;
+  /* Above the valve's own lever (top left of the symbol): no port, wire or readout uses it. */
+  top: 0;
+  left: 6px;
+  width: 92px;
   accent-color: var(--accent);
   cursor: ew-resize;
 }
