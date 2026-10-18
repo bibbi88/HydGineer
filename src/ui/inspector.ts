@@ -36,6 +36,7 @@ import {
   HYD_CYLINDER_SINGLE_TYPE,
   HYD_MOTOR_TYPE,
 } from '../components/hyd/actuators';
+import { HYD_SPOOL_DIVIDER_TYPE, HYD_ROTARY_DIVIDER_TYPE } from '../components/hyd/dividers';
 import {
   nextSensorLabel,
   isSensorLabelInUse,
@@ -272,6 +273,58 @@ const INSPECTOR_FIELDS: Record<string, InspectorField[]> = {
   [HYD_FLOW_CONTROL_TYPE]: [
     { kind: 'number', key: 'qSet', label: 'Set flow (L/min)', min: 0, max: 2000, step: 0.5 },
     { kind: 'checkbox', key: 'bypass', label: 'Bypass check valve (free OUT→IN)' },
+  ],
+  [HYD_SPOOL_DIVIDER_TYPE]: [
+    {
+      kind: 'number',
+      key: 'ratioA',
+      label: 'Share to A (%) - B gets the rest',
+      min: 5,
+      max: 95,
+      step: 5,
+    },
+    {
+      kind: 'number',
+      key: 'qNom',
+      label: 'Nominal inlet flow (L/min)',
+      min: 0.5,
+      max: 2000,
+      step: 1,
+    },
+  ],
+  [HYD_ROTARY_DIVIDER_TYPE]: [
+    {
+      kind: 'number',
+      key: 'dispA',
+      label: 'Section A displacement (cm³/rev)',
+      min: 0.1,
+      max: 1000,
+      step: 0.5,
+    },
+    {
+      kind: 'number',
+      key: 'dispB',
+      label: 'Section B displacement (cm³/rev)',
+      min: 0.1,
+      max: 1000,
+      step: 0.5,
+    },
+    {
+      kind: 'number',
+      key: 'leakAt100',
+      label: 'Internal leakage per section (L/min at 100 bar)',
+      min: 0,
+      max: 100,
+      step: 0.05,
+    },
+    {
+      kind: 'number',
+      key: 'friction',
+      label: 'Breakaway friction (Nm)',
+      min: 0,
+      max: 1000,
+      step: 0.1,
+    },
   ],
   [HYD_CYLINDER_DOUBLE_TYPE]: [
     { kind: 'relabel', label: 'Cylinder letter' },

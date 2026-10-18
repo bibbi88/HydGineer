@@ -159,4 +159,42 @@ export const EXAMPLES: Array<{ title: string; file: () => ProjectFileV1 }> = [
         b.wire(jb, 'P', poc, 'X');
       }),
   },
+  {
+    title: 'Synchronising two cylinders: spool flow divider',
+    file: () =>
+      syncCircuit('Example - spool flow divider', 'hydSpoolDivider', { ratioA: 50, qNom: 15 }),
+  },
+  {
+    title: 'Synchronising two cylinders: rotary flow divider',
+    file: () =>
+      syncCircuit('Example - rotary flow divider', 'hydRotaryDivider', {
+        dispA: 8,
+        dispB: 8,
+        leakAt100: 0.3,
+        friction: 0.5,
+      }),
+  },
 ];
+
+/** Two equal cylinders with very different loads (3 kN and 15 kN) fed through a flow divider
+ * from a lever valve, so they extend together - the B sides return through a junction. */
+function syncCircuit(name: string, dividerType: string, dividerData: Record<string, unknown>) {
+  return circuit(name, (b) => {
+    const supply = powerUnit(b, 260, 560, 120);
+    const valve = b.add('hydValve43', 420, 380, { actuation: 'lever', center: 'tandem', qNom: 30 });
+    const tank = b.add('hydTank', 520, 460);
+    const divider = b.add(dividerType, 390, 240, dividerData);
+    const cylData = { bore: 50, rodD: 30, stroke: 300, friction: 150, showName: true };
+    const cylA = b.add('hydCylinderDouble', 280, 60, { ...cylData, load: 3000 });
+    const cylB = b.add('hydCylinderDouble', 620, 60, { ...cylData, load: 15000 });
+    const jb = b.add('junction', 700, 300, { orientation: 'H' });
+    b.wire(supply, 'P', valve, 'P');
+    b.wire(valve, 'T', tank, 'T');
+    b.wire(valve, 'A', divider, 'P');
+    b.wire(divider, 'A', cylA, 'A');
+    b.wire(divider, 'B', cylB, 'A');
+    b.wire(cylA, 'B', jb, 'P');
+    b.wire(cylB, 'B', jb, 'P');
+    b.wire(jb, 'P', valve, 'B');
+  });
+}

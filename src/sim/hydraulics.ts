@@ -87,7 +87,36 @@ export type HydElement =
     }
   /** Rotary actuator: forward rotation (n > 0) passes D·n from `a` to `b`. `torque` (Nm)
    * opposes rotation in either direction. */
-  | { kind: 'motor'; a: string; b: string; disp: number; torque: number };
+  | { kind: 'motor'; a: string; b: string; disp: number; torque: number }
+  /**
+   * Pressure-compensating sleeve (spool) of a spool-type flow divider. Chambers `a` and `b` sit
+   * downstream of the divider's two fixed metering orifices; the sleeve throttles chamber a → outlet
+   * `x` and chamber b → outlet `y` in opposite directions, and is pushed by the chamber pressures
+   * against a soft centring spring (`spring`, bar per unit travel). It settles where the two
+   * chamber pressures are equal - so both metering orifices see the same Δp and the flows divide
+   * in the ratio of their sizes, whatever the outlet pressures. At travel s = ±0.5 one outlet is
+   * fully open and the other shut; a stop just beyond that limits the travel. Each throttle is an orifice of coefficient k when
+   * fully open.
+   */
+  | { kind: 'compensator'; a: string; b: string; x: string; y: string; k: number; spring: number }
+  /**
+   * Rotary (gear) flow divider: two gear sections of displacement d1 (inlet `a` → outlet `b`) and
+   * d2 (`a` → `x`) on one shaft, so they pass flows in the ratio d1:d2 at a common speed n.
+   * Torque balance: (p_a − p_b)·d1 + (p_a − p_x)·d2 = friction - the section with the lower
+   * outlet pressure drives the other as a pump, which is why the other outlet can rise above
+   * inlet pressure (pressure intensification). `leak` (L/min per bar) is the internal leakage
+   * of each section past its gears, `torque` (Nm) the breakaway friction.
+   */
+  | {
+      kind: 'rotaryDivider';
+      a: string;
+      b: string;
+      x: string;
+      d1: number;
+      d2: number;
+      leak: number;
+      torque: number;
+    };
 
 export interface HydInput {
   /** Every hydraulic port key in the circuit. */
@@ -146,6 +175,8 @@ const ORIFICE_DELTA = 0.1;
 const EDGE_EPS = 0.1;
 /** Pressure band (bar) over which a pilot-operated check valve goes from shut to fully open. */
 const PILOT_BAND = 2;
+/** End-stop stiffness of a flow divider's compensating sleeve (bar per unit overtravel). */
+const SPOOL_END_STIFFNESS = 2000;
 /** Viscous damping of a piston, as the extra pressure (bar) it takes per m/s - small. */
 const PISTON_VISCOUS_BAR = 0.02;
 /** Viscous damping of a motor, bar per rev/s - small. */
@@ -291,8 +322,10 @@ export function solveHydraulics(input: HydInput): HydSolution {
   const tA: Array<Terminal | null> = [];
   const tB: Array<Terminal | null> = [];
   const tX: Array<Terminal | null> = [];
+  const tY: Array<Terminal | null> = [];
   for (const e of els) {
-    tX.push(e.kind === 'pilotCheck' ? term(e.x) : null);
+    tX.push('x' in e ? term(e.x) : null);
+    tY.push('y' in e ? term(e.y) : null);
     switch (e.kind) {
       case 'pump':
         tA.push(null);
@@ -323,7 +356,14 @@ export function solveHydraulics(input: HydInput): HydSolution {
   for (let n = 0; n < N; n++) if (!fixed[n]) varOfNode[n] = nv++;
   const varOfElement = new Int32Array(els.length).fill(-1);
   els.forEach((e, i) => {
-    if (e.kind === 'piston' || e.kind === 'motor') varOfElement[i] = nv++;
+    if (
+      e.kind === 'piston' ||
+      e.kind === 'motor' ||
+      e.kind === 'compensator' ||
+      e.kind === 'rotaryDivider'
+    ) {
+      varOfElement[i] = nv++;
+    }
   });
   const nVars = nv;
 
@@ -375,8 +415,12 @@ export function solveHydraulics(input: HydInput): HydSolution {
     return v < 0 ? 0 : xx[v]!;
   };
 
-  /** Element i's through-flow a→b (L/min) for actuators: the flow drawn from a / pushed to b. */
-  function elementFlows(xx: Float64Array, i: number): { qa: number; qb: number; value: number } {
+  /** Flows (L/min) element i draws from the nodes at its terminals a, b (and x, y where it has
+   * them) - negative where it pushes oil into that node - plus its reported value. */
+  function elementFlows(
+    xx: Float64Array,
+    i: number,
+  ): { qa: number; qb: number; qx?: number; qy?: number; value: number } {
     const e = els[i]!;
     const pa = pressureOf(xx, tA[i]!);
     const pb = pressureOf(xx, tB[i]!);
@@ -424,6 +468,21 @@ export function solveHydraulics(input: HydInput): HydSolution {
         const q = e.disp * n * 0.06;
         return { qa: q, qb: -q, value: n };
       }
+      case 'compensator': {
+        const sp = xx[varOfElement[i]!]!;
+        const px = pressureOf(xx, tX[i]!);
+        const py = pressureOf(xx, tY[i]!);
+        const q1 = clamp01(0.5 + sp) * orificeFlow(e.k, pa - px);
+        const q2 = clamp01(0.5 - sp) * orificeFlow(e.k, pb - py);
+        return { qa: q1, qb: q2, qx: -q1, qy: -q2, value: sp };
+      }
+      case 'rotaryDivider': {
+        const n = xx[varOfElement[i]!]!;
+        const px = pressureOf(xx, tX[i]!);
+        const q1 = e.d1 * n * 0.06 + e.leak * (pa - pb);
+        const q2 = e.d2 * n * 0.06 + e.leak * (pa - px);
+        return { qa: q1 + q2, qb: -q1, qx: -q2, value: n };
+      }
     }
   }
 
@@ -448,6 +507,25 @@ export function solveHydraulics(input: HydInput): HydSolution {
       const torquePerBar = Math.max(e.disp, 1e-6) / (20 * Math.PI);
       return MOTOR_VISCOUS_BAR * n - deadZone(pa - pb, Math.abs(e.torque) / torquePerBar);
     }
+    if (e.kind === 'compensator') {
+      const sp = xx[varOfElement[i]!]!;
+      const pa = pressureOf(xx, tA[i]!);
+      const pb = pressureOf(xx, tB[i]!);
+      // The stop sits just beyond full closure (|s| = 0.5), so an outlet can actually shut.
+      const endStop = SPOOL_END_STIFFNESS * (ramp(sp - 0.6) - ramp(-sp - 0.6));
+      return e.spring * sp + endStop - (pa - pb);
+    }
+    if (e.kind === 'rotaryDivider') {
+      const n = xx[varOfElement[i]!]!;
+      const pa = pressureOf(xx, tA[i]!);
+      const pb = pressureOf(xx, tB[i]!);
+      const px = pressureOf(xx, tX[i]!);
+      const dSum = Math.max(e.d1 + e.d2, 1e-6);
+      // Mean pressure drop across the two sections, weighted by displacement: Δp_eff·(d1+d2)/20π
+      // is the net shaft torque.
+      const dpEff = ((pa - pb) * e.d1 + (pa - px) * e.d2) / dSum;
+      return MOTOR_VISCOUS_BAR * n - deadZone(dpEff, (Math.abs(e.torque) * 20 * Math.PI) / dSum);
+    }
     return 0;
   }
 
@@ -464,17 +542,16 @@ export function solveHydraulics(input: HydInput): HydSolution {
       }
     }
     for (let i = 0; i < els.length; i++) {
-      const { qa, qb } = elementFlows(xx, i);
-      const ta = tA[i];
-      const tb = tB[i];
-      if (ta) {
-        const v = varOfNode[ta.node]!;
-        if (v >= 0) out[v]! += qa;
-      }
-      if (tb) {
-        const v = varOfNode[tb.node]!;
-        if (v >= 0) out[v]! += qb;
-      }
+      const { qa, qb, qx, qy } = elementFlows(xx, i);
+      const add = (t: Terminal | null | undefined, q: number | undefined): void => {
+        if (!t || q === undefined) return;
+        const v = varOfNode[t.node]!;
+        if (v >= 0) out[v]! += q;
+      };
+      add(tA[i], qa);
+      add(tB[i], qb);
+      add(tX[i], qx);
+      add(tY[i], qy);
       const av = varOfElement[i]!;
       if (av >= 0) out[av] = actuatorResidual(xx, i);
     }
@@ -629,7 +706,7 @@ export function solveHydraulics(input: HydInput): HydSolution {
     portFlow.set(port, (portFlow.get(port) ?? 0) + q);
   };
   els.forEach((e, i) => {
-    const { qa, qb, value } = elementFlows(x, i);
+    const { qa, qb, qx, qy, value } = elementFlows(x, i);
     elementValue.push(value);
     // qa/qb are flows drawn *from* the node into the element; out of the component is the
     // negative of that.
@@ -637,6 +714,8 @@ export function solveHydraulics(input: HydInput): HydSolution {
     else if (e.kind !== 'tank') {
       addFlow((e as { a?: string }).a, -qa);
       addFlow((e as { b?: string }).b, -qb);
+      if (qx !== undefined) addFlow((e as { x?: string }).x, -qx);
+      if (qy !== undefined) addFlow((e as { y?: string }).y, -qy);
     }
   });
   // Tank connections absorb whatever arrives at their node.

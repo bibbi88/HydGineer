@@ -39,6 +39,12 @@ import {
   HYD_MOTOR_TYPE,
 } from './hyd/actuators';
 import {
+  createHydSpoolDivider,
+  createHydRotaryDivider,
+  HYD_SPOOL_DIVIDER_TYPE,
+  HYD_ROTARY_DIVIDER_TYPE,
+} from './hyd/dividers';
+import {
   createElecRailPlus,
   createElecRailZero,
   createElecContact,
@@ -185,6 +191,24 @@ export const componentRegistry = new Map<string, RegistryEntry>([
     {
       factory: (ctx, x, y) => createHydFlowControl(ctx.compLayer, x, y),
       label: 'Flow control (pressure comp.)',
+      placeable: true,
+      category: ComponentCategory.FLOW,
+    },
+  ],
+  [
+    HYD_SPOOL_DIVIDER_TYPE,
+    {
+      factory: (ctx, x, y) => createHydSpoolDivider(ctx.compLayer, x, y),
+      label: 'Flow divider, spool (compensated)',
+      placeable: true,
+      category: ComponentCategory.FLOW,
+    },
+  ],
+  [
+    HYD_ROTARY_DIVIDER_TYPE,
+    {
+      factory: (ctx, x, y) => createHydRotaryDivider(ctx.compLayer, x, y),
+      label: 'Flow divider, rotary (gear)',
       placeable: true,
       category: ComponentCategory.FLOW,
     },

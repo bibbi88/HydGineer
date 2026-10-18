@@ -35,7 +35,10 @@ function globalize(id: number, e: HydElement): HydElement {
         b: e.b === undefined ? undefined : k(e.b),
       };
     case 'pilotCheck':
+    case 'rotaryDivider':
       return { ...e, a: k(e.a), b: k(e.b), x: k(e.x) };
+    case 'compensator':
+      return { ...e, a: k(e.a), b: k(e.b), x: k(e.x), y: k(e.y) };
     default:
       return { ...e, a: k(e.a), b: k(e.b) };
   }

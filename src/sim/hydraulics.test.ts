@@ -305,6 +305,127 @@ describe('cavitation', () => {
   });
 });
 
+describe('flow dividers', () => {
+  /** Spool divider fed by a pump: metering orifices kA/kB from P into chambers C1/C2, the
+   * compensating sleeve to outlets A/B. A drains through `loadA`, B through `loadB`. */
+  function spoolDivider(
+    q: number,
+    kA: number,
+    kB: number,
+    loadA: HydElement[],
+    loadB: HydElement[],
+  ) {
+    return solve(
+      ['P', 'C1', 'C2', 'A', 'B', 'T'],
+      [],
+      [
+        { kind: 'pump', out: 'P', q, leak: 0 },
+        { kind: 'relief', a: 'P', b: 'T', set: 200, gain: 10 },
+        { kind: 'orifice', a: 'P', b: 'C1', k: kA },
+        { kind: 'orifice', a: 'P', b: 'C2', k: kB },
+        { kind: 'compensator', a: 'C1', b: 'C2', x: 'A', y: 'B', k: 20, spring: 0.3 },
+        { kind: 'tank', a: 'T' },
+        ...loadA,
+        ...loadB,
+      ],
+    );
+  }
+
+  it('spool divider: equal split although one outlet sees 5 bar and the other 80 bar', () => {
+    const s = spoolDivider(
+      20,
+      4,
+      4,
+      [{ kind: 'orifice', a: 'A', b: 'T', k: 5 }],
+      [{ kind: 'relief', a: 'B', b: 'T', set: 80, gain: 10 }],
+    );
+    const qA = s.elementValue[6]!;
+    const qB = s.elementValue[7]!;
+    expect(qA + qB).toBeCloseTo(20, 2);
+    expect(Math.abs(qA - qB) / 10).toBeLessThan(0.03);
+    expect(s.pressure.get('B')!).toBeGreaterThan(80);
+    expect(s.pressure.get('A')!).toBeLessThan(10);
+    // The sleeve has moved towards closing the low-pressure side.
+    expect(s.elementValue[4]!).toBeLessThan(-0.1);
+  });
+
+  it('spool divider: unequal metering orifices divide in their ratio (2:1)', () => {
+    const s = spoolDivider(
+      18,
+      6,
+      3,
+      [{ kind: 'relief', a: 'A', b: 'T', set: 40, gain: 10 }],
+      [{ kind: 'orifice', a: 'B', b: 'T', k: 3 }],
+    );
+    const qA = s.elementValue[6]!;
+    const qB = s.elementValue[7]!;
+    expect(qA / qB).toBeGreaterThan(1.94);
+    expect(qA / qB).toBeLessThan(2.06);
+  });
+
+  it('spool divider: blocking one outlet also shuts the other', () => {
+    const s = spoolDivider(20, 4, 4, [{ kind: 'orifice', a: 'A', b: 'T', k: 5 }], []);
+    // Only a trickle gets past the nearly shut sleeve; the rest goes over the relief valve.
+    expect(Math.abs(s.elementValue[6]!)).toBeLessThan(2);
+    expect(s.elementValue[1]!).toBeGreaterThan(18);
+  });
+
+  function rotary(loadA: HydElement[], loadB: HydElement[], leak = 0) {
+    return solve(
+      ['P', 'A', 'B', 'T'],
+      [],
+      [
+        { kind: 'pump', out: 'P', q: 20, leak: 0 },
+        { kind: 'relief', a: 'P', b: 'T', set: 100, gain: 10 },
+        { kind: 'rotaryDivider', a: 'P', b: 'A', x: 'B', d1: 8, d2: 8, leak, torque: 0.5 },
+        { kind: 'tank', a: 'T' },
+        ...loadA,
+        ...loadB,
+      ],
+    );
+  }
+
+  it('rotary divider: equal displacements give equal flows, the inlet sees the mean pressure', () => {
+    const s = rotary(
+      [{ kind: 'relief', a: 'A', b: 'T', set: 20, gain: 10 }],
+      [{ kind: 'relief', a: 'B', b: 'T', set: 60, gain: 10 }],
+    );
+    const qA = s.elementValue[4]!;
+    const qB = s.elementValue[5]!;
+    expect(qA).toBeCloseTo(10, 2);
+    expect(qB).toBeCloseTo(10, 2);
+    const n = s.elementValue[2]!;
+    expect(n * 60).toBeCloseTo((10 / 8) * 1000, 0);
+    // Torque balance: p_P ≈ (p_A + p_B)/2 plus the friction share.
+    const pMean = (s.pressure.get('A')! + s.pressure.get('B')!) / 2;
+    const pFriction = (0.5 * 20 * Math.PI) / 16;
+    const pViscous = 0.01 * n; // the solver's small viscous drag, bar per rev/s
+    expect(s.pressure.get('P')!).toBeCloseTo(pMean + pFriction + pViscous, 2);
+  });
+
+  it('rotary divider: intensifies - one outlet can rise above the inlet pressure', () => {
+    const s = rotary(
+      [{ kind: 'orifice', a: 'A', b: 'T', k: 50 }],
+      [{ kind: 'relief', a: 'B', b: 'T', set: 150, gain: 10 }],
+    );
+    // Inlet held near 100 bar by its relief valve, yet B reaches its 150 bar load.
+    expect(s.pressure.get('P')!).toBeLessThan(101);
+    expect(s.pressure.get('B')!).toBeGreaterThan(150);
+  });
+
+  it('rotary divider: internal leakage makes the higher-pressure side lose flow', () => {
+    const s = rotary(
+      [{ kind: 'relief', a: 'A', b: 'T', set: 10, gain: 10 }],
+      [{ kind: 'relief', a: 'B', b: 'T', set: 90, gain: 10 }],
+      0.005,
+    );
+    const qA = s.elementValue[4]!;
+    const qB = s.elementValue[5]!;
+    expect(qA).toBeGreaterThan(qB);
+    expect(qA + qB).toBeCloseTo(20, 2);
+  });
+});
+
 describe('wireFlows', () => {
   it('splits flow along a branched net', () => {
     // pump -> J, J -> a, J -> b (a takes 3, b takes 7)

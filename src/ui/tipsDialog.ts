@@ -79,6 +79,12 @@ const TIP_SECTIONS: TipSection[] = [
       'Hover over a wire or a port while simulating for its exact pressure and flow. The longest ' +
         'wire of each line shows them as a label; pressure lines are red (darker = higher), ' +
         'return lines blue, and the moving dashes show which way the oil flows.',
+      'Flow dividers split one inlet flow between outlets A and B. The spool type holds the ' +
+        'split with a pressure-compensating sleeve that throttles the lighter-loaded side, so ' +
+        'the inlet runs at the higher load pressure and the throttling becomes heat. The rotary ' +
+        '(gear) type splits by displacement on a common shaft: the inlet sees the mean of the ' +
+        'outlet pressures, and one outlet can rise above the inlet pressure (intensification). ' +
+        'With either type, blocking one outlet stops the other, and both combine flow in reverse.',
       'Hand-lever valves are switched by clicking the left or right half of the symbol while the ' +
         'simulation runs; click the same side again to return to centre.',
     ],

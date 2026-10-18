@@ -19,6 +19,11 @@ continuation, see `src/sim/hydraulics.ts`):
 - **Pressure-reducing valve**, **pressure-compensated flow control**, **pilot-operated check**.
 - **Cylinders**: force balance p_A·A_A − p_B·A_B = F_load ± friction, speed v = Q/A; end stops.
 - **Motors**: n = Q/V, Δp = 20π·T/V (bar, Nm, cm³/rev).
+- **Flow dividers**: spool type - two metering orifices plus a compensating sleeve that
+  settles where both orifices see the same Δp (split held whatever the loads, the lighter
+  side throttled); rotary type - two gear sections on one shaft, flows in the ratio of their
+  displacements, torque balance (p_P − p_A)·V_A + (p_P − p_B)·V_B = friction, internal
+  leakage, and pressure intensification.
 - **Compressibility** (bulk modulus 10 000 bar): trapped oil keeps its pressure and pressure
   builds up over time; steady states are the exact incompressible ones.
 
@@ -30,7 +35,8 @@ Units: bar (gauge), L/min, N, Nm, mm, cm³/rev.
 - Directional valves: 4/3 (closed / tandem / float / open centre) and 4/2, solenoid or hand lever
 - Pressure control: relief valve, pressure-reducing valve
 - Flow & check: check valve, pilot-operated check valve, throttle, one-way flow control,
-  pressure-compensated flow control (optional bypass check)
+  pressure-compensated flow control (optional bypass check), flow divider (spool with
+  compensating sleeve, and rotary gear type)
 - Actuators: double-acting cylinder, single-acting spring-return cylinder, hydraulic motor
 - Measuring: pressure gauge, pressure switch (publishes a signal, e.g. S1)
 - Electrical: +24 V / 0 V, push buttons, contacts, relay coils, solenoids, lamps, PLC
