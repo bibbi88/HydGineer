@@ -1,5 +1,7 @@
 # HydGineer
 
+**▶ Try it in your browser: [bibbi88.github.io/HydGineer](https://bibbi88.github.io/HydGineer/)**
+
 A browser-based **hydraulic** circuit editor and simulator - the hydraulic sibling of
 [PneuGineer](https://github.com/bibbi88/PneuGineerCL), built on the same editor. Drag pumps,
 valves, cylinders and motors onto a canvas, wire them together and run the simulation: every
