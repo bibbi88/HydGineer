@@ -1705,6 +1705,11 @@ circle.hydPathReturn {
   cursor: ew-resize;
 }
 
+/* The variable motor's taller readout sits beside it, so its slider goes above that. */
+.swashLever.motorLever {
+  top: -18px;
+}
+
 .workspace:not(.simulating) .swashLever {
   display: none;
 }

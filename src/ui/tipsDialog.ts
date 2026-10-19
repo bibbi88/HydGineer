@@ -114,6 +114,11 @@ const TIP_SECTIONS: TipSection[] = [
         'speed and direction, through zero. Its leakage goes to the case drain, so the closed ' +
         'loop needs a charge pump feeding the low-pressure line through make-up check valves; ' +
         'the cross-port relief valves limit the pressure in both directions.',
+      'Efficiencies: pumps have a volumetric efficiency ηv (leakage - less flow at higher ' +
+        'pressure) and a hydromechanical efficiency ηhm (friction - more shaft torque needed: ' +
+        'T = V·p / (20π·ηhm)). Their readout shows hydraulic and shaft power and ηtot = ηv·ηhm. ' +
+        'Motors have ηhm too: a load torque T needs Δp = 20π·T / (V·ηhm). Both default to 90 %; ' +
+        'set 100 % for the ideal textbook values.',
       'Variable motor: drag the displacement slider beside it while simulating (it stops at the ' +
         'minimum-displacement setting). Less displacement turns faster on the same flow, but the ' +
         'same load torque then needs more pressure (Δp = 20π·T / V) - the power stays the same. ' +

@@ -211,6 +211,21 @@ describe('solveHydraulics', () => {
     expect(s.elementValue[1]! * 60).toBeCloseTo((12 / 20) * 1000, 0);
     expect(s.pressure.get('pump:P')).toBeCloseTo((30 * 20 * Math.PI) / 20, 0);
   });
+
+  it('hydraulic motor with ηhm: same speed, Δp = T·20π/(D·ηhm)', () => {
+    const s = solve(
+      ['pump:P', 'tank:T'],
+      [],
+      [
+        { kind: 'pump', out: 'pump:P', q: 12, leak: 0 },
+        { kind: 'motor', a: 'pump:P', b: 'tank:T', disp: 20, torque: 30, etaHm: 0.8 },
+        { kind: 'relief', a: 'pump:P', b: 'tank:T', set: 200, gain: 20 },
+        { kind: 'tank', a: 'tank:T' },
+      ],
+    );
+    expect(s.elementValue[1]! * 60).toBeCloseTo((12 / 20) * 1000, 0);
+    expect(s.pressure.get('pump:P')).toBeCloseTo((30 * 20 * Math.PI) / (20 * 0.8), 0);
+  });
 });
 
 describe('load holding and overrunning loads', () => {

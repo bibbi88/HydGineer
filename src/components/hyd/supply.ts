@@ -162,6 +162,8 @@ export function createHydPump(
   let displacement = 10; // cm³/rev
   let speed = 1450; // rpm
   let etaV = 95; // %
+  /** Hydromechanical efficiency, %: the shaft has to give T = V·p / (20π·ηhm). */
+  let etaHm = 90;
   let ratedPressure = 250; // bar
   let signal = '';
   let running = true;
@@ -197,6 +199,25 @@ export function createHydPump(
   }
   refresh();
 
+  /** Flow the pump actually displaces: what it delivers plus what leaks back inside it (with a
+   * variable pump this is the swivel angle's share of full displacement). */
+  function geometricFlow(q: number, p: number): number {
+    const leak = (theoreticalFlow() * (1 - etaV / 100)) / Math.max(1, ratedPressure);
+    return Math.max(0, q) + leak * Math.max(0, p);
+  }
+  /** Readout lines for the drive: hydraulic power out, shaft power and torque in, and the total
+   * efficiency ηv·ηhm - the shaft power is P = Q_geo·p / (600·ηhm), T = P / ω. */
+  function drivePower(q: number, p: number): string[] {
+    const pHyd = (Math.max(0, q) * Math.max(0, p)) / 600;
+    const pShaft = (geometricFlow(q, p) * Math.max(0, p)) / (600 * (etaHm / 100));
+    const torque = speed > 0 ? (pShaft * 1000) / ((2 * Math.PI * speed) / 60) : 0;
+    const lines = [`P ${pHyd.toFixed(2)} kW (shaft ${pShaft.toFixed(2)})`];
+    if (pShaft > 0.005) {
+      lines.push(`T ${torque.toFixed(1)} Nm · ηtot ${((pHyd / pShaft) * 100).toFixed(0)} %`);
+    }
+    return lines;
+  }
+
   const comp = hydComponentBase(shell, type, x, y, svgW, svgH, ports);
   return Object.assign(comp, {
     recompute(): void {
@@ -229,19 +250,16 @@ export function createHydPump(
     step(_dt: number, ctx: SimStepContext): void {
       const p = ctx.pressureAt('P');
       const q = running ? ctx.elementValue(0) : 0;
-      const lines = running
-        ? [`Q ${fmtFlow(q)}`, `p ${fmtBar(p)}`, `P ${((p * q) / 600).toFixed(2)} kW`]
-        : ['motor off'];
+      const lines = running ? [`Q ${fmtFlow(q)}`, `p ${fmtBar(p)}`] : ['motor off'];
+      if (running) lines.push(...drivePower(q, p));
       if (isLS) {
         const pls = ctx.pressureAt('LS');
         paintFlow(lsLine, pls, 0);
         if (running) lines.splice(2, 0, `LS ${fmtBar(pls)} (Δp ${fmtBar(p - pls)})`);
       }
       if (running && (isLS || control === 'pc')) {
-        // Swivel angle as a share of full displacement: what's delivered plus what leaks.
         const qTheo = theoreticalFlow();
-        const leak = (qTheo * (1 - etaV / 100)) / Math.max(1, ratedPressure);
-        const share = qTheo > 0 ? (q + leak * Math.max(0, p)) / qTheo : 0;
+        const share = qTheo > 0 ? geometricFlow(q, p) / qTheo : 0;
         lines.splice(1, 0, `displacement ${(Math.min(1, share) * 100).toFixed(0)} %`);
       }
       if (running && p > ratedPressure) lines.push('⚠ above rated pressure');
@@ -254,6 +272,7 @@ export function createHydPump(
         displacement,
         speed,
         etaV,
+        etaHm,
         ratedPressure,
         signal,
         ...(isLS ? { margin } : { control }),
@@ -265,6 +284,7 @@ export function createHydPump(
       displacement = readNum(data, 'displacement', displacement, 0, 1000);
       speed = readNum(data, 'speed', speed, 0, 10000);
       etaV = readNum(data, 'etaV', etaV, 50, 100);
+      etaHm = readNum(data, 'etaHm', etaHm, 50, 100);
       ratedPressure = readNum(data, 'ratedPressure', ratedPressure, 1, 1000);
       if (typeof data.signal === 'string') signal = data.signal;
       if (data.control === 'fixed' || data.control === 'pc') control = data.control;
@@ -742,6 +762,7 @@ export function createHydPumpLoop(compLayer: HTMLElement, x: number, y: number):
   let displacement = 28; // cm³/rev at full swash
   let speed = 1500; // rpm
   let etaV = 95; // % at rated pressure
+  let etaHm = 90; // % hydromechanical
   let ratedPressure = 300; // bar
   /** Swash plate, −1 … +1. */
   let swash = 0;
@@ -786,19 +807,35 @@ export function createHydPumpLoop(compLayer: HTMLElement, x: number, y: number):
       const lines = [`swash ${swash > 0 ? '+' : ''}${Math.round(swash * 100)} %`];
       if (Math.abs(swash) > 0.004) {
         lines.push(`Q ${fmtFlow(q)} out of ${swash >= 0 ? 'B' : 'A'}`);
-        lines.push(`Δp ${fmtBar(dp)} · P ${((dp * q) / 600).toFixed(2)} kW`);
+        // Shaft: the swash plate displaces |swash|·Vmax·n whatever leaks; T = V·Δp / (20π·ηhm).
+        const pHyd = (dp * q) / 600;
+        const pShaft = (Math.abs(swash) * maxFlow() * dp) / (600 * (etaHm / 100));
+        const torque = speed > 0 ? (pShaft * 1000) / ((2 * Math.PI * speed) / 60) : 0;
+        lines.push(`Δp ${fmtBar(dp)}`);
+        lines.push(`P ${pHyd.toFixed(2)} kW (shaft ${pShaft.toFixed(2)})`);
+        if (pShaft > 0.005) {
+          lines.push(`T ${torque.toFixed(1)} Nm · ηtot ${((pHyd / pShaft) * 100).toFixed(0)} %`);
+        }
       }
       if (Math.max(pA, pB) > PUMP_BURST_PRESSURE * 0.95) lines.push('⚠ no pressure relief!');
       shell.setInfo(lines);
       paintFlow(leadA, pA, -qA);
       paintFlow(leadB, pB, -ctx.flowAt('B'));
     },
-    snapshot: () => ({ ...nameSnapshot(shell), displacement, speed, etaV, ratedPressure }),
+    snapshot: () => ({
+      ...nameSnapshot(shell),
+      displacement,
+      speed,
+      etaV,
+      etaHm,
+      ratedPressure,
+    }),
     restore(data: Record<string, unknown>): void {
       restoreName(shell, data);
       displacement = readNum(data, 'displacement', displacement, 0, 1000);
       speed = readNum(data, 'speed', speed, 0, 10000);
       etaV = readNum(data, 'etaV', etaV, 50, 100);
+      etaHm = readNum(data, 'etaHm', etaHm, 50, 100);
       ratedPressure = readNum(data, 'ratedPressure', ratedPressure, 1, 1000);
     },
     reset(): void {

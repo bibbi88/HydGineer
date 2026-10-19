@@ -86,7 +86,7 @@ export function swapComponentType(comp: Component, newType: string): void {
   const { x, y } = comp;
   // Contact <-> push button keeps its NO/NC choice, relay coil <-> solenoid keeps its name;
   // other swaps have no such fields.
-  const { normallyClosed, key, showName, customName, displacement, torque } =
+  const { normallyClosed, key, showName, customName, displacement, torque, etaHm } =
     comp.snapshot() as Record<string, unknown>;
   const rotation = getComponentRotation(comp);
   const mirrored = comp.el.dataset.mirror === '1';
@@ -111,7 +111,7 @@ export function swapComponentType(comp: Component, newType: string): void {
     if (keepsKey && typeof key === 'string') next.restore({ ...next.snapshot(), key });
     // Fixed <-> variable motor keeps its size and load.
     if (isMotor(comp.type) && isMotor(newType)) {
-      next.restore({ ...next.snapshot(), displacement, torque });
+      next.restore({ ...next.snapshot(), displacement, torque, etaHm });
     }
     // Same place on the drawing: orientation and naming carry over to the replacement.
     if (rotation) setComponentRotation(next, rotation);

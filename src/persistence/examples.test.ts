@@ -249,21 +249,22 @@ describe('example circuits behave as described', () => {
       expect(p(f, pump, port)).toBeLessThan(22);
     }
 
-    // 60 % one way: ~630 rpm (25.2 L/min into 40 cm³/rev, less leakage), Δp = 94 bar for 60 Nm.
+    // 60 % one way: ~630 rpm (25.2 L/min into 40 cm³/rev, less leakage);
+    // Δp = 20π·60 / (40·0.90) = 105 bar for 60 Nm at ηhm 90 %.
     swash(60);
     f = run(1);
     expect(rpm(f)).toBeGreaterThan(560);
     expect(rpm(f)).toBeLessThan(635);
     const dp = Math.abs(p(f, pump, 'A') - p(f, pump, 'B'));
-    expect(dp).toBeGreaterThan(92);
-    expect(dp).toBeLessThan(97);
+    expect(dp).toBeGreaterThan(103);
+    expect(dp).toBeLessThan(107);
     expect(Math.min(p(f, pump, 'A'), p(f, pump, 'B'))).toBeGreaterThan(17); // low side charged
 
     // Through zero to the other way: same speed, reversed; the high side swaps.
     swash(-60);
     f = run(1);
     expect(rpm(f)).toBeLessThan(-560);
-    expect(p(f, pump, 'A')).toBeGreaterThan(p(f, pump, 'B') + 90);
+    expect(p(f, pump, 'A')).toBeGreaterThan(p(f, pump, 'B') + 100);
 
     // Overload: 300 Nm needs 471 bar - the cross-port relief caps the high side and the motor stalls.
     motor.restore({ ...motor.snapshot(), torque: 300 });
@@ -286,38 +287,47 @@ describe('example circuits behave as described', () => {
       Number(/n (-?\d+) rpm/.exec(motor.el.querySelector('.hydInfo')!.textContent ?? '')?.[1]);
     const dp = (f: HydFrame): number => p(f, pump, 'B') - p(f, pump, 'A');
 
-    // Full swash, full motor displacement: as the fixed-motor transmission at 100 %.
+    // Full swash, full motor displacement: Δp = 20π·60 / (40·0.90) = 105 bar.
     slide(pump, 100);
     let f = run(1);
     expect(rpm()).toBeGreaterThan(980);
     expect(rpm()).toBeLessThan(1060);
-    expect(dp(f)).toBeGreaterThan(92);
-    expect(dp(f)).toBeLessThan(97);
+    expect(dp(f)).toBeGreaterThan(103);
+    expect(dp(f)).toBeLessThan(107);
 
-    // Half the displacement: about twice the speed, twice the Δp (20π·60/20 = 188 bar).
+    // Half the displacement: about twice the speed, twice the Δp (209 bar).
     slide(motor, 50);
     f = run(1);
     expect(rpm()).toBeGreaterThan(1950);
     expect(rpm()).toBeLessThan(2100);
-    expect(dp(f)).toBeGreaterThan(185);
-    expect(dp(f)).toBeLessThan(192);
+    expect(dp(f)).toBeGreaterThan(206);
+    expect(dp(f)).toBeLessThan(213);
 
-    // 40 %: 236 bar is still below the 250 bar cross-port reliefs.
-    slide(motor, 40);
+    // 45 %: 233 bar is still below the 250 bar cross-port reliefs.
+    slide(motor, 45);
     f = run(1);
-    expect(rpm()).toBeGreaterThan(2400);
-    expect(dp(f)).toBeGreaterThan(232);
-    expect(dp(f)).toBeLessThan(240);
+    expect(rpm()).toBeGreaterThan(2150);
+    expect(dp(f)).toBeGreaterThan(229);
+    expect(dp(f)).toBeLessThan(237);
 
-    // 30 % would need 314 bar: the cross-port relief opens and the motor stalls.
-    slide(motor, 30);
+    // 40 % would need 262 bar: the cross-port relief opens and the motor stalls.
+    slide(motor, 40);
     f = run(1);
     expect(Math.abs(rpm())).toBeLessThan(5);
     expect(dp(f)).toBeGreaterThan(245);
     expect(dp(f)).toBeLessThan(262);
 
+    // The motor's readout shows the losses: 6.9 kW of oil in, ηhm 90 % of it on the shaft.
+    slide(motor, 100);
+    run(1);
+    const info = motor.el.querySelector('.hydInfo')!.textContent ?? '';
+    const [pIn, pOut] = /P in ([\d.]+) → out ([\d.]+) kW/.exec(info)!.slice(1).map(Number);
+    expect(pOut! / pIn!).toBeGreaterThan(0.89);
+    expect(pOut! / pIn!).toBeLessThan(0.91);
+
     // The slider stops at the minimum-displacement setting.
     slide(motor, 0);
+    run(0.1);
     expect(motor.el.querySelector('.hydInfo')!.textContent).toContain('(30 %)');
   });
 });

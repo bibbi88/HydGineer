@@ -157,8 +157,9 @@ export type HydElement =
       vPrev?: number;
     }
   /** Rotary actuator: forward rotation (n > 0) passes D·n from `a` to `b`. `torque` (Nm)
-   * opposes rotation in either direction. */
-  | { kind: 'motor'; a: string; b: string; disp: number; torque: number }
+   * opposes rotation in either direction. `etaHm` (0…1, default 1) is the hydromechanical
+   * efficiency: the shaft gives T = Δp·D·ηhm / 20π, so a load needs Δp = 20π·T / (D·ηhm). */
+  | { kind: 'motor'; a: string; b: string; disp: number; torque: number; etaHm?: number }
   /**
    * Pressure-compensating sleeve (spool) of a spool-type flow divider. Chambers `a` and `b` sit
    * downstream of the divider's two fixed metering orifices; the sleeve throttles chamber a → outlet
@@ -627,7 +628,8 @@ export function solveHydraulics(input: HydInput): HydSolution {
       const n = xx[varOfElement[i]!]!;
       const pa = pressureOf(xx, tA[i]!);
       const pb = pressureOf(xx, tB[i]!);
-      const torquePerBar = Math.max(e.disp, 1e-6) / (20 * Math.PI);
+      const etaHm = Math.min(1, Math.max(0.05, e.etaHm ?? 1));
+      const torquePerBar = (Math.max(e.disp, 1e-6) * etaHm) / (20 * Math.PI);
       return MOTOR_VISCOUS_BAR * n - deadZone(pa - pb, Math.abs(e.torque) / torquePerBar);
     }
     if (e.kind === 'compensator') {

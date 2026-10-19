@@ -220,6 +220,14 @@ const INSPECTOR_FIELDS: Record<string, InspectorField[]> = {
     { kind: 'number', key: 'etaV', label: 'Volumetric efficiency (%)', min: 50, max: 100, step: 1 },
     {
       kind: 'number',
+      key: 'etaHm',
+      label: 'Hydromechanical efficiency (%)',
+      min: 50,
+      max: 100,
+      step: 1,
+    },
+    {
+      kind: 'number',
       key: 'ratedPressure',
       label: 'Rated pressure (bar)',
       min: 1,
@@ -277,6 +285,14 @@ const INSPECTOR_FIELDS: Record<string, InspectorField[]> = {
       step: 5,
     },
     { kind: 'number', key: 'etaV', label: 'Volumetric efficiency (%)', min: 50, max: 100, step: 1 },
+    {
+      kind: 'number',
+      key: 'etaHm',
+      label: 'Hydromechanical efficiency (%)',
+      min: 50,
+      max: 100,
+      step: 1,
+    },
     {
       kind: 'number',
       key: 'ratedPressure',
@@ -354,6 +370,14 @@ const INSPECTOR_FIELDS: Record<string, InspectorField[]> = {
       kind: 'number',
       key: 'etaV',
       label: 'Volumetric efficiency at rated pressure (%)',
+      min: 50,
+      max: 100,
+      step: 1,
+    },
+    {
+      kind: 'number',
+      key: 'etaHm',
+      label: 'Hydromechanical efficiency (%)',
       min: 50,
       max: 100,
       step: 1,
@@ -563,6 +587,14 @@ const INSPECTOR_FIELDS: Record<string, InspectorField[]> = {
       step: 1,
     },
     { kind: 'number', key: 'torque', label: 'Load torque (Nm)', min: 0, step: 1 },
+    {
+      kind: 'number',
+      key: 'etaHm',
+      label: 'Hydromechanical efficiency (%)',
+      min: 50,
+      max: 100,
+      step: 1,
+    },
   ],
   [HYD_MOTOR_VAR_TYPE]: [
     { kind: 'actuatorMode', label: 'Motor type', options: swapFamilyOf(HYD_MOTOR_VAR_TYPE) },
@@ -591,6 +623,14 @@ const INSPECTOR_FIELDS: Record<string, InspectorField[]> = {
       step: 5,
     },
     { kind: 'number', key: 'torque', label: 'Load torque (Nm)', min: 0, step: 1 },
+    {
+      kind: 'number',
+      key: 'etaHm',
+      label: 'Hydromechanical efficiency (%)',
+      min: 50,
+      max: 100,
+      step: 1,
+    },
   ],
   [TEXT_ANNOTATION_TYPE]: [
     {

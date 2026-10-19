@@ -442,6 +442,9 @@ export function createHydMotor(
   shell.setInfoSide('right');
   let displacement = 20; // cm³/rev (the maximum, for the variable motor)
   let torque = 20;
+  /** Hydromechanical efficiency, %: friction and flow losses inside the motor - the shaft gets
+   * T = Δp·V·ηhm / 20π. */
+  let etaHm = 90;
   let angle = 0;
   /** Variable motor: minimum-displacement stop and starting setting, % of the maximum. */
   let minPct = 30;
@@ -455,7 +458,7 @@ export function createHydMotor(
     lever.type = 'range';
     lever.max = '100';
     lever.step = '5';
-    lever.className = 'swashLever';
+    lever.className = 'swashLever motorLever';
     lever.title = 'Motor displacement: right = maximum, left = minimum (double-click to reset)';
     for (const ev of ['mousedown', 'pointerdown', 'click', 'dblclick'] as const) {
       lever.addEventListener(ev, (e) => e.stopPropagation());
@@ -486,22 +489,25 @@ export function createHydMotor(
 
   const comp = hydComponentBase(shell, type, x, y, svgW, svgH, ports);
   return Object.assign(comp, {
-    hydElements: (): HydElement[] => [{ kind: 'motor', a: 'A', b: 'B', disp: disp(), torque }],
+    hydElements: (): HydElement[] => [
+      { kind: 'motor', a: 'A', b: 'B', disp: disp(), torque, etaHm: etaHm / 100 },
+    ],
     step(dt: number, ctx: SimStepContext): void {
       const n = ctx.elementValue(0);
       // Shown at a slowed-down rate so it stays readable at real speeds.
       angle = (angle + n * 360 * dt * 0.1) % 360;
       spoke.setAttribute('transform', `rotate(${angle} 70 ${cy})`);
       const dp = ctx.pressureAt('A') - ctx.pressureAt('B');
-      const t = (dp * disp()) / (20 * Math.PI);
+      // Shaft torque after the hydromechanical losses; hydraulic power in = Δp·Q.
+      const t = (dp * disp() * etaHm) / 100 / (20 * Math.PI);
       const rpm = Math.abs(n) < 1e-4 ? 0 : n * 60;
-      const lines = [
-        `n ${rpm.toFixed(0)} rpm`,
-        `T ${t.toFixed(1)} Nm · P ${((t * 2 * Math.PI * n) / 1000).toFixed(2)} kW`,
-      ];
+      const pOut = Math.abs(t * 2 * Math.PI * n) / 1000;
+      const pIn = Math.abs((dp * disp() * n * 0.06) / 600);
+      const lines = [`n ${rpm.toFixed(0)} rpm`, `T ${t.toFixed(1)} Nm (ηhm ${etaHm} %)`];
+      if (pIn > 0.005) lines.push(`P in ${pIn.toFixed(2)} → out ${pOut.toFixed(2)} kW`);
       if (variable) {
         lines.unshift(`V ${disp().toFixed(1)} cm³/rev (${Math.round(pct)} %)`);
-        lines.push(`Δp ${fmtBar(Math.abs(dp))}`);
+        lines.splice(2, 0, `Δp ${fmtBar(Math.abs(dp))}`);
       }
       shell.setInfo(lines);
     },
@@ -509,12 +515,14 @@ export function createHydMotor(
       ...nameSnapshot(shell),
       displacement,
       torque,
+      etaHm,
       ...(variable ? { minPct, setting } : {}),
     }),
     restore(data: Record<string, unknown>): void {
       restoreName(shell, data);
       displacement = readNum(data, 'displacement', displacement, 0.1, 10000);
       torque = readNum(data, 'torque', torque, 0, 1e6);
+      etaHm = readNum(data, 'etaHm', etaHm, 50, 100);
       if (variable) {
         minPct = readNum(data, 'minPct', minPct, 5, 100);
         setting = readNum(data, 'setting', setting, 5, 100);

@@ -442,7 +442,7 @@ export const EXAMPLES: Array<{ title: string; file: () => ProjectFileV1 }> = [
     title: 'Hydrostatic transmission with variable motor',
     // The same loop with a variable-displacement motor (slider beside it): with the pump at full
     // swash, turning the motor's displacement down raises its speed further - and the pressure
-    // its load torque needs, until the cross-port relief valves stop it (below ~38 %).
+    // its load torque needs, until the cross-port relief valves stop it (below ~42 % with ηhm 90 %).
     file: () =>
       hstCircuit('Example - hydrostatic transmission, variable motor', 'hydMotorVar', {
         displacement: 40,

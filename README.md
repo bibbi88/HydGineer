@@ -16,11 +16,14 @@ continuation, see `src/sim/hydraulics.ts`):
 - **Continuity** at every line: what flows in flows out.
 - **Orifice law** for valve paths, throttles and check valves: Q = Cd·A·√(2Δp/ρ)
   (Cd 0.62, ρ 870 kg/m³). Directional valves are rated as L/min per path at Δp 5 bar.
-- **Pump**: Q = V·n minus pressure-dependent leakage (volumetric efficiency at rated pressure).
+- **Pump**: Q = V·n minus pressure-dependent leakage (volumetric efficiency ηv at rated
+  pressure); the drive needs T = V·p / (20π·ηhm) and P = Q_geo·p / (600·ηhm) - the readout shows
+  hydraulic and shaft power, shaft torque and the total efficiency ηtot = ηv·ηhm.
 - **Relief valve**: shut below the cracking pressure, then passes the surplus flow.
 - **Pressure-reducing valve**, **pressure-compensated flow control**, **pilot-operated check**.
 - **Cylinders**: force balance p_A·A_A − p_B·A_B = F_load ± friction, speed v = Q/A; end stops.
-- **Motors**: n = Q/V, Δp = 20π·T/V (bar, Nm, cm³/rev).
+- **Motors**: n = Q/V, Δp = 20π·T / (V·ηhm) (bar, Nm, cm³/rev) with the hydromechanical
+  efficiency ηhm (default 90 %); hydraulic power in and shaft power out are shown.
 - **Flow dividers**: spool type - two metering orifices plus a compensating sleeve that
   settles where both orifices see the same Δp (split held whatever the loads, the lighter
   side throttled); rotary type - two gear sections on one shaft, flows in the ratio of their
