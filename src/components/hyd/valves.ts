@@ -38,6 +38,7 @@ export const HYD_COUNTERBALANCE_TYPE = 'hydCounterbalance';
 export const HYD_VALVE_LS_TYPE = 'hydValveLS';
 export const HYD_SHUTTLE_TYPE = 'hydShuttle';
 export const HYD_PRESSURE_COMP_TYPE = 'hydPressureCompensator';
+export const HYD_CROSS_RELIEF_TYPE = 'hydCrossRelief';
 
 /** Directional valves driven by named solenoids - also what project loading and the electrical
  * coil components use to pair coil names with valves. */
@@ -1563,6 +1564,117 @@ export function createHydPressureCompensator(
       arrowG.setAttribute('transform', '');
       shell.setInfo([]);
       clearFlow([...inLead, ...outLead, ...throughArrow, ...pilotOut, ...pilotLS]);
+    },
+  });
+}
+
+/** Flow per bar above the setting of each relief in a cross-port relief block. */
+const CROSS_RELIEF_GAIN = 10;
+
+/**
+ * Cross-port relief block: two direct-operated relief valves back to back between the two lines
+ * of a closed loop (or a motor's two ports). Whichever line is the high-pressure one, its relief
+ * opens at the setting and passes the surplus straight across into the other line - limiting
+ * the torque on the motor in both directions, without dumping oil out of the loop.
+ */
+export function createHydCrossRelief(compLayer: HTMLElement, x: number, y: number): Component {
+  const svgW = 100;
+  const svgH = 100;
+  const shell = createHydShell(
+    compLayer,
+    HYD_CROSS_RELIEF_TYPE,
+    x,
+    y,
+    svgW,
+    svgH,
+    'Cross-port relief valves',
+    { x: 4, y: 18, w: 92, h: 64 },
+  );
+  const g = shell.g;
+  for (const bx of [20, 60]) {
+    g.appendChild(
+      createSvgEl('rect', {
+        x: bx,
+        y: 34,
+        width: 20,
+        height: 32,
+        fill: '#fff',
+        stroke: INK,
+        'stroke-width': STROKE,
+      }),
+    );
+  }
+  // Port leads, drawn from each port into the block.
+  const leadA = [line(g, 50, 10, 50, 20)];
+  const leadB = [line(g, 50, 90, 50, 80)];
+  // Left valve: A → B (downwards). Right valve: B → A (upwards). Each normally closed - its
+  // arrow sits off the line until it opens - with its spring on the outside.
+  const leftPath = [path(g, 'M 50 20 H 30 V 34'), path(g, 'M 30 66 V 80 H 50')];
+  const rightPath = [path(g, 'M 50 80 H 70 V 66'), path(g, 'M 70 34 V 20 H 50')];
+  const leftArrowG = createSvgEl('g', { class: 'hydSpool' });
+  const rightArrowG = createSvgEl('g', { class: 'hydSpool' });
+  g.append(leftArrowG, rightArrowG);
+  const leftArrow = arrowLine(leftArrowG, 35, 38, 35, 62);
+  const rightArrow = arrowLine(rightArrowG, 65, 62, 65, 38);
+  springH(g, 20, 4, 50, 4);
+  springH(g, 80, 96, 50, 4);
+  // Each valve's pilot from its own inlet.
+  for (const d of ['M 30 26 H 24 V 34', 'M 70 74 H 76 V 66']) {
+    path(g, d, { 'stroke-dasharray': '3 2', 'stroke-width': 1.2 });
+  }
+  createPortLabel(g, 57, 14, 'A', { anchor: 'start', fontSize: 10 });
+  createPortLabel(g, 57, 96, 'B', { anchor: 'start', fontSize: 10 });
+  const setText = createSvgEl('text', { x: 50, y: 53, 'text-anchor': 'middle', 'font-size': 8 });
+  g.appendChild(setText);
+  const ports = {
+    A: createPort(g, 'A', 50, 10, 'V'),
+    B: createPort(g, 'B', 50, 90, 'V'),
+  };
+  shell.setInfoSide('right');
+
+  let setting = 250;
+  function refresh(): void {
+    setText.textContent = String(setting);
+  }
+  refresh();
+
+  const comp = hydComponentBase(shell, HYD_CROSS_RELIEF_TYPE, x, y, svgW, svgH, ports);
+  return Object.assign(comp, {
+    hydElements: (): HydElement[] => [
+      { kind: 'relief', a: 'A', b: 'B', set: setting, gain: CROSS_RELIEF_GAIN },
+      { kind: 'relief', a: 'B', b: 'A', set: setting, gain: CROSS_RELIEF_GAIN },
+    ],
+    step(_dt: number, ctx: SimStepContext): void {
+      const qAB = ctx.elementValue(0);
+      const qBA = ctx.elementValue(1);
+      const pA = ctx.pressureAt('A');
+      const pB = ctx.pressureAt('B');
+      leftArrowG.setAttribute('transform', qAB > 0.01 ? 'translate(-5,0)' : '');
+      rightArrowG.setAttribute('transform', qBA > 0.01 ? 'translate(5,0)' : '');
+      const lines: string[] = [];
+      if (qAB > 0.01) lines.push(`A→B ${fmtFlow(qAB)}`);
+      if (qBA > 0.01) lines.push(`B→A ${fmtFlow(qBA)}`);
+      shell.setInfo(lines);
+      paintFlow(leadA, pA, qAB - qBA);
+      paintFlow(leadB, pB, qBA - qAB);
+      paintFlow([leftPath[0]!], pA, qAB);
+      paintFlow([leftPath[1]!], pB, qAB);
+      paintFlow(leftArrow, pA, qAB);
+      paintFlow([rightPath[0]!], pB, qBA);
+      paintFlow([rightPath[1]!], pA, qBA);
+      paintFlow(rightArrow, pB, qBA);
+    },
+    snapshot: () => ({ ...nameSnapshot(shell), setting }),
+    restore(data: Record<string, unknown>): void {
+      restoreName(shell, data);
+      setting = readNum(data, 'setting', setting, 1, 700);
+      refresh();
+    },
+    reset(): void {
+      leftArrowG.setAttribute('transform', '');
+      rightArrowG.setAttribute('transform', '');
+      shell.setInfo([]);
+      clearFlow([...leadA, ...leadB, ...leftPath, ...rightPath, ...leftArrow, ...rightArrow]);
     },
   });
 }

@@ -227,4 +227,49 @@ describe('example circuits behave as described', () => {
     expect(p(f, byType(comps, 'hydPumpLS'), 'P')).toBeGreaterThan(240);
     expect(Math.abs(-flowOut(f, cyls[0]!, 'A') - qSlow) / qSlow).toBeLessThan(0.05);
   });
+
+  it('hydrostatic transmission: speed and direction from the swash plate, charge holds the low side', () => {
+    const comps = load('Hydrostatic transmission');
+    const pump = byType(comps, 'hydPumpLoop');
+    const motor = byType(comps, 'hydMotor');
+    const swash = (pct: number): void => {
+      const input = pump.el.querySelector<HTMLInputElement>('input.swashLever')!;
+      input.value = String(pct);
+      input.dispatchEvent(new Event('input'));
+    };
+    /** Motor speed (rpm) as its readout shows it. */
+    const rpm = (_f: HydFrame): number =>
+      Number(/n (-?\d+) rpm/.exec(motor.el.querySelector('.hydInfo')!.textContent ?? '')?.[1]);
+
+    // Neutral: motor stands, both loop lines sit at charge pressure.
+    let f = run(1);
+    expect(Math.abs(rpm(f))).toBeLessThan(5);
+    for (const port of ['A', 'B']) {
+      expect(p(f, pump, port)).toBeGreaterThan(17);
+      expect(p(f, pump, port)).toBeLessThan(22);
+    }
+
+    // 60 % one way: ~630 rpm (25.2 L/min into 40 cm³/rev, less leakage), Δp = 94 bar for 60 Nm.
+    swash(60);
+    f = run(1);
+    expect(rpm(f)).toBeGreaterThan(560);
+    expect(rpm(f)).toBeLessThan(635);
+    const dp = Math.abs(p(f, pump, 'A') - p(f, pump, 'B'));
+    expect(dp).toBeGreaterThan(92);
+    expect(dp).toBeLessThan(97);
+    expect(Math.min(p(f, pump, 'A'), p(f, pump, 'B'))).toBeGreaterThan(17); // low side charged
+
+    // Through zero to the other way: same speed, reversed; the high side swaps.
+    swash(-60);
+    f = run(1);
+    expect(rpm(f)).toBeLessThan(-560);
+    expect(p(f, pump, 'A')).toBeGreaterThan(p(f, pump, 'B') + 90);
+
+    // Overload: 300 Nm needs 471 bar - the cross-port relief caps the high side and the motor stalls.
+    motor.restore({ ...motor.snapshot(), torque: 300 });
+    f = run(1);
+    expect(Math.abs(rpm(f))).toBeLessThan(5);
+    expect(p(f, pump, 'A')).toBeGreaterThan(250);
+    expect(p(f, pump, 'A')).toBeLessThan(280);
+  });
 });

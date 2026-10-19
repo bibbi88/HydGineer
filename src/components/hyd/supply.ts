@@ -4,6 +4,8 @@ import { uid } from '../../core/ids';
 import { createPort, createPortLabel, createSvgEl } from '../shared/svgHelpers';
 import { clearFlow, paintFlow } from './flowPaint';
 import { getSignal } from '../../sim/signals';
+import { appState } from '../../app/AppState';
+import { Modes } from '../../app/modes';
 import {
   INK,
   STROKE,
@@ -29,6 +31,7 @@ export const HYD_RELIEF_TYPE = 'hydRelief';
 export const HYD_GAUGE_TYPE = 'hydGauge';
 export const HYD_PRESSURE_SWITCH_TYPE = 'hydPressureSwitch';
 export const HYD_ACCUMULATOR_TYPE = 'hydAccumulator';
+export const HYD_PUMP_LOOP_TYPE = 'hydPumpLoop';
 
 /** Pressure (bar) at which an unprotected pump outlet is capped - standing in for whatever
  * would burst first. A circuit reaching it has no working pressure relief. */
@@ -634,6 +637,175 @@ export function createHydAccumulator(compLayer: HTMLElement, x: number, y: numbe
       drawLevel();
       shell.setInfo([]);
       clearFlow(lead);
+    },
+  });
+}
+
+/**
+ * Over-centre variable-displacement pump for closed circuits (hydrostatic transmissions). Both
+ * ports are working ports: with the swash plate on one side of centre (lever right) it draws
+ * from A and delivers into B, past centre the other way round, at zero it delivers nothing - so the one
+ * lever sets the speed and direction of the motor it drives, steplessly.
+ *
+ * Its internal leakage goes to the case drain (tank) from whichever side is pressurised, so the
+ * closed loop slowly loses oil - which is why a closed circuit needs a charge pump feeding the
+ * low-pressure side through make-up check valves.
+ */
+export function createHydPumpLoop(compLayer: HTMLElement, x: number, y: number): Component {
+  const svgW = 100;
+  const svgH = 120;
+  const shell = createHydShell(
+    compLayer,
+    HYD_PUMP_LOOP_TYPE,
+    x,
+    y,
+    svgW,
+    svgH,
+    'Over-centre pump',
+    { x: 18, y: 36, w: 76, h: 48 },
+  );
+  const g = shell.g;
+  const cx = 40;
+  const cy = 60;
+  const r = 18;
+  g.appendChild(
+    createSvgEl('circle', { cx, cy, r, fill: '#fff', stroke: INK, 'stroke-width': STROKE }),
+  );
+  // Two outward triangles: a pump that can deliver from either port.
+  g.appendChild(
+    createSvgEl('polygon', {
+      points: `${cx},${cy - r + 1} ${cx - 7},${cy - r + 12} ${cx + 7},${cy - r + 12}`,
+      fill: INK,
+    }),
+  );
+  g.appendChild(
+    createSvgEl('polygon', {
+      points: `${cx},${cy + r - 1} ${cx - 7},${cy + r - 12} ${cx + 7},${cy + r - 12}`,
+      fill: INK,
+    }),
+  );
+  adjustArrow(g, cx, cy, 22);
+  // Leads drawn from each port into the pump.
+  const leadA = [line(g, cx, 10, cx, cy - r)];
+  const leadB = [line(g, cx, 110, cx, cy + r)];
+  // Case drain, dashed, to its own tank.
+  path(g, `M ${cx - r + 4} ${cy + 10} H 8 V 92`, {
+    'stroke-dasharray': '4 3',
+    'stroke-width': 1.5,
+  });
+  tankGlyph(g, 8, 92, 14, 8);
+  // Drive shaft and electric motor.
+  line(g, cx + r, cy - 2, 71, cy - 2, { 'stroke-width': 1.5 });
+  line(g, cx + r, cy + 2, 71, cy + 2, { 'stroke-width': 1.5 });
+  g.appendChild(
+    createSvgEl('circle', {
+      cx: 82,
+      cy,
+      r: 11,
+      fill: '#d8f5dc',
+      stroke: INK,
+      'stroke-width': STROKE,
+    }),
+  );
+  const m = createSvgEl('text', {
+    x: 82,
+    y: cy + 4,
+    'text-anchor': 'middle',
+    'font-size': 11,
+    'font-weight': 600,
+  });
+  m.textContent = 'M';
+  g.appendChild(m);
+  createPortLabel(g, cx + 8, 14, 'A', { anchor: 'start', fontSize: 10 });
+  createPortLabel(g, cx + 8, 112, 'B', { anchor: 'start', fontSize: 10 });
+  const ports = {
+    A: createPort(g, 'A', cx, 10, 'V'),
+    B: createPort(g, 'B', cx, 110, 'V'),
+  };
+  shell.setInfoSide('right');
+
+  // The swash-plate lever: a slider beside the pump while simulating (see app.css).
+  const lever = document.createElement('input');
+  lever.type = 'range';
+  lever.min = '-100';
+  lever.max = '100';
+  lever.step = '5';
+  lever.value = '0';
+  lever.className = 'swashLever';
+  lever.title =
+    'Swash plate: right = deliver from A, left = deliver from B, middle = zero (double-click to centre)';
+  for (const ev of ['mousedown', 'pointerdown', 'click', 'dblclick'] as const) {
+    lever.addEventListener(ev, (e) => e.stopPropagation());
+  }
+  shell.el.appendChild(lever);
+
+  let displacement = 28; // cm³/rev at full swash
+  let speed = 1500; // rpm
+  let etaV = 95; // % at rated pressure
+  let ratedPressure = 300; // bar
+  /** Swash plate, −1 … +1. */
+  let swash = 0;
+
+  lever.addEventListener('input', () => {
+    if (appState.mode === Modes.STOP) return;
+    swash = Number(lever.value) / 100;
+  });
+  lever.addEventListener('dblclick', () => {
+    swash = 0;
+    lever.value = '0';
+  });
+
+  function maxFlow(): number {
+    return (displacement * speed) / 1000;
+  }
+  /** Leakage per side, L/min per bar: (1 − ηv) of full flow lost at rated pressure. */
+  function leakCoef(): number {
+    return (maxFlow() * (1 - etaV / 100)) / Math.max(1, ratedPressure);
+  }
+
+  const comp = hydComponentBase(shell, HYD_PUMP_LOOP_TYPE, x, y, svgW, svgH, ports);
+  return Object.assign(comp, {
+    hydElements: (): HydElement[] => [
+      // Lever right (+): deliver out of B, drawing from A; left: the other way round.
+      { kind: 'loopPump', a: 'B', b: 'A', q: swash * maxFlow() },
+      { kind: 'tank', a: '_D' },
+      // Leakage to the case drain from each side (linear in pressure).
+      { kind: 'relief', a: 'A', b: '_D', set: 0, gain: leakCoef() },
+      { kind: 'relief', a: 'B', b: '_D', set: 0, gain: leakCoef() },
+      // Burst protection, should the circuit have no relief valves.
+      { kind: 'relief', a: 'A', b: '_D', set: PUMP_BURST_PRESSURE, gain: 100 },
+      { kind: 'relief', a: 'B', b: '_D', set: PUMP_BURST_PRESSURE, gain: 100 },
+    ],
+    step(_dt: number, ctx: SimStepContext): void {
+      const pA = ctx.pressureAt('A');
+      const pB = ctx.pressureAt('B');
+      const qA = ctx.flowAt('A'); // out of the pump at A
+      // Delivered flow: what leaves the outlet side (B with the lever right, A with it left).
+      const q = Math.max(0, swash >= 0 ? ctx.flowAt('B') : qA);
+      const dp = Math.abs(pA - pB);
+      const lines = [`swash ${swash > 0 ? '+' : ''}${Math.round(swash * 100)} %`];
+      if (Math.abs(swash) > 0.004) {
+        lines.push(`Q ${fmtFlow(q)} out of ${swash >= 0 ? 'B' : 'A'}`);
+        lines.push(`Δp ${fmtBar(dp)} · P ${((dp * q) / 600).toFixed(2)} kW`);
+      }
+      if (Math.max(pA, pB) > PUMP_BURST_PRESSURE * 0.95) lines.push('⚠ no pressure relief!');
+      shell.setInfo(lines);
+      paintFlow(leadA, pA, -qA);
+      paintFlow(leadB, pB, -ctx.flowAt('B'));
+    },
+    snapshot: () => ({ ...nameSnapshot(shell), displacement, speed, etaV, ratedPressure }),
+    restore(data: Record<string, unknown>): void {
+      restoreName(shell, data);
+      displacement = readNum(data, 'displacement', displacement, 0, 1000);
+      speed = readNum(data, 'speed', speed, 0, 10000);
+      etaV = readNum(data, 'etaV', etaV, 50, 100);
+      ratedPressure = readNum(data, 'ratedPressure', ratedPressure, 1, 1000);
+    },
+    reset(): void {
+      swash = 0;
+      lever.value = '0';
+      shell.setInfo([]);
+      clearFlow([...leadA, ...leadB]);
     },
   });
 }

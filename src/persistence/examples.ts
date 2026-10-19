@@ -428,6 +428,54 @@ export const EXAMPLES: Array<{ title: string; file: () => ProjectFileV1 }> = [
         b.wire(shuttle, 'OUT', supply.pump, 'LS');
       }),
   },
+  {
+    title: 'Hydrostatic transmission (closed loop)',
+    file: () =>
+      circuit('Example - hydrostatic transmission', (b) => {
+        // An over-centre pump drives the motor in a closed loop: the swash-plate slider beside
+        // the pump sets the motor's speed and direction steplessly, through zero. The motor's
+        // return oil goes straight back to the pump's inlet. A small charge pump (9 L/min, 20 bar)
+        // keeps the low-pressure line topped up through the make-up check valves, replacing what
+        // leaks to the pump's case drain; the cross-port relief valves limit the high side.
+        const pump = b.add('hydPumpLoop', 300, 360, { displacement: 28, speed: 1500 });
+        const motor = b.add('hydMotor', 1020, 360, { displacement: 40, torque: 60 });
+        const cross = b.add('hydCrossRelief', 860, 360, { setting: 250 });
+        const gA = b.add('hydGauge', 520, 240, { range: 400 });
+        const gB = b.add('hydGauge', 520, 390, { range: 400 });
+        // Junctions along the upper (A) and lower (B) loop lines.
+        const top = [520, 620, 860].map((x) => b.add('junction', x, 290, { orientation: 'V' }));
+        const bot = [520, 700, 860].map((x) => b.add('junction', x, 430, { orientation: 'V' }));
+        b.wire(pump, 'A', top[0]!, 'P');
+        b.wire(top[0]!, 'P', top[1]!, 'P');
+        b.wire(top[1]!, 'P', top[2]!, 'P');
+        b.wire(top[2]!, 'P', motor, 'B');
+        b.wire(pump, 'B', bot[0]!, 'P');
+        b.wire(bot[0]!, 'P', bot[1]!, 'P');
+        b.wire(bot[1]!, 'P', bot[2]!, 'P');
+        b.wire(bot[2]!, 'P', motor, 'A');
+        b.wire(gA, 'P', top[0]!, 'P');
+        b.wire(gB, 'P', bot[0]!, 'P');
+        b.wire(cross, 'A', top[2]!, 'P');
+        b.wire(cross, 'B', bot[2]!, 'P');
+        // Charge circuit: the charge line runs between the loop lines; one make-up check opens
+        // up into the A line, the other down into the B line - whichever is the low side.
+        const charge = b.add('hydPump', 660, 700, { displacement: 6, speed: 1500 });
+        const jC = b.add('junction', 650, 360, { orientation: 'H' });
+        const jR = b.add('junction', 650, 540, { orientation: 'H' });
+        const chargeRelief = b.add('hydRelief', 480, 580, { setting: 20 });
+        const chargeTank = b.add('hydTank', 480, 720);
+        const ckA = b.add('hydCheck', 620, 330);
+        const ckB = b.add('hydCheck', 700, 390, {}, 180);
+        b.wire(charge, 'P', jR, 'P');
+        b.wire(jR, 'P', jC, 'P');
+        b.wire(jR, 'P', chargeRelief, 'P');
+        b.wire(chargeRelief, 'T', chargeTank, 'T');
+        b.wire(jC, 'P', ckA, 'IN');
+        b.wire(ckA, 'OUT', top[1]!, 'P');
+        b.wire(jC, 'P', ckB, 'IN');
+        b.wire(ckB, 'OUT', bot[1]!, 'P');
+      }),
+  },
 ];
 
 /** Two equal cylinders with very different loads (3 kN and 15 kN) fed through a flow divider

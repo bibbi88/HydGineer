@@ -39,6 +39,7 @@ export function createHydShell(
   info.className = 'hydInfo';
   shell.el.appendChild(info);
   let last = '';
+  let lastRot = 0;
   return {
     ...shell,
     g,
@@ -46,6 +47,15 @@ export function createHydShell(
       info.dataset.side = side;
     },
     setInfo(lines: string[]): void {
+      // The readout turns with a rotated component (it lives inside its element) - turn it back
+      // so it always reads upright.
+      const rot = ((Number(shell.el.dataset.rot ?? '0') % 360) + 360) % 360;
+      if (rot !== lastRot) {
+        lastRot = rot;
+        const side = info.dataset.side ?? 'below';
+        const base = side === 'left' || side === 'right' ? 'translateY(-50%)' : 'translateX(-50%)';
+        info.style.transform = rot ? `${base} rotate(${-rot}deg)` : '';
+      }
       const text = lines.join('\n');
       if (text === last) return;
       last = text;

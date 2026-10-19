@@ -130,6 +130,10 @@ export type HydElement =
       k: number;
       band: number;
     }
+  /** Closed-loop (over-centre) pump: draws `q` from `b` and delivers it into `a`; a negative
+   * `q` (swash plate past centre) reverses the flow. No tank connection - any leakage is
+   * modelled separately by the component. */
+  | { kind: 'loopPump'; a: string; b: string; q: number }
   /** Tank (reservoir) connection: holds this node at 0 bar. */
   | { kind: 'tank'; a: string }
   /** Linear actuator. Extending (v > 0) draws areaA·v from `a` and pushes areaB·v into `b`.
@@ -550,6 +554,8 @@ export function solveHydraulics(input: HydInput): HydSolution {
       }
       case 'tank':
         return { qa: 0, qb: 0, value: 0 };
+      case 'loopPump':
+        return { qa: -e.q, qb: e.q, value: e.q };
       case 'piston': {
         const v = xx[varOfElement[i]!]!;
         return { qa: e.areaA * v * 6, qb: -e.areaB * v * 6, value: v };

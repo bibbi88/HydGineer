@@ -8,6 +8,8 @@ import {
   createHydPressureSwitch,
   createHydAccumulator,
   HYD_PUMP_LS_TYPE,
+  createHydPumpLoop,
+  HYD_PUMP_LOOP_TYPE,
   HYD_ACCUMULATOR_TYPE,
   HYD_PUMP_TYPE,
   HYD_TANK_TYPE,
@@ -31,6 +33,8 @@ import {
   HYD_SHUTTLE_TYPE,
   createHydPressureCompensator,
   HYD_PRESSURE_COMP_TYPE,
+  createHydCrossRelief,
+  HYD_CROSS_RELIEF_TYPE,
   HYD_COUNTERBALANCE_TYPE,
   HYD_VALVE_43_TYPE,
   HYD_VALVE_42_TYPE,
@@ -135,6 +139,15 @@ export const componentRegistry = new Map<string, RegistryEntry>([
     },
   ],
   [
+    HYD_PUMP_LOOP_TYPE,
+    {
+      factory: (ctx, x, y) => createHydPumpLoop(ctx.compLayer, x, y),
+      label: 'Over-centre pump (closed loop)',
+      placeable: true,
+      category: ComponentCategory.SUPPLY,
+    },
+  ],
+  [
     HYD_ACCUMULATOR_TYPE,
     {
       factory: (ctx, x, y) => createHydAccumulator(ctx.compLayer, x, y),
@@ -211,6 +224,15 @@ export const componentRegistry = new Map<string, RegistryEntry>([
     {
       factory: (ctx, x, y) => createHydPressureCompensator(ctx.compLayer, x, y),
       label: 'Pressure compensator (LS)',
+      placeable: true,
+      category: ComponentCategory.PRESSURE,
+    },
+  ],
+  [
+    HYD_CROSS_RELIEF_TYPE,
+    {
+      factory: (ctx, x, y) => createHydCrossRelief(ctx.compLayer, x, y),
+      label: 'Cross-port relief valves',
       placeable: true,
       category: ComponentCategory.PRESSURE,
     },

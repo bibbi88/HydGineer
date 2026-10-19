@@ -37,6 +37,9 @@ continuation, see `src/sim/hydraulics.ts`):
   proportional LS valves meter flow by spool stroke; a section compensator - built into the
   valve (off by default) or as a separate 2-way pressure compensator - holds a fixed Δp across
   each section's metering notch, so several sections share flow by lever position, not by load.
+- **Hydrostatic transmission**: an over-centre pump (flow = swash × displacement × speed, either
+  direction, leakage to case drain) drives a motor in a closed loop; a charge pump tops up the
+  low side through make-up checks, cross-port relief valves limit the high side.
 - **Compressibility** (bulk modulus 10 000 bar): trapped oil keeps its pressure and pressure
   builds up over time; steady states are the exact incompressible ones.
 
@@ -44,12 +47,13 @@ Units: bar (gauge), L/min, N, Nm, mm, cm³/rev.
 
 ## Components
 
-- Power supply: pump unit, fixed, pressure-compensated or load-sensing variable displacement (motor can be
+- Power supply: pump unit, fixed, pressure-compensated or load-sensing variable displacement;
+  over-centre pump for closed loops (motor can be
   switched by a relay or pressure switch), tank, gas-loaded accumulator
 - Directional valves: 4/3 (closed / tandem / float / open centre) and 4/2, solenoid or hand lever;
   proportional load-sensing valve (lever slider or solenoids) with LS port; shuttle valve
-- Pressure control: relief valve, pressure-reducing valve, counterbalance valve, 2-way pressure
-  compensator (LS)
+- Pressure control: relief valve, cross-port relief valves, pressure-reducing valve,
+  counterbalance valve, 2-way pressure compensator (LS)
 - Flow & check: check valve, pilot-operated check valve, throttle, one-way flow control,
   pressure-compensated flow control (optional bypass check), flow divider (spool with
   compensating sleeve, and rotary gear type)
@@ -61,7 +65,7 @@ The **Examples** menu in the toolbar loads ready-made circuits (meter-out speed 
 electro-hydraulic control, motor speed control, load holding, and synchronising two
 cylinders with each type of flow divider, accumulator charging, counterbalance valve,
 pressure-compensated pump, inertia and pressure peaks, load sensing with one and two
-sections, with and without pressure compensators). Flow dividers and directional valves
+sections, with and without pressure compensators, hydrostatic transmission). Flow dividers and directional valves
 can be swapped type in place from the inspector, or by dropping the other type onto them.
 
 ## Running

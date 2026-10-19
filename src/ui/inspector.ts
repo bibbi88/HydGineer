@@ -21,6 +21,7 @@ import {
   HYD_PRESSURE_SWITCH_TYPE,
   HYD_ACCUMULATOR_TYPE,
   HYD_PUMP_LS_TYPE,
+  HYD_PUMP_LOOP_TYPE,
 } from '../components/hyd/supply';
 import {
   CENTER_OPTIONS,
@@ -35,6 +36,7 @@ import {
   HYD_COUNTERBALANCE_TYPE,
   HYD_VALVE_LS_TYPE,
   HYD_PRESSURE_COMP_TYPE,
+  HYD_CROSS_RELIEF_TYPE,
 } from '../components/hyd/valves';
 import {
   HYD_CYLINDER_DOUBLE_TYPE,
@@ -335,6 +337,43 @@ const INSPECTOR_FIELDS: Record<string, InspectorField[]> = {
       min: 0.5,
       max: 2000,
       step: 1,
+    },
+  ],
+  [HYD_PUMP_LOOP_TYPE]: [
+    {
+      kind: 'number',
+      key: 'displacement',
+      label: 'Max displacement (cm³/rev)',
+      min: 0,
+      max: 1000,
+      step: 0.5,
+    },
+    { kind: 'number', key: 'speed', label: 'Drive speed (rpm)', min: 0, max: 10000, step: 10 },
+    {
+      kind: 'number',
+      key: 'etaV',
+      label: 'Volumetric efficiency at rated pressure (%)',
+      min: 50,
+      max: 100,
+      step: 1,
+    },
+    {
+      kind: 'number',
+      key: 'ratedPressure',
+      label: 'Rated pressure (bar)',
+      min: 1,
+      max: 1000,
+      step: 10,
+    },
+  ],
+  [HYD_CROSS_RELIEF_TYPE]: [
+    {
+      kind: 'number',
+      key: 'setting',
+      label: 'Cracking pressure, both valves (bar)',
+      min: 1,
+      max: 700,
+      step: 5,
     },
   ],
   [HYD_ACCUMULATOR_TYPE]: [

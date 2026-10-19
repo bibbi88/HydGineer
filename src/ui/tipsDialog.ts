@@ -109,6 +109,11 @@ const TIP_SECTIONS: TipSection[] = [
         'a lightly loaded section takes most of the oil unless each one has a pressure ' +
         'compensator: either tick "Section pressure compensator" on the valve, or fit a separate ' +
         'Pressure compensator in front of its P port with its LS port on that section’s LS line.',
+      'Hydrostatic transmission: the over-centre pump has two working ports and no tank port. ' +
+        'Drag its swash-plate slider (beside the pump while simulating) to set the motor’s ' +
+        'speed and direction, through zero. Its leakage goes to the case drain, so the closed ' +
+        'loop needs a charge pump feeding the low-pressure line through make-up check valves; ' +
+        'the cross-port relief valves limit the pressure in both directions.',
       'Flow dividers, pumps and directional valves can be switched type in place: pick another type ' +
         'in the inspector, or drag the other type from the library onto it (it outlines green). ' +
         'Wires, position and rotation are kept.',

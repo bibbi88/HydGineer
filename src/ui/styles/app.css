@@ -1693,3 +1693,18 @@ circle.hydPathReturn {
 .lsPassage.hydPathFlow {
   stroke-dasharray: 4 4;
 }
+
+/* Swash-plate lever of an over-centre pump: beside the pump, only while simulating. */
+.swashLever {
+  position: absolute;
+  /* Right of the pump, above its readout: clear of both loop lines. */
+  top: 6px;
+  left: calc(100% + 2px);
+  width: 92px;
+  accent-color: var(--accent);
+  cursor: ew-resize;
+}
+
+.workspace:not(.simulating) .swashLever {
+  display: none;
+}
