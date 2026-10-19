@@ -40,6 +40,8 @@ continuation, see `src/sim/hydraulics.ts`):
 - **Hydrostatic transmission**: an over-centre pump (flow = swash × displacement × speed, either
   direction, leakage to case drain) drives a motor in a closed loop; a charge pump tops up the
   low side through make-up checks, cross-port relief valves limit the high side.
+- **Variable-displacement motor**: displacement set by a slider between a minimum stop and the
+  maximum; smaller displacement gives n = Q/V faster and Δp = 20π·T/V higher at the same power.
 - **Compressibility** (bulk modulus 10 000 bar): trapped oil keeps its pressure and pressure
   builds up over time; steady states are the exact incompressible ones.
 
@@ -58,6 +60,7 @@ Units: bar (gauge), L/min, N, Nm, mm, cm³/rev.
   pressure-compensated flow control (optional bypass check), flow divider (spool with
   compensating sleeve, and rotary gear type)
 - Actuators: double-acting cylinder, single-acting spring-return cylinder, hydraulic motor
+  (fixed or variable displacement)
 - Measuring: pressure gauge, pressure switch (publishes a signal, e.g. S1)
 - Electrical: +24 V / 0 V, push buttons, contacts, relay coils, solenoids, lamps, PLC
 
@@ -65,8 +68,8 @@ The **Examples** menu in the toolbar loads ready-made circuits (meter-out speed 
 electro-hydraulic control, motor speed control, load holding, and synchronising two
 cylinders with each type of flow divider, accumulator charging, counterbalance valve,
 pressure-compensated pump, inertia and pressure peaks, load sensing with one and two
-sections, with and without pressure compensators, hydrostatic transmission). Flow dividers and directional valves
-can be swapped type in place from the inspector, or by dropping the other type onto them.
+sections, with and without pressure compensators, hydrostatic transmission with fixed or
+variable motor). Flow dividers, pumps, motors and directional valves can be swapped type in place from the inspector, or by dropping the other type onto them.
 
 ## Running
 

@@ -52,6 +52,7 @@ import {
   HYD_CYLINDER_DOUBLE_TYPE,
   HYD_CYLINDER_SINGLE_TYPE,
   HYD_MOTOR_TYPE,
+  HYD_MOTOR_VAR_TYPE,
 } from './hyd/actuators';
 import {
   createHydSpoolDivider,
@@ -323,6 +324,15 @@ export const componentRegistry = new Map<string, RegistryEntry>([
     {
       factory: (ctx, x, y) => createHydMotor(ctx.compLayer, x, y),
       label: 'Hydraulic motor',
+      placeable: true,
+      category: ComponentCategory.ACTUATORS,
+    },
+  ],
+  [
+    HYD_MOTOR_VAR_TYPE,
+    {
+      factory: (ctx, x, y) => createHydMotor(ctx.compLayer, x, y, 'variable'),
+      label: 'Hydraulic motor, variable',
       placeable: true,
       category: ComponentCategory.ACTUATORS,
     },

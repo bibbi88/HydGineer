@@ -1,6 +1,7 @@
 import type { Component, SimStepContext } from '../../core/types';
 import { circleAreaCm2, type HydElement } from '../../sim/hydraulics';
 import { appState } from '../../app/AppState';
+import { Modes } from '../../app/modes';
 import { createPort, createPortLabel, createSvgEl } from '../shared/svgHelpers';
 import { nextCylinderLetter, isCylinderLetterInUse } from '../shared/letters';
 import {
@@ -18,6 +19,8 @@ import {
   hydComponentBase,
   line,
   nameSnapshot,
+  adjustArrow,
+  fmtBar,
   path,
   readNum,
   restoreName,
@@ -27,6 +30,7 @@ import {
 export const HYD_CYLINDER_DOUBLE_TYPE = 'hydCylinderDouble';
 export const HYD_CYLINDER_SINGLE_TYPE = 'hydCylinderSingle';
 export const HYD_MOTOR_TYPE = 'hydMotor';
+export const HYD_MOTOR_VAR_TYPE = 'hydMotorVar';
 
 const BODY_X = 10;
 const BODY_W = 180;
@@ -374,14 +378,26 @@ export function createHydCylinderSingle(compLayer: HTMLElement, x: number, y: nu
 }
 
 /**
- * Fixed-displacement hydraulic motor, bidirectional. Speed n = Q / V; the pressure difference
- * across it is what the load torque needs: Δp = 20π·T / V (bar, Nm, cm³/rev). The resisting
- * torque acts against rotation in either direction; below it the motor stalls.
+ * Hydraulic motor, bidirectional. Speed n = Q / V; the pressure difference across it is what the
+ * load torque needs: Δp = 20π·T / V (bar, Nm, cm³/rev). The resisting torque acts against
+ * rotation in either direction; below it the motor stalls.
+ *
+ * The variable variant has an adjustable displacement (a slider beside it while simulating),
+ * between a minimum stop and its maximum: a smaller displacement turns faster on the same flow
+ * but needs more pressure for the same torque - the hydraulic power, Δp·Q, stays the same.
  */
-export function createHydMotor(compLayer: HTMLElement, x: number, y: number): Component {
+export function createHydMotor(
+  compLayer: HTMLElement,
+  x: number,
+  y: number,
+  variant: 'fixed' | 'variable' = 'fixed',
+): Component {
+  const variable = variant === 'variable';
+  const type = variable ? HYD_MOTOR_VAR_TYPE : HYD_MOTOR_TYPE;
   const svgW = 80;
   const svgH = 100;
-  const shell = createHydShell(compLayer, HYD_MOTOR_TYPE, x, y, svgW, svgH, 'Hydraulic motor', {
+  const title = variable ? 'Hydraulic motor, variable' : 'Hydraulic motor';
+  const shell = createHydShell(compLayer, type, x, y, svgW, svgH, title, {
     x: 20,
     y: 30,
     w: 58,
@@ -409,6 +425,8 @@ export function createHydMotor(compLayer: HTMLElement, x: number, y: number): Co
   );
   line(g, cx, 10, cx, cy - r);
   line(g, cx, 90, cx, cy + r);
+  // Variable displacement: the ISO adjustment arrow through the motor.
+  if (variable) adjustArrow(g, cx, cy, 22);
   line(g, cx + r, cy - 2, 62, cy - 2, { 'stroke-width': 1.5 });
   line(g, cx + r, cy + 2, 62, cy + 2, { 'stroke-width': 1.5 });
   g.appendChild(
@@ -422,34 +440,91 @@ export function createHydMotor(compLayer: HTMLElement, x: number, y: number): Co
     B: createPort(g, 'B', cx, 10, 'V'),
   };
   shell.setInfoSide('right');
-  let displacement = 20;
+  let displacement = 20; // cm³/rev (the maximum, for the variable motor)
   let torque = 20;
   let angle = 0;
-  const comp = hydComponentBase(shell, HYD_MOTOR_TYPE, x, y, svgW, svgH, ports);
+  /** Variable motor: minimum-displacement stop and starting setting, % of the maximum. */
+  let minPct = 30;
+  let setting = 100;
+  /** Displacement now, % of the maximum. */
+  let pct = 100;
+
+  // The displacement lever: a slider beside the motor while simulating (see app.css).
+  const lever = variable ? document.createElement('input') : null;
+  if (lever) {
+    lever.type = 'range';
+    lever.max = '100';
+    lever.step = '5';
+    lever.className = 'swashLever';
+    lever.title = 'Motor displacement: right = maximum, left = minimum (double-click to reset)';
+    for (const ev of ['mousedown', 'pointerdown', 'click', 'dblclick'] as const) {
+      lever.addEventListener(ev, (e) => e.stopPropagation());
+    }
+    lever.addEventListener('input', () => {
+      if (appState.mode === Modes.STOP) return;
+      pct = clampPct(Number(lever.value));
+    });
+    lever.addEventListener('dblclick', () => {
+      pct = clampPct(setting);
+      syncLever();
+    });
+    shell.el.appendChild(lever);
+  }
+  function clampPct(v: number): number {
+    return Math.min(100, Math.max(minPct, v));
+  }
+  function syncLever(): void {
+    if (!lever) return;
+    lever.min = String(minPct);
+    lever.value = String(pct);
+  }
+  syncLever();
+  /** Displacement in use, cm³/rev. */
+  function disp(): number {
+    return variable ? (displacement * pct) / 100 : displacement;
+  }
+
+  const comp = hydComponentBase(shell, type, x, y, svgW, svgH, ports);
   return Object.assign(comp, {
-    hydElements: (): HydElement[] => [
-      { kind: 'motor', a: 'A', b: 'B', disp: displacement, torque },
-    ],
+    hydElements: (): HydElement[] => [{ kind: 'motor', a: 'A', b: 'B', disp: disp(), torque }],
     step(dt: number, ctx: SimStepContext): void {
       const n = ctx.elementValue(0);
       // Shown at a slowed-down rate so it stays readable at real speeds.
       angle = (angle + n * 360 * dt * 0.1) % 360;
       spoke.setAttribute('transform', `rotate(${angle} 70 ${cy})`);
       const dp = ctx.pressureAt('A') - ctx.pressureAt('B');
-      const t = (dp * displacement) / (20 * Math.PI);
+      const t = (dp * disp()) / (20 * Math.PI);
       const rpm = Math.abs(n) < 1e-4 ? 0 : n * 60;
-      shell.setInfo([
+      const lines = [
         `n ${rpm.toFixed(0)} rpm`,
         `T ${t.toFixed(1)} Nm · P ${((t * 2 * Math.PI * n) / 1000).toFixed(2)} kW`,
-      ]);
+      ];
+      if (variable) {
+        lines.unshift(`V ${disp().toFixed(1)} cm³/rev (${Math.round(pct)} %)`);
+        lines.push(`Δp ${fmtBar(Math.abs(dp))}`);
+      }
+      shell.setInfo(lines);
     },
-    snapshot: () => ({ ...nameSnapshot(shell), displacement, torque }),
+    snapshot: () => ({
+      ...nameSnapshot(shell),
+      displacement,
+      torque,
+      ...(variable ? { minPct, setting } : {}),
+    }),
     restore(data: Record<string, unknown>): void {
       restoreName(shell, data);
       displacement = readNum(data, 'displacement', displacement, 0.1, 10000);
       torque = readNum(data, 'torque', torque, 0, 1e6);
+      if (variable) {
+        minPct = readNum(data, 'minPct', minPct, 5, 100);
+        setting = readNum(data, 'setting', setting, 5, 100);
+        pct = clampPct(setting);
+        syncLever();
+      }
     },
     reset(): void {
+      pct = clampPct(setting);
+      syncLever();
       angle = 0;
       spoke.setAttribute('transform', '');
       shell.setInfo([]);

@@ -42,6 +42,7 @@ import {
   HYD_CYLINDER_DOUBLE_TYPE,
   HYD_CYLINDER_SINGLE_TYPE,
   HYD_MOTOR_TYPE,
+  HYD_MOTOR_VAR_TYPE,
 } from '../components/hyd/actuators';
 import { HYD_SPOOL_DIVIDER_TYPE, HYD_ROTARY_DIVIDER_TYPE } from '../components/hyd/dividers';
 import {
@@ -552,6 +553,7 @@ const INSPECTOR_FIELDS: Record<string, InspectorField[]> = {
     { kind: 'sensorList', arrayKey: 'sensors', min: 0, max: 100, step: 1 },
   ],
   [HYD_MOTOR_TYPE]: [
+    { kind: 'actuatorMode', label: 'Motor type', options: swapFamilyOf(HYD_MOTOR_TYPE) },
     {
       kind: 'number',
       key: 'displacement',
@@ -559,6 +561,34 @@ const INSPECTOR_FIELDS: Record<string, InspectorField[]> = {
       min: 0.1,
       max: 10000,
       step: 1,
+    },
+    { kind: 'number', key: 'torque', label: 'Load torque (Nm)', min: 0, step: 1 },
+  ],
+  [HYD_MOTOR_VAR_TYPE]: [
+    { kind: 'actuatorMode', label: 'Motor type', options: swapFamilyOf(HYD_MOTOR_VAR_TYPE) },
+    {
+      kind: 'number',
+      key: 'displacement',
+      label: 'Max displacement (cm³/rev)',
+      min: 0.1,
+      max: 10000,
+      step: 1,
+    },
+    {
+      kind: 'number',
+      key: 'minPct',
+      label: 'Min displacement (% of max)',
+      min: 5,
+      max: 100,
+      step: 5,
+    },
+    {
+      kind: 'number',
+      key: 'setting',
+      label: 'Starting displacement (%)',
+      min: 5,
+      max: 100,
+      step: 5,
     },
     { kind: 'number', key: 'torque', label: 'Load torque (Nm)', min: 0, step: 1 },
   ],

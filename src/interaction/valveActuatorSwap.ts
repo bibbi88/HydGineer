@@ -18,6 +18,7 @@ import {
 import { HYD_ROTARY_DIVIDER_TYPE, HYD_SPOOL_DIVIDER_TYPE } from '../components/hyd/dividers';
 import { HYD_VALVE_42_TYPE, HYD_VALVE_43_TYPE, HYD_VALVE_LS_TYPE } from '../components/hyd/valves';
 import { HYD_PUMP_LS_TYPE, HYD_PUMP_TYPE } from '../components/hyd/supply';
+import { HYD_MOTOR_TYPE, HYD_MOTOR_VAR_TYPE } from '../components/hyd/actuators';
 
 /**
  * Groups of interchangeable component types: same job, same port names, so one can replace the
@@ -38,11 +39,19 @@ export const SWAP_FAMILIES: Array<Array<{ type: string; label: string }>> = [
     { type: HYD_PUMP_TYPE, label: 'Fixed or pressure-compensated' },
     { type: HYD_PUMP_LS_TYPE, label: 'Load-sensing (LS port)' },
   ],
+  [
+    { type: HYD_MOTOR_TYPE, label: 'Fixed displacement' },
+    { type: HYD_MOTOR_VAR_TYPE, label: 'Variable displacement' },
+  ],
 ];
 
 /** The other types `type` can be swapped with (empty if it has no family). */
 export function swapFamilyOf(type: string): Array<{ type: string; label: string }> {
   return SWAP_FAMILIES.find((f) => f.some((m) => m.type === type)) ?? [];
+}
+
+function isMotor(type: string): boolean {
+  return type === HYD_MOTOR_TYPE || type === HYD_MOTOR_VAR_TYPE;
 }
 
 export function canSwap(fromType: string, toType: string): boolean {
@@ -77,7 +86,8 @@ export function swapComponentType(comp: Component, newType: string): void {
   const { x, y } = comp;
   // Contact <-> push button keeps its NO/NC choice, relay coil <-> solenoid keeps its name;
   // other swaps have no such fields.
-  const { normallyClosed, key, showName, customName } = comp.snapshot() as Record<string, unknown>;
+  const { normallyClosed, key, showName, customName, displacement, torque } =
+    comp.snapshot() as Record<string, unknown>;
   const rotation = getComponentRotation(comp);
   const mirrored = comp.el.dataset.mirror === '1';
   const keepsKey =
@@ -99,6 +109,10 @@ export function swapComponentType(comp: Component, newType: string): void {
     const next = spawnComponent(newType, ctxRef!, viewportRef!, x, y);
     if (normallyClosed !== undefined) next.restore({ ...next.snapshot(), normallyClosed });
     if (keepsKey && typeof key === 'string') next.restore({ ...next.snapshot(), key });
+    // Fixed <-> variable motor keeps its size and load.
+    if (isMotor(comp.type) && isMotor(newType)) {
+      next.restore({ ...next.snapshot(), displacement, torque });
+    }
     // Same place on the drawing: orientation and naming carry over to the replacement.
     if (rotation) setComponentRotation(next, rotation);
     if (mirrored) setComponentMirrored(next, true);

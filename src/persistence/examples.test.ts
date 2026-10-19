@@ -272,4 +272,52 @@ describe('example circuits behave as described', () => {
     expect(p(f, pump, 'A')).toBeGreaterThan(250);
     expect(p(f, pump, 'A')).toBeLessThan(280);
   });
+
+  it('variable motor: smaller displacement - faster, but more pressure for the same torque', () => {
+    const comps = load('Hydrostatic transmission with variable motor');
+    const pump = byType(comps, 'hydPumpLoop');
+    const motor = byType(comps, 'hydMotorVar');
+    const slide = (c: Component, pct: number): void => {
+      const input = c.el.querySelector<HTMLInputElement>('input.swashLever')!;
+      input.value = String(pct);
+      input.dispatchEvent(new Event('input'));
+    };
+    const rpm = (): number =>
+      Number(/n (-?\d+) rpm/.exec(motor.el.querySelector('.hydInfo')!.textContent ?? '')?.[1]);
+    const dp = (f: HydFrame): number => p(f, pump, 'B') - p(f, pump, 'A');
+
+    // Full swash, full motor displacement: as the fixed-motor transmission at 100 %.
+    slide(pump, 100);
+    let f = run(1);
+    expect(rpm()).toBeGreaterThan(980);
+    expect(rpm()).toBeLessThan(1060);
+    expect(dp(f)).toBeGreaterThan(92);
+    expect(dp(f)).toBeLessThan(97);
+
+    // Half the displacement: about twice the speed, twice the Δp (20π·60/20 = 188 bar).
+    slide(motor, 50);
+    f = run(1);
+    expect(rpm()).toBeGreaterThan(1950);
+    expect(rpm()).toBeLessThan(2100);
+    expect(dp(f)).toBeGreaterThan(185);
+    expect(dp(f)).toBeLessThan(192);
+
+    // 40 %: 236 bar is still below the 250 bar cross-port reliefs.
+    slide(motor, 40);
+    f = run(1);
+    expect(rpm()).toBeGreaterThan(2400);
+    expect(dp(f)).toBeGreaterThan(232);
+    expect(dp(f)).toBeLessThan(240);
+
+    // 30 % would need 314 bar: the cross-port relief opens and the motor stalls.
+    slide(motor, 30);
+    f = run(1);
+    expect(Math.abs(rpm())).toBeLessThan(5);
+    expect(dp(f)).toBeGreaterThan(245);
+    expect(dp(f)).toBeLessThan(262);
+
+    // The slider stops at the minimum-displacement setting.
+    slide(motor, 0);
+    expect(motor.el.querySelector('.hydInfo')!.textContent).toContain('(30 %)');
+  });
 });

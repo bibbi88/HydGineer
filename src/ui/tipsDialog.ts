@@ -114,7 +114,11 @@ const TIP_SECTIONS: TipSection[] = [
         'speed and direction, through zero. Its leakage goes to the case drain, so the closed ' +
         'loop needs a charge pump feeding the low-pressure line through make-up check valves; ' +
         'the cross-port relief valves limit the pressure in both directions.',
-      'Flow dividers, pumps and directional valves can be switched type in place: pick another type ' +
+      'Variable motor: drag the displacement slider beside it while simulating (it stops at the ' +
+        'minimum-displacement setting). Less displacement turns faster on the same flow, but the ' +
+        'same load torque then needs more pressure (Δp = 20π·T / V) - the power stays the same. ' +
+        'Typical use: pump to full swash first, then reduce the motor for top speed.',
+      'Flow dividers, pumps, motors and directional valves can be switched type in place: pick another type ' +
         'in the inspector, or drag the other type from the library onto it (it outlines green). ' +
         'Wires, position and rotation are kept.',
       'Hand-lever valves are switched by clicking the left or right half of the symbol while the ' +

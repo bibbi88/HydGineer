@@ -14,8 +14,14 @@ import { fitViewToWorldRect } from './fitViewToBounds';
  *
  * A no-op only when there's nothing at all to fit around: no components and no frame.
  */
-export function zoomToFit(viewport: ViewportAdapter, workspaceEl: HTMLElement): void {
+export function zoomToFit(
+  viewport: ViewportAdapter,
+  workspaceEl: HTMLElement,
+  /** Extra world-space room right of the drawing - for the readouts and sliders that appear
+   * beside pumps and motors only while simulating, so a freshly loaded example leaves space. */
+  extraRight = 0,
+): void {
   const bounds = unionBounds(computeContentBounds(), getPageFrameWorldBounds());
   if (!bounds) return;
-  fitViewToWorldRect(viewport, workspaceEl, bounds);
+  fitViewToWorldRect(viewport, workspaceEl, { ...bounds, maxX: bounds.maxX + extraRight });
 }

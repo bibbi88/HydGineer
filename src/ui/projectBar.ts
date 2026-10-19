@@ -11,6 +11,9 @@ import { zoomToFit } from '../interaction/zoomToFit';
 import { appState } from '../app/AppState';
 import { canEdit } from '../app/modes';
 
+/** World px kept free right of an example's drawing for its readouts (see zoomToFit). */
+const EXAMPLE_READOUT_ROOM = 130;
+
 export interface ProjectBarRefs {
   getName(): string;
   setName(name: string): void;
@@ -76,7 +79,8 @@ export function renderProjectBar(
     loadProject(file, ctx, viewport);
     nameInput.value = file.name;
     appState.markDirty();
-    requestAnimationFrame(() => zoomToFit(viewport, workspaceEl));
+    // Room on the right for the simulation readouts beside the right-most components.
+    requestAnimationFrame(() => zoomToFit(viewport, workspaceEl, EXAMPLE_READOUT_ROOM));
   });
 
   container.append(nameInput, saveBtn, loadBtn, exportBtn, examples);
