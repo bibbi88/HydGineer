@@ -192,8 +192,30 @@ describe('PLC editor: editing a block', () => {
   it('changes an input variable', () => {
     open();
     selectNode('i1');
-    change(propsSelect(), 'Q0.0');
+    change(propsSelect(), 'I0.3');
 
+    expect(program()).toBe('T1 = TON(I0.0 & I0.3, 2)\nQ0.0 = T1.Q');
+  });
+
+  it('offers only inputs and constants as input variables, not outputs', () => {
+    open();
+    const options = (sel: HTMLSelectElement): string[] => [...sel.options].map((o) => o.value);
+    const allowed = ['I0.0', 'I0.1', 'I0.2', 'I0.3', 'TRUE', 'FALSE'];
+
+    expect(options(document.querySelector('.plcPalette select') as HTMLSelectElement)).toEqual(
+      allowed,
+    );
+    selectNode('i1');
+    expect(options(propsSelect())).toEqual(allowed);
+  });
+
+  it('still shows an output an older diagram reads back as an input', () => {
+    const graph = sampleGraph();
+    graph.nodes[1] = { id: 'i1', kind: 'signal', ref: 'Q0.0', x: 70, y: 120 };
+    open(graph);
+    selectNode('i1');
+
+    expect(propsSelect().value).toBe('Q0.0');
     expect(program()).toBe('T1 = TON(I0.0 & Q0.0, 2)\nQ0.0 = T1.Q');
   });
 

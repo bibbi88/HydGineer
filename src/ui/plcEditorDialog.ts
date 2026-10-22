@@ -96,6 +96,11 @@ const GATE_SYMBOL: Record<GateOp, string> = { AND: '&', OR: '≥1', XOR: '=1' };
 const LOGIC_FUNCTIONS = [...GATE_OPS, 'NOT'] as const;
 type LogicFunction = (typeof LOGIC_FUNCTIONS)[number];
 
+/** What the Input list offers: the PLC's inputs and the constants, not its outputs (Q0.x). A
+ * diagram saved with an output read back as an input still loads and runs; its own picker keeps
+ * that value listed so selecting the block doesn't silently change it. */
+const INPUT_REFS = SIGNAL_REFS.filter((ref) => !ref.startsWith('Q'));
+
 function isTimer(fbType: FbType): boolean {
   return fbType === 'TON' || fbType === 'TOF' || fbType === 'TP';
 }
@@ -290,7 +295,7 @@ export function openPlcEditorDialog(opts: PlcEditorOptions): void {
 
   const signalGroup = paletteGroup('Input');
   const signalSelect = document.createElement('select');
-  for (const ref of SIGNAL_REFS) signalSelect.appendChild(new Option(ref, ref));
+  for (const ref of INPUT_REFS) signalSelect.appendChild(new Option(ref, ref));
   signalGroup.append(
     signalSelect,
     paletteButton('Add', 'Add an input variable', () => {
@@ -857,10 +862,14 @@ export function openPlcEditorDialog(opts: PlcEditorOptions): void {
           heading.textContent = 'Input';
           field(
             'Variable',
-            selectControl(SIGNAL_REFS, node.ref, (v) => {
-              node.ref = v;
-              render();
-            }),
+            selectControl(
+              INPUT_REFS.includes(node.ref) ? INPUT_REFS : [node.ref, ...INPUT_REFS],
+              node.ref,
+              (v) => {
+                node.ref = v;
+                render();
+              },
+            ),
           );
           break;
         case 'coil': {
