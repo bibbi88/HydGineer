@@ -5,6 +5,7 @@ import { placeableComponentsByCategory, type ComponentFactoryContext } from './c
 import { initLinking } from './interaction/linking';
 import { initMarquee } from './interaction/marquee';
 import { initKeyboard } from './interaction/keyboard';
+import { initPlcMonitor } from './ui/plcMonitor';
 import { initWireSplitting } from './interaction/wireSplitting';
 import {
   trySpliceOntoWire,
@@ -74,6 +75,7 @@ initWireHandles(handleLayer, viewport, workspaceEl);
 initLinking(connLayer, viewport, workspaceEl);
 initMarquee(workspaceEl, connLayer);
 initKeyboard();
+initPlcMonitor();
 initWireSplitting(compLayer, viewport, workspaceEl);
 initConfirmBeforeUnload();
 

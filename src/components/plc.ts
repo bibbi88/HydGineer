@@ -5,6 +5,9 @@ import { compileProgram, runScan, type CompiledProgram, type FbState } from '../
 import { cloneGraph, compileGraph, graphToText, type PlcGraph } from '../sim/plcGraph';
 import { buildComponentShell, createPort, createSvgEl } from './shared/svgHelpers';
 import { openPlcEditorDialog } from '../ui/plcEditorDialog';
+import { openPlcMonitor } from '../ui/plcMonitor';
+import { registerPlcLiveState } from './plcLiveState';
+import { Modes } from '../app/modes';
 
 export const PLC_TYPE = 'plc';
 
@@ -137,6 +140,8 @@ export function createPlc(compLayer: HTMLElement, x: number, y: number): Compone
   let program: CompiledProgram = compileProgram(programText);
   let outputs = new Map<string, boolean>(OUTPUTS.map((n) => [n, false]));
   let fbState = new Map<string, FbState>();
+  let lastInputs = new Map<string, boolean>(INPUTS.map((n) => [n, false]));
+  let powered = false;
 
   function refreshProgram(): void {
     if (legacyProgramText !== null) {
@@ -160,6 +165,12 @@ export function createPlc(compLayer: HTMLElement, x: number, y: number): Compone
 
   svg.addEventListener('dblclick', (e) => {
     e.stopPropagation();
+    // While simulating, the program is watched, not edited - editing mid-run would change it
+    // under running timers and counters.
+    if (appState.mode !== Modes.STOP) {
+      openPlcMonitor(comp);
+      return;
+    }
     openPlcEditorDialog({
       graph: legacyProgramText === null ? cloneGraph(graph) : null,
       onSave(nextGraph: PlcGraph) {
@@ -185,8 +196,9 @@ export function createPlc(compLayer: HTMLElement, x: number, y: number): Compone
     electrical: {
       sources: () => OUTPUTS.filter((n) => outputs.get(n) === true),
       scan(dt, isLive, isGround): boolean {
-        const powered = isLive('L+') && isGround('M');
+        powered = isLive('L+') && isGround('M');
         const inputs = new Map(INPUTS.map((n) => [n, isLive(n)]));
+        lastInputs = inputs;
         let next: Map<string, boolean>;
         if (powered) {
           const result = runScan(program, inputs, outputs, fbState, dt);
@@ -230,6 +242,8 @@ export function createPlc(compLayer: HTMLElement, x: number, y: number): Compone
     reset(): void {
       outputs = new Map(OUTPUTS.map((n) => [n, false]));
       fbState = new Map();
+      lastInputs = new Map(INPUTS.map((n) => [n, false]));
+      powered = false;
       paintOutputs();
     },
     setPos(nx: number, ny: number): void {
@@ -240,5 +254,14 @@ export function createPlc(compLayer: HTMLElement, x: number, y: number): Compone
     getBounds: shell.getBounds,
     setSelected: shell.setSelected,
   };
+  registerPlcLiveState(comp, () => ({
+    name: shell.getCustomName() ?? 'PLC',
+    graph: legacyProgramText === null ? graph : null,
+    programText,
+    powered,
+    inputs: lastInputs,
+    outputs,
+    fb: fbState,
+  }));
   return comp;
 }

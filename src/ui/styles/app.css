@@ -1777,3 +1777,211 @@ circle.hydPathReturn {
 .workspace:not(.simulating) .swashLever {
   display: none;
 }
+
+/* Live values in the PLC monitor (ui/plcMonitor.ts): TRUE signals solid green, FALSE dashed grey -
+   the same convention as the online/monitor views of common PLC programming tools. */
+.plcStroke.plcOn,
+.plcWire.plcOn {
+  stroke: #16a34a;
+  stroke-width: 2.5;
+}
+
+.plcStroke.plcOff,
+.plcWire.plcOff {
+  stroke: #6b7280;
+  stroke-dasharray: 4 3;
+}
+
+.plcPin.plcOn,
+.plcJunction.plcOn {
+  fill: #16a34a;
+}
+
+.plcPin.plcOff {
+  fill: #9ca3af;
+}
+
+.plcVarOn {
+  fill: #16a34a;
+  font-weight: 700;
+}
+
+.plcLiveValue {
+  fill: #1d4ed8;
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Floating, non-modal: sits above the canvas but leaves it usable, below real dialogs. */
+.plcMonitor {
+  position: fixed;
+  z-index: 900;
+  display: flex;
+  flex-direction: column;
+  min-width: 320px;
+  min-height: 200px;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.18);
+  overflow: hidden;
+  resize: both;
+}
+
+.plcMonitorHeader {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px 6px 12px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--line-soft);
+  cursor: move;
+  user-select: none;
+}
+
+.plcMonitorTitle {
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.plcMonitorTabs {
+  display: flex;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
+  overflow-x: auto;
+}
+
+.plcMonitorTab {
+  font-size: 12px;
+  padding: 2px 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #fff;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.plcMonitorTabActive {
+  border-color: var(--port);
+  color: var(--port);
+  font-weight: 600;
+}
+
+.plcMonitorTabsSingle .plcMonitorTab {
+  border: none;
+  background: none;
+  color: var(--muted);
+  font-weight: normal;
+  pointer-events: none;
+}
+
+.plcMonitorAuto {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--muted);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.plcMonitorClose {
+  border: none;
+  background: none;
+  font-size: 14px;
+  cursor: pointer;
+  color: var(--muted);
+}
+
+.plcMonitorClose:hover {
+  color: var(--accent);
+}
+
+.plcMonitorStatusRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.plcMonitorStatus {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: #f3f4f6;
+  color: #374151;
+}
+
+.plcMonitorStatusRun {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.plcMonitorStatusOff {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+.plcMonitorLeds {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.plcMonitorLedGroup {
+  display: flex;
+  gap: 4px;
+}
+
+.plcLed {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 10px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.plcLed::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #d1d5db;
+}
+
+.plcLedOn {
+  color: #15803d;
+  font-weight: 600;
+}
+
+.plcLedOn::before {
+  background: #22c55e;
+  box-shadow: 0 0 4px #22c55e;
+}
+
+.plcMonitorBody {
+  flex: 1;
+  min-height: 0;
+  background-color: #fff;
+  background-image: radial-gradient(#e5e5e5 1px, transparent 1px);
+  background-size: 10px 10px;
+}
+
+.plcMonitorCanvas {
+  width: 100%;
+  height: 100%;
+}
+
+.plcMonitorLegacy {
+  margin: 0;
+  padding: 12px;
+  font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  font-size: 12px;
+  white-space: pre-wrap;
+}

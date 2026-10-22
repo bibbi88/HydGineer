@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   compileGraph,
+  evaluateGraphNodes,
   graphToText,
   type GraphNode,
   type GraphWire,
@@ -211,5 +212,53 @@ describe('compileGraph', () => {
       wires: [wire('a', 'xor', 0), wire('b', 'xor', 1), wire('xor', 'coil', 0)],
     };
     expect(graphToText(graph)).toBe('Q0.0 = I0.0 ^ I0.1');
+  });
+});
+
+describe('evaluateGraphNodes', () => {
+  const graph: PlcGraph = {
+    nodes: [
+      { id: 'a', kind: 'signal', ref: 'I0.0', x: 0, y: 0 },
+      { id: 'b', kind: 'signal', ref: 'Q0.0', x: 0, y: 20 },
+      { id: 'or', kind: 'gate', op: 'OR', x: 100, y: 10 },
+      { id: 'not', kind: 'not', x: 100, y: 60 },
+      { id: 't', kind: 'fb', fbType: 'TON', instance: 'T1', params: [2], x: 200, y: 10 },
+      { id: 'q', kind: 'coil', target: 'Q0.0', x: 300, y: 10 },
+      { id: 'loose', kind: 'gate', op: 'AND', x: 100, y: 120 },
+    ],
+    wires: [
+      wire('a', 'or', 0),
+      wire('b', 'or', 1),
+      wire('a', 'not', 0),
+      wire('or', 't', 0),
+      wire('t', 'q', 0),
+      wire('a', 'loose', 0),
+    ],
+  };
+  const fbState = (q: boolean): FbState => ({ q, et: 0, cv: 0, running: false, prevIn: false });
+
+  it('gives every node the value on its output, and a coil the value on its input', () => {
+    const values = evaluateGraphNodes(
+      graph,
+      bools({ 'I0.0': true, 'Q0.0': false }),
+      new Map([['T1', fbState(false)]]),
+    );
+    expect(values.get('a')).toBe(true);
+    expect(values.get('b')).toBe(false);
+    expect(values.get('or')).toBe(true);
+    expect(values.get('not')).toBe(false);
+    expect(values.get('t')).toBe(false);
+    expect(values.get('q')).toBe(false);
+  });
+
+  it('reads a function block from the state its scan left, not by re-running it', () => {
+    const values = evaluateGraphNodes(graph, bools({}), new Map([['T1', fbState(true)]]));
+    expect(values.get('t')).toBe(true);
+    expect(values.get('q')).toBe(true);
+  });
+
+  it('leaves out a gate with an unwired input', () => {
+    const values = evaluateGraphNodes(graph, bools({ 'I0.0': true }), new Map());
+    expect(values.has('loose')).toBe(false);
   });
 });

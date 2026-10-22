@@ -23,6 +23,7 @@ import {
   PORT_RE,
   type CompiledProgram,
   type Expr,
+  type FbState,
   type FbType,
   type Statement,
 } from './plcProgram';
@@ -291,6 +292,68 @@ function compileStatements(graph: PlcGraph): Statement[] {
   }
 
   return result.map((b) => b.statement);
+}
+
+/**
+ * The value on every node's output (a coil: on its input) for one set of PLC bits and function
+ * block states - what a monitor colors the diagram with. Reads the state a scan left behind
+ * rather than re-running it, so function blocks report the Q they actually latched; a node
+ * whose value can't be worked out (an unwired input, a gate loop) is simply absent.
+ */
+export function evaluateGraphNodes(
+  graph: PlcGraph,
+  bits: Map<string, boolean>,
+  fb: Map<string, FbState>,
+): Map<string, boolean> {
+  const nodesById = new Map(graph.nodes.map((n) => [n.id, n]));
+  const wireInto = new Map<string, string>();
+  for (const w of graph.wires) wireInto.set(`${w.to.node}:${w.to.pin}`, w.from.node);
+  const values = new Map<string, boolean>();
+  const visiting = new Set<string>();
+
+  function pinValue(node: GraphNode, pin: number): boolean | undefined {
+    const source = nodesById.get(wireInto.get(`${node.id}:${pin}`) ?? '');
+    return source ? valueOf(source) : undefined;
+  }
+
+  function valueOf(node: GraphNode): boolean | undefined {
+    if (values.has(node.id)) return values.get(node.id);
+    if (visiting.has(node.id)) return undefined;
+    visiting.add(node.id);
+    let v: boolean | undefined;
+    switch (node.kind) {
+      case 'signal':
+        v =
+          node.ref === 'TRUE' ? true : node.ref === 'FALSE' ? false : (bits.get(node.ref) ?? false);
+        break;
+      case 'fb':
+        v = fb.get(node.instance.trim().toUpperCase())?.q ?? false;
+        break;
+      case 'not': {
+        const a = pinValue(node, 0);
+        v = a === undefined ? undefined : !a;
+        break;
+      }
+      case 'coil':
+        v = pinValue(node, 0);
+        break;
+      case 'gate': {
+        const ins: Array<boolean | undefined> = [];
+        for (let p = 0; p < gateInputCount(node); p++) ins.push(pinValue(node, p));
+        if (ins.some((x) => x === undefined)) v = undefined;
+        else if (node.op === 'AND') v = ins.every(Boolean);
+        else if (node.op === 'OR') v = ins.some(Boolean);
+        else v = ins[0] !== ins[1];
+        break;
+      }
+    }
+    visiting.delete(node.id);
+    if (v !== undefined) values.set(node.id, v);
+    return v;
+  }
+
+  for (const n of graph.nodes) valueOf(n);
+  return values;
 }
 
 export function compileGraph(graph: PlcGraph): CompiledProgram {

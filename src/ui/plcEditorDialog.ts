@@ -12,14 +12,23 @@ import {
   MIN_GATE_INPUTS,
   SIGNAL_REFS,
   type CoilTarget,
-  type GateOp,
   type GraphNode,
   type PlcGraph,
   type SignalRef,
 } from '../sim/plcGraph';
-import { FB_ARG_SHAPE, type FbType } from '../sim/plcProgram';
+import { type FbType } from '../sim/plcProgram';
 import { createSvgEl } from '../components/shared/svgHelpers';
 import { pathFromPoints } from '../geometry/routing';
+import {
+  drawDiagram,
+  FB_INPUT_NAMES,
+  GATE_SYMBOL,
+  isTimer,
+  outputPinLocal,
+  snap,
+  wireRoute,
+  type Point,
+} from './plcDiagram';
 
 export interface PlcEditorOptions {
   /** null when this PLC was saved before the graphical editor existed and only has legacy text -
@@ -28,45 +37,7 @@ export interface PlcEditorOptions {
   onSave(graph: PlcGraph): void;
 }
 
-type Point = { x: number; y: number };
 type FbNode = Extract<GraphNode, { kind: 'fb' }>;
-
-/** Blocks snap to this grid, and every pin sits at a multiple of it from its block's center, so
- * pins of blocks placed side by side line up and wires between them run straight. */
-const GRID = 10;
-/** Height of one formal-parameter row inside a function block (and one input of a gate). */
-const ROW = 20;
-/** Length of the short connection line between a block's edge and its pin. */
-const STUB = 10;
-/** Height of a function block's header row, which holds its type name. */
-const FB_HEADER = 20;
-const FB_BOX_W = 100;
-const GATE_BOX_W = 40;
-const VAR_W = 80;
-
-/** IEC 61131-3 formal parameter names, in TYPE(...) argument order - both the boolean inputs that
- * get a pin and the numeric ones (PT, PV) that are written as a literal beside the block. */
-const FB_INPUT_NAMES: Record<FbType, string[]> = {
-  TON: ['IN', 'PT'],
-  TOF: ['IN', 'PT'],
-  TP: ['IN', 'PT'],
-  CTU: ['CU', 'R', 'PV'],
-  CTD: ['CD', 'LD', 'PV'],
-  SR: ['S1', 'R'],
-  RS: ['S', 'R1'],
-};
-
-/** Output parameters. Only the first (the boolean Q/Q1) can be wired; the rest (elapsed time,
- * count) are drawn so the block reads like the standard one, but the program can't use them. */
-const FB_OUTPUT_NAMES: Record<FbType, string[]> = {
-  TON: ['Q', 'ET'],
-  TOF: ['Q', 'ET'],
-  TP: ['Q', 'ET'],
-  CTU: ['Q', 'CV'],
-  CTD: ['Q', 'CV'],
-  SR: ['Q1'],
-  RS: ['Q1'],
-};
 
 const FB_DESCRIPTIONS: Record<FbType, string> = {
   TON: 'On-delay timer',
@@ -88,9 +59,6 @@ const FB_NAME_PREFIX: Record<FbType, string> = {
   RS: 'M',
 };
 
-/** The IEC symbol printed at the top of each logic box. */
-const GATE_SYMBOL: Record<GateOp, string> = { AND: '&', OR: '≥1', XOR: '=1' };
-
 /** Which choices the "Function" picker offers a logic block - NOT is a different node kind, but
  * to the user it's just another logic function, so switching to and from it is allowed. */
 const LOGIC_FUNCTIONS = [...GATE_OPS, 'NOT'] as const;
@@ -100,96 +68,6 @@ type LogicFunction = (typeof LOGIC_FUNCTIONS)[number];
  * diagram saved with an output read back as an input still loads and runs; its own picker keeps
  * that value listed so selecting the block doesn't silently change it. */
 const INPUT_REFS = SIGNAL_REFS.filter((ref) => !ref.startsWith('Q'));
-
-function isTimer(fbType: FbType): boolean {
-  return fbType === 'TON' || fbType === 'TOF' || fbType === 'TP';
-}
-
-function fbRows(fbType: FbType): number {
-  return Math.max(FB_ARG_SHAPE[fbType].length, FB_OUTPUT_NAMES[fbType].length);
-}
-
-/** The block's own rectangle, centered on (node.x, node.y). Variables have no box. */
-function boxSize(n: GraphNode): { w: number; h: number } {
-  switch (n.kind) {
-    case 'signal':
-    case 'coil':
-      return { w: VAR_W, h: ROW };
-    case 'not':
-      return { w: GATE_BOX_W, h: 30 };
-    case 'gate':
-      return { w: GATE_BOX_W, h: gateInputCount(n) * ROW };
-    case 'fb':
-      return { w: FB_BOX_W, h: FB_HEADER + fbRows(n.fbType) * ROW };
-  }
-}
-
-/** y (relative to the node center) of a function block's parameter row. */
-function fbRowY(n: FbNode, row: number): number {
-  return -boxSize(n).h / 2 + FB_HEADER + ROW / 2 + row * ROW;
-}
-
-function inputPinLocal(n: GraphNode, pin: number): Point {
-  const { w, h } = boxSize(n);
-  switch (n.kind) {
-    case 'coil':
-      return { x: -w / 2, y: 0 };
-    case 'not':
-      return { x: -w / 2 - STUB, y: 0 };
-    case 'gate':
-      return { x: -w / 2 - STUB, y: -h / 2 + ROW / 2 + pin * ROW };
-    case 'fb':
-      return { x: -w / 2 - STUB, y: fbRowY(n, fbArgLayout(n.fbType).boolArgs[pin] ?? 0) };
-    case 'signal':
-      return { x: 0, y: 0 };
-  }
-}
-
-function outputPinLocal(n: GraphNode): Point | null {
-  const { w } = boxSize(n);
-  switch (n.kind) {
-    case 'coil':
-      return null;
-    case 'signal':
-      return { x: w / 2, y: 0 };
-    case 'not':
-      // The negation circle sits on the box edge, so the pin is one grid step further out.
-      return { x: w / 2 + 2 * STUB, y: 0 };
-    case 'gate':
-      return { x: w / 2 + STUB, y: 0 };
-    case 'fb':
-      return { x: w / 2 + STUB, y: fbRowY(n, 0) };
-  }
-}
-
-/** IEC duration literal for a timer's PT, e.g. T#2s, T#500ms, T#1.25s. */
-function formatDuration(seconds: number): string {
-  if (Number.isInteger(seconds)) return `T#${seconds}s`;
-  const ms = seconds * 1000;
-  if (Math.abs(ms - Math.round(ms)) < 1e-9 && seconds < 1) return `T#${Math.round(ms)}ms`;
-  return `T#${seconds}s`;
-}
-
-function snap(v: number): number {
-  return Math.round(v / GRID) * GRID;
-}
-
-/** Orthogonal route from an output pin to an input pin: across, down/up at `midX`, across. When
- * the input is behind the output, it loops round instead of cutting back through the blocks. */
-function wireRoute(p1: Point, p2: Point, midX: number): Point[] {
-  if (p2.x - p1.x >= 2 * GRID) {
-    return [p1, { x: midX, y: p1.y }, { x: midX, y: p2.y }, p2];
-  }
-  const ym = p1.y === p2.y ? p1.y + 4 * GRID : (p1.y + p2.y) / 2;
-  return [
-    p1,
-    { x: p1.x + GRID, y: p1.y },
-    { x: p1.x + GRID, y: ym },
-    { x: p2.x - GRID, y: ym },
-    { x: p2.x - GRID, y: p2.y },
-    p2,
-  ];
-}
 
 function nextInstanceName(graph: PlcGraph, fbType: FbType, except?: FbNode): string {
   const prefix = FB_NAME_PREFIX[fbType];
@@ -509,263 +387,29 @@ export function openPlcEditorDialog(opts: PlcEditorOptions): void {
     ghost.setAttribute('d', pathFromPoints(wireRoute(p1, to, snap((p1.x + to.x) / 2))));
   }
 
-  function line(g: SVGElement, x1: number, y1: number, x2: number, y2: number, cls?: string): void {
-    g.appendChild(createSvgEl('line', { x1, y1, x2, y2, class: cls ?? 'plcStroke' }));
-  }
-
-  function text(
-    g: SVGElement,
-    x: number,
-    y: number,
-    content: string,
-    attrs: Record<string, string | number> = {},
-  ): SVGElement {
-    const t = createSvgEl('text', { x, y, 'font-size': 11, ...attrs });
-    t.textContent = content;
-    g.appendChild(t);
-    return t;
-  }
-
-  /** A pin is a small visible dot plus a larger invisible circle on top that actually catches the
-   * mouse, so it doesn't take pixel-perfect aim to start or finish a wire. */
-  function pin(
-    g: SVGElement,
-    nodeId: string,
-    dir: 'in' | 'out',
-    index: number,
-    pos: Point,
-    open: boolean,
-  ): void {
-    g.appendChild(
-      createSvgEl('circle', {
-        cx: pos.x,
-        cy: pos.y,
-        r: 3,
-        class: open ? 'plcPin plcPinOpen' : 'plcPin',
-      }),
-    );
-    const hit = createSvgEl('circle', { cx: pos.x, cy: pos.y, r: 7, class: 'plcPinHit' });
-    hit.dataset.pinNode = nodeId;
-    hit.dataset.pinDir = dir;
-    hit.dataset.pinIndex = String(index);
-    if (dir === 'out') {
-      hit.addEventListener('mousedown', (e) => {
-        e.stopPropagation();
-        wireDrag = { fromNode: nodeId };
-      });
-    }
-    g.appendChild(hit);
-  }
-
-  function renderNodeBody(g: SVGElement, n: GraphNode): void {
-    const { w, h } = boxSize(n);
-    const left = n.x - w / 2;
-    const top = n.y - h / 2;
-
-    // Invisible hit area, so a variable (which is just a name on a line) can still be grabbed
-    // anywhere along it, and so the selection outline has something to draw round.
-    g.appendChild(
-      createSvgEl('rect', {
-        x: left - (n.kind === 'fb' || n.kind === 'gate' || n.kind === 'not' ? STUB : 0),
-        y: top - (n.kind === 'fb' ? 16 : 3),
-        width:
-          w + (n.kind === 'fb' || n.kind === 'gate' ? 2 * STUB : n.kind === 'not' ? 3 * STUB : 0),
-        height: h + (n.kind === 'fb' ? 19 : 6),
-        class: 'plcNodeHit',
-      }),
-    );
-
-    switch (n.kind) {
-      case 'signal': {
-        // An input variable: its name, then a line out to the pin.
-        line(g, n.x + w / 2 - STUB * 2, n.y, n.x + w / 2, n.y);
-        text(g, n.x + w / 2 - STUB * 2 - 3, n.y + 4, n.ref, {
-          'text-anchor': 'end',
-          class: 'plcVarText',
-        });
-        return;
-      }
-      case 'coil': {
-        // An output variable: a line in from the pin, then its name.
-        line(g, left, n.y, left + STUB * 2, n.y);
-        text(g, left + STUB * 2 + 3, n.y + 4, n.target, { class: 'plcVarText' });
-        return;
-      }
-      case 'not':
-      case 'gate': {
-        g.appendChild(
-          createSvgEl('rect', { x: left, y: top, width: w, height: h, class: 'plcBox' }),
-        );
-        text(g, n.x, top + 13, n.kind === 'not' ? '1' : GATE_SYMBOL[n.op], {
-          'text-anchor': 'middle',
-          'font-size': 12,
-          class: 'plcBoxTitle',
-        });
-        const count = inputPinCount(n);
-        for (let p = 0; p < count; p++) {
-          const pl = inputPinLocal(n, p);
-          line(g, n.x + pl.x, n.y + pl.y, left, n.y + pl.y);
-        }
-        if (n.kind === 'not') {
-          // Negated output: the IEC inversion circle on the box edge.
-          g.appendChild(
-            createSvgEl('circle', { cx: left + w + 4, cy: n.y, r: 4, class: 'plcNegation' }),
-          );
-          line(g, left + w + 8, n.y, n.x + w / 2 + 2 * STUB, n.y);
-        } else {
-          line(g, left + w, n.y, left + w + STUB, n.y);
-        }
-        return;
-      }
-      case 'fb': {
-        g.appendChild(
-          createSvgEl('rect', { x: left, y: top, width: w, height: h, class: 'plcBox' }),
-        );
-        text(g, n.x, top - 5, n.instance, { 'text-anchor': 'middle', class: 'plcInstanceName' });
-        text(g, n.x, top + 14, n.fbType, {
-          'text-anchor': 'middle',
-          'font-weight': 'bold',
-          class: 'plcBoxTitle',
-        });
-        const { numArgs } = fbArgLayout(n.fbType);
-        FB_INPUT_NAMES[n.fbType].forEach((name, argIdx) => {
-          const y = n.y + fbRowY(n, argIdx);
-          line(g, left - STUB, y, left, y);
-          text(g, left + 4, y + 4, name, { 'font-size': 10, class: 'plcParamName' });
-          const paramIdx = numArgs.indexOf(argIdx);
-          if (paramIdx >= 0) {
-            // A literal (PT/PV) is written beside the input the way IEC FBD shows a constant.
-            const value = n.params[paramIdx] ?? 0;
-            text(
-              g,
-              left - STUB - 3,
-              y + 4,
-              isTimer(n.fbType) ? formatDuration(value) : String(value),
-              {
-                'text-anchor': 'end',
-                class: 'plcLiteral',
-              },
-            );
-          }
-        });
-        FB_OUTPUT_NAMES[n.fbType].forEach((name, row) => {
-          const y = n.y + fbRowY(n, row);
-          line(g, left + w, y, left + w + STUB, y, row === 0 ? 'plcStroke' : 'plcStroke plcUnused');
-          text(g, left + w - 4, y + 4, name, {
-            'text-anchor': 'end',
-            'font-size': 10,
-            class: 'plcParamName',
-          });
-        });
-        return;
-      }
-    }
-  }
-
   function render(): void {
-    svg.replaceChildren();
-
-    const wiredPins = new Set(graph.wires.map((w) => `${w.to.node}:${w.to.pin}`));
-
-    // Wires leaving the same output share one vertical run (at the nearest target's midpoint),
-    // with a junction dot wherever a branch leaves it - how a fanned-out signal is drawn by hand.
-    const bySource = new Map<string, typeof graph.wires>();
-    for (const w of graph.wires) {
-      const list = bySource.get(w.from.node) ?? [];
-      list.push(w);
-      bySource.set(w.from.node, list);
-    }
-    for (const [sourceId, wires] of bySource) {
-      const from = findNode(sourceId);
-      const out = from && outputPinLocal(from);
-      if (!from || !out) continue;
-      const p1 = { x: from.x + out.x, y: from.y + out.y };
-      const ends: Point[] = [];
-      for (const w of wires) {
-        const to = findNode(w.to.node);
-        if (!to) continue;
-        const inp = inputPinLocal(to, w.to.pin);
-        ends.push({ x: to.x + inp.x, y: to.y + inp.y });
-      }
-      const forward = ends.filter((p) => p.x - p1.x >= 2 * GRID);
-      const midX =
-        forward.length > 0 ? Math.min(...forward.map((p) => snap((p1.x + p.x) / 2))) : p1.x;
-
-      wires.forEach((w) => {
-        const to = findNode(w.to.node);
-        if (!to) return;
-        const inp = inputPinLocal(to, w.to.pin);
-        const d = pathFromPoints(wireRoute(p1, { x: to.x + inp.x, y: to.y + inp.y }, midX));
-        const hit = createSvgEl('path', { d, class: 'plcWireHit', fill: 'none' });
-        hit.addEventListener('mousedown', (e) => {
-          e.stopPropagation();
-          select(null, w.id);
-        });
-        svg.appendChild(hit);
-        svg.appendChild(
-          createSvgEl('path', {
-            d,
-            class: w.id === selectedWireId ? 'plcWire plcWireSelected' : 'plcWire',
-            fill: 'none',
-          }),
-        );
-      });
-
-      // A dot marks a real junction - three or more segments meeting on the shared vertical run -
-      // not a plain corner where it just turns.
-      if (forward.length > 1) {
-        const ys = [p1.y, ...forward.map((p) => p.y)];
-        const lo = Math.min(...ys);
-        const hi = Math.max(...ys);
-        for (const y of new Set(ys)) {
-          const horizontals = ys.filter((v) => v === y).length;
-          const verticals = (y > lo ? 1 : 0) + (y < hi ? 1 : 0);
-          if (horizontals + verticals >= 3) {
-            svg.appendChild(
-              createSvgEl('circle', { cx: midX, cy: y, r: 2.5, class: 'plcJunction' }),
-            );
-          }
-        }
-      }
-    }
-
-    for (const n of graph.nodes) {
-      const selected = n.id === selectedNodeId;
-      const g = createSvgEl('g', {
-        class: `plcNode plcNode-${n.kind}${selected ? ' plcNodeSelected' : ''}`,
-      });
-      g.dataset.nodeId = n.id;
-      renderNodeBody(g, n);
-
-      const count = inputPinCount(n);
-      for (let p = 0; p < count; p++) {
-        const local = inputPinLocal(n, p);
-        pin(
-          g,
-          n.id,
-          'in',
-          p,
-          { x: n.x + local.x, y: n.y + local.y },
-          !wiredPins.has(`${n.id}:${p}`),
-        );
-      }
-      const out = outputPinLocal(n);
-      if (out) pin(g, n.id, 'out', 0, { x: n.x + out.x, y: n.y + out.y }, false);
-
-      g.addEventListener('mousedown', (e) => {
-        if ((e.target as Element).classList.contains('plcPinHit')) return;
+    drawDiagram(svg, graph, {
+      selectedNodeId,
+      selectedWireId,
+      onWireMouseDown(w, e) {
+        e.stopPropagation();
+        select(null, w.id);
+      },
+      onOutPinMouseDown(n, e) {
+        e.stopPropagation();
+        wireDrag = { fromNode: n.id };
+      },
+      onNodeMouseDown(n, e) {
         e.stopPropagation();
         const p = svgLocalPoint(e.clientX, e.clientY);
         dragNode = { id: n.id, dx: p.x - n.x, dy: p.y - n.y };
         if (selectedNodeId !== n.id) select(n.id, null);
-      });
-      g.addEventListener('dblclick', (e) => {
+      },
+      onNodeDblClick(_n, e) {
         e.stopPropagation();
         propsBar.querySelector<HTMLElement>('input, select')?.focus();
-      });
-
-      svg.appendChild(g);
-    }
+      },
+    });
 
     svg.appendChild(ghost);
 
