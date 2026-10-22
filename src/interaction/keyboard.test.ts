@@ -131,3 +131,63 @@ describe('Escape key', () => {
     expect(appState.selectedComponents.has(a.id)).toBe(true);
   });
 });
+
+describe('while a dialog is open', () => {
+  beforeEach(() => {
+    resetHistory();
+    appState.components = [];
+    appState.connections = [];
+    clearSelection();
+    initKeyboard();
+  });
+
+  function openDialog(): HTMLElement {
+    const backdrop = document.createElement('div');
+    backdrop.className = 'modalBackdrop';
+    document.body.appendChild(backdrop);
+    return backdrop;
+  }
+
+  it('Delete does not remove the component selected on the canvas behind it', () => {
+    // The PLC editor deletes its own blocks with Delete - that must not also delete the PLC.
+    const comp = createSource(document.createElement('div'), 0, 0);
+    appState.addComponent(comp);
+    selectOnly(comp.id);
+    const dialog = openDialog();
+
+    const del = dispatchKeydown('Delete');
+    const backspace = dispatchKeydown('Backspace');
+
+    expect(appState.components).toContain(comp);
+    expect(del.defaultPrevented).toBe(false);
+    expect(backspace.defaultPrevented).toBe(false);
+    dialog.remove();
+  });
+
+  it('canvas undo, paste and nudge are left alone too', () => {
+    const comp = createSource(document.createElement('div'), 0, 0);
+    appState.addComponent(comp);
+    selectOnly(comp.id);
+    pushHistory('a');
+    pushHistory('b');
+    const dialog = openDialog();
+
+    dispatchKeydown('z', { ctrlKey: true });
+    dispatchKeydown('ArrowRight');
+
+    expect(canUndo()).toBe(true);
+    expect(comp.x).toBe(0);
+    dialog.remove();
+  });
+
+  it('shortcuts work again once the dialog is closed', () => {
+    const comp = createSource(document.createElement('div'), 0, 0);
+    appState.addComponent(comp);
+    selectOnly(comp.id);
+    openDialog().remove();
+
+    dispatchKeydown('ArrowRight');
+
+    expect(comp.x).toBeGreaterThan(0);
+  });
+});

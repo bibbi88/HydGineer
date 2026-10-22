@@ -49,6 +49,10 @@ export function initKeyboard(): void {
 
   activeListener = (e) => {
     if (isTypingTarget(document.activeElement)) return;
+    // A dialog (the PLC editor, export, tips) is open over the canvas: its keys are its own. The
+    // PLC editor deletes its own blocks with Delete, and that must never also delete whatever is
+    // still selected on the canvas behind it - the PLC itself, typically.
+    if (document.querySelector('.modalBackdrop')) return;
 
     if (e.key === 'Escape') {
       // Cancels whichever's actually in progress, not both at once: a wire drag first (nothing
