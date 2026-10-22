@@ -12,6 +12,8 @@ interface CacheEntry {
   fromY: number;
   toX: number;
   toY: number;
+  /** Which way each end leaves - a junction's can change without either end moving. */
+  sides: string;
   points: Point[];
 }
 
@@ -83,9 +85,124 @@ export function computeConnectionAnchors(
   if (!fromAnchor || !toAnchor) return null;
   return {
     fromAnchor:
-      fromComp.type === JUNCTION_TYPE ? alignJunctionAnchor(fromAnchor, toAnchor) : fromAnchor,
-    toAnchor: toComp.type === JUNCTION_TYPE ? alignJunctionAnchor(toAnchor, fromAnchor) : toAnchor,
+      fromComp.type === JUNCTION_TYPE
+        ? junctionAnchor(viewport, workspaceEl, fromComp, conn, fromAnchor, toAnchor)
+        : fromAnchor,
+    toAnchor:
+      toComp.type === JUNCTION_TYPE
+        ? junctionAnchor(viewport, workspaceEl, toComp, conn, toAnchor, fromAnchor)
+        : toAnchor,
   };
+}
+
+/** One of a junction dot's four sides: the axis a wire leaves along, and which way. */
+interface Side {
+  axis: 'H' | 'V';
+  dir: 1 | -1;
+}
+
+function sameSide(a: Side, b: Side): boolean {
+  return a.axis === b.axis && a.dir === b.dir;
+}
+
+function sign(v: number): 1 | -1 {
+  return v < 0 ? -1 : 1;
+}
+
+/** The side a wire whose route is already pinned down - lined up with the dot, or drawn through
+ * guides - uses. These are settled first; free-routed wires then fit round them. */
+function pinnedSide(
+  junction: PortAnchor,
+  other: PortAnchor,
+  conn: Connection,
+  atFrom: boolean,
+): Side {
+  const a = alignJunctionAnchor(junction, other);
+  const guide = atFrom ? conn.guides[0] : conn.guides[conn.guides.length - 1];
+  let target = a.entryOrientation === 'H' ? other.pos.x : other.pos.y;
+  // A guide across the wire's leaving axis is where its first leg heads.
+  if (guide && guide.type !== a.entryOrientation) target = guide.pos;
+  const from = a.entryOrientation === 'H' ? junction.pos.x : junction.pos.y;
+  if (Math.abs(target - from) < 0.5) {
+    target = a.entryOrientation === 'H' ? other.pos.x : other.pos.y;
+  }
+  return { axis: a.entryOrientation, dir: sign(target - from) };
+}
+
+function isPinned(junction: PortAnchor, other: PortAnchor, conn: Connection): boolean {
+  if (conn.guides.length > 0) return true;
+  const sameRow = Math.abs(junction.pos.y - other.pos.y) < 0.5;
+  const sameColumn = Math.abs(junction.pos.x - other.pos.x) < 0.5;
+  return sameRow !== sameColumn;
+}
+
+/** The side facing `other` best that no wire already uses - or, if every free side faces away
+ * from it, the best-facing side even though another free-routed wire shares it (two wires of the
+ * same net running into the dot together read as one; a detour round the dot does not). A side
+ * held by a pinned wire is never shared. */
+function chooseSide(junction: PortAnchor, other: PortAnchor, pinned: Side[], used: Side[]): Side {
+  const dx = other.pos.x - junction.pos.x;
+  const dy = other.pos.y - junction.pos.y;
+  const sides: Side[] = [
+    { axis: 'H', dir: 1 },
+    { axis: 'H', dir: -1 },
+    { axis: 'V', dir: 1 },
+    { axis: 'V', dir: -1 },
+  ];
+  const facing = (s: Side): number => (s.axis === 'H' ? dx : dy) * s.dir;
+  // Ties go to the junction's own axis - set across the line it was dropped on.
+  const ranked = sides
+    .filter((s) => !pinned.some((p) => sameSide(p, s)))
+    .sort(
+      (a, b) =>
+        facing(b) - facing(a) ||
+        (a.axis === junction.entryOrientation ? -1 : 0) -
+          (b.axis === junction.entryOrientation ? -1 : 0),
+    );
+  const free = ranked.find((s) => !used.some((u) => sameSide(u, s)) && facing(s) > 0);
+  return free ?? ranked[0] ?? { axis: junction.entryOrientation, dir: sign(dy) };
+}
+
+/**
+ * Which side of a junction dot `conn` leaves from. Wires whose route is pinned down (lined up
+ * with the dot, or drawn through guides) keep `alignJunctionAnchor`'s answer. Every other wire at
+ * the dot gets its own side, facing its other end, out of the ones left over - so a wire never
+ * has to approach along a side another wire already occupies and detour round the dot to avoid
+ * running on top of it. Decided for all the dot's wires together, in connection order, from
+ * endpoint positions alone, so the answer doesn't depend on which wire happened to be redrawn
+ * first.
+ */
+function junctionAnchor(
+  viewport: ViewportAdapter,
+  workspaceEl: HTMLElement,
+  junction: Component,
+  conn: Connection,
+  anchor: PortAnchor,
+  other: PortAnchor,
+): PortAnchor {
+  if (isPinned(anchor, other, conn)) return alignJunctionAnchor(anchor, other);
+
+  const pinned: Side[] = [];
+  const free: Array<{ conn: Connection; other: PortAnchor }> = [];
+  for (const c of appState.connections) {
+    const atFrom = c.from.id === junction.id;
+    if (!atFrom && c.to.id !== junction.id) continue;
+    const end = atFrom ? c.to : c.from;
+    const otherComp = appState.findComponent(end.id);
+    const otherAnchor = otherComp && worldPortAnchor(viewport, workspaceEl, otherComp, end.port);
+    if (!otherAnchor) continue;
+    if (isPinned(anchor, otherAnchor, c)) pinned.push(pinnedSide(anchor, otherAnchor, c, atFrom));
+    else free.push({ conn: c, other: otherAnchor });
+  }
+
+  const used: Side[] = [];
+  for (const f of free) {
+    const side = chooseSide(anchor, f.other, pinned, used);
+    if (f.conn.id === conn.id)
+      return { ...anchor, entryOrientation: side.axis, pilotDir: side.dir };
+    used.push(side);
+  }
+  return alignJunctionAnchor(anchor, other);
 }
 
 /**
@@ -136,9 +253,11 @@ export function computeConnectionGeometry(
 
   // The A* route only depends on endpoint positions and topology (which components exist/where) -
   // skip re-running it if neither has changed since the last redraw of this connection.
+  const sides = `${fromAnchor.entryOrientation}${fromAnchor.pilotDir ?? 0}${toAnchor.entryOrientation}${toAnchor.pilotDir ?? 0}`;
   const cached = cache.get(conn.id);
   if (
     cached &&
+    cached.sides === sides &&
     cached.topologyVersion === appState.topologyVersion &&
     cached.fromX === fromAnchor.pos.x &&
     cached.fromY === fromAnchor.pos.y &&
@@ -149,9 +268,16 @@ export function computeConnectionGeometry(
     return cached.points;
   }
 
+  // Wires into the same junction are one net: running together into the dot is how a shared
+  // return is drawn, so they're not steered apart the way unrelated wires are.
+  const ownJunctions = new Set<ComponentId>();
+  for (const end of [conn.from, conn.to]) {
+    if (appState.findComponent(end.id)?.type === JUNCTION_TYPE) ownJunctions.add(end.id);
+  }
   const otherWires: Point[][] = [];
   for (const other of appState.connections) {
     if (other.id === conn.id) continue;
+    if (ownJunctions.has(other.from.id) || ownJunctions.has(other.to.id)) continue;
     const route = lastRoute.get(other.id);
     if (route) otherWires.push(route);
   }
@@ -178,6 +304,7 @@ export function computeConnectionGeometry(
     fromY: fromAnchor.pos.y,
     toX: toAnchor.pos.x,
     toY: toAnchor.pos.y,
+    sides,
     points,
   });
 

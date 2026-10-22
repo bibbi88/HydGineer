@@ -1,8 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { autoRouteAStar } from './autoRoute';
-import { alignJunctionAnchor, worldPortAnchor } from './connectionGeometry';
+import {
+  alignJunctionAnchor,
+  computeConnectionAnchors,
+  worldPortAnchor,
+} from './connectionGeometry';
 import { completeGuides, guideCorners, type Point, type PortAnchor } from './routing';
-import type { Component } from '../core/types';
+import type { Component, Connection } from '../core/types';
+import { appState } from '../app/AppState';
+import { createConnection, initWires } from '../wires/connection';
 import type { ViewportAdapter } from '../ui/viewport';
 import {
   createHydThrottle as createThrottleValve,
@@ -161,5 +167,62 @@ describe('alignJunctionAnchor', () => {
   it('keeps the dot’s own axis when the other end is off to one side', () => {
     const offset: PortAnchor = { pos: { x: 50, y: 130 }, entryOrientation: 'H', pilotDir: 1 };
     expect(alignJunctionAnchor(junction, offset)).toBe(junction);
+  });
+});
+
+describe('which side of a junction a free-routed wire uses', () => {
+  // The 0V return of a PLC circuit: the rail comes in level from the left and the PLC's M
+  // terminal drops in from straight above, so both of those sides are taken. Two solenoid
+  // returns arrive from up and to the right.
+  function setup(): { conns: Connection[]; junction: Component } {
+    appState.components = [];
+    appState.connections = [];
+    const at = (p: Point): Component => {
+      const c = createJunction(layer(), p.x, p.y);
+      placePort(c, 'P', p);
+      appState.addComponent(c);
+      return c;
+    };
+    const junction = at({ x: 200, y: 300 });
+    const rail = at({ x: 50, y: 300 });
+    const plcM = at({ x: 200, y: 200 });
+    const y2 = at({ x: 330, y: 270 });
+    const y1 = at({ x: 410, y: 270 });
+    initWires(document.createElementNS('http://www.w3.org/2000/svg', 'svg'), viewport, workspaceEl);
+    const wire = (from: Component, to: Component): Connection =>
+      createConnection({ id: from.id, port: 'P' }, { id: to.id, port: 'P' });
+    const conns = [
+      wire(rail, junction),
+      wire(junction, plcM),
+      wire(y1, junction),
+      wire(y2, junction),
+    ];
+    return { conns, junction };
+  }
+
+  it('comes in from the free side facing it, not along a side another wire already holds', () => {
+    // Held to the dot's own (vertical) axis, it had to come in from above - on top of the M
+    // wire - and looped round the dot to avoid running along it.
+    const { conns } = setup();
+    const anchors = computeConnectionAnchors(viewport, workspaceEl, conns[2] as Connection);
+    expect(anchors?.toAnchor).toMatchObject({ entryOrientation: 'H', pilotDir: 1 });
+  });
+
+  it('shares that side with a second wire of the same net rather than detour', () => {
+    const { conns } = setup();
+    const anchors = computeConnectionAnchors(viewport, workspaceEl, conns[3] as Connection);
+    expect(anchors?.toAnchor).toMatchObject({ entryOrientation: 'H', pilotDir: 1 });
+  });
+
+  it('leaves wires lined up with the dot entering straight along their line', () => {
+    const { conns } = setup();
+    expect(
+      computeConnectionAnchors(viewport, workspaceEl, conns[0] as Connection)?.toAnchor
+        .entryOrientation,
+    ).toBe('H');
+    expect(
+      computeConnectionAnchors(viewport, workspaceEl, conns[1] as Connection)?.fromAnchor
+        .entryOrientation,
+    ).toBe('V');
   });
 });
