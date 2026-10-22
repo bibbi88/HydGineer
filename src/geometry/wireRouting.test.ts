@@ -225,4 +225,32 @@ describe('which side of a junction a free-routed wire uses', () => {
         .entryOrientation,
     ).toBe('V');
   });
+
+  it('reads a split line’s side off its actual route, so a branch doesn’t join on top of it', () => {
+    // An air supply line split at (300, 480): the half towards the valve leaves the dot going up
+    // and only then turns towards the valve, up and to the right. Judged by where that valve is,
+    // the half looked as though it used the right-hand side - so the branch from another valve,
+    // up and to the right, came in from above, along the half itself.
+    appState.components = [];
+    appState.connections = [];
+    initWires(document.createElementNS('http://www.w3.org/2000/svg', 'svg'), viewport, workspaceEl);
+    const at = (p: Point): Component => {
+      const c = createJunction(layer(), p.x, p.y);
+      placePort(c, 'P', p);
+      appState.addComponent(c);
+      return c;
+    };
+    const junction = at({ x: 300, y: 480 });
+    const source = at({ x: 300, y: 580 });
+    const valve = at({ x: 320, y: 340 });
+    const other = at({ x: 670, y: 354 });
+    createConnection({ id: source.id, port: 'P' }, { id: junction.id, port: 'P' });
+    const half = createConnection({ id: junction.id, port: 'P' }, { id: valve.id, port: 'P' });
+    half.guides = [{ type: 'H', pos: 354 }];
+    half.stubStartLen = 0;
+    const branch = createConnection({ id: other.id, port: 'P' }, { id: junction.id, port: 'P' });
+
+    const anchors = computeConnectionAnchors(viewport, workspaceEl, branch);
+    expect(anchors?.toAnchor).toMatchObject({ entryOrientation: 'H', pilotDir: 1 });
+  });
 });

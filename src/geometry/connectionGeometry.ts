@@ -109,28 +109,38 @@ function sign(v: number): 1 | -1 {
   return v < 0 ? -1 : 1;
 }
 
-/** The side a wire whose route is already pinned down - lined up with the dot, or drawn through
- * guides - uses. These are settled first; free-routed wires then fit round them. */
+/** The side a wire whose route is already pinned down uses - read off the route it is actually
+ * drawn with (its guides and stubs), not guessed from where its other end is: a split line's
+ * half leaves the dot along the line it was split from, wherever its far end lies. These are
+ * settled first; free-routed wires then fit round them. */
 function pinnedSide(
   junction: PortAnchor,
   other: PortAnchor,
+  otherIsJunction: boolean,
   conn: Connection,
   atFrom: boolean,
 ): Side {
-  const a = alignJunctionAnchor(junction, other);
-  const guide = atFrom ? conn.guides[0] : conn.guides[conn.guides.length - 1];
-  let target = a.entryOrientation === 'H' ? other.pos.x : other.pos.y;
-  // A guide across the wire's leaving axis is where its first leg heads.
-  if (guide && guide.type !== a.entryOrientation) target = guide.pos;
-  const from = a.entryOrientation === 'H' ? junction.pos.x : junction.pos.y;
-  if (Math.abs(target - from) < 0.5) {
-    target = a.entryOrientation === 'H' ? other.pos.x : other.pos.y;
+  const j = alignJunctionAnchor(junction, other);
+  const o = otherIsJunction ? alignJunctionAnchor(other, junction) : other;
+  const route = atFrom
+    ? routeWithGuides(j, o, conn.guides, conn.stubStartLen, conn.stubEndLen)
+    : routeWithGuides(o, j, conn.guides, conn.stubStartLen, conn.stubEndLen).reverse();
+  const start = route[0] ?? junction.pos;
+  for (const p of route.slice(1)) {
+    const dx = p.x - start.x;
+    const dy = p.y - start.y;
+    if (Math.abs(dx) >= 0.5) return { axis: 'H', dir: sign(dx) };
+    if (Math.abs(dy) >= 0.5) return { axis: 'V', dir: sign(dy) };
   }
-  return { axis: a.entryOrientation, dir: sign(target - from) };
+  return { axis: j.entryOrientation, dir: 1 };
 }
 
+/** Whether a wire's route at the dot is already settled: it's drawn through guides or with a
+ * set stub length (a split line's halves, a dragged wire), or it lines up with the dot. */
 function isPinned(junction: PortAnchor, other: PortAnchor, conn: Connection): boolean {
-  if (conn.guides.length > 0) return true;
+  if (conn.guides.length > 0 || conn.stubStartLen !== null || conn.stubEndLen !== null) {
+    return true;
+  }
   const sameRow = Math.abs(junction.pos.y - other.pos.y) < 0.5;
   const sameColumn = Math.abs(junction.pos.x - other.pos.x) < 0.5;
   return sameRow !== sameColumn;
@@ -191,8 +201,10 @@ function junctionAnchor(
     const otherComp = appState.findComponent(end.id);
     const otherAnchor = otherComp && worldPortAnchor(viewport, workspaceEl, otherComp, end.port);
     if (!otherAnchor) continue;
-    if (isPinned(anchor, otherAnchor, c)) pinned.push(pinnedSide(anchor, otherAnchor, c, atFrom));
-    else free.push({ conn: c, other: otherAnchor });
+    if (isPinned(anchor, otherAnchor, c)) {
+      const otherIsJunction = otherComp.type === JUNCTION_TYPE;
+      pinned.push(pinnedSide(anchor, otherAnchor, otherIsJunction, c, atFrom));
+    } else free.push({ conn: c, other: otherAnchor });
   }
 
   const used: Side[] = [];
@@ -268,16 +280,28 @@ export function computeConnectionGeometry(
     return cached.points;
   }
 
-  // Wires into the same junction are one net: running together into the dot is how a shared
-  // return is drawn, so they're not steered apart the way unrelated wires are.
-  const ownJunctions = new Set<ComponentId>();
-  for (const end of [conn.from, conn.to]) {
-    if (appState.findComponent(end.id)?.type === JUNCTION_TYPE) ownJunctions.add(end.id);
-  }
+  // Wires entering the same junction from the same side are one net running together into the
+  // dot - how a shared return is drawn - so they're not steered apart the way unrelated wires
+  // are. Wires on other sides of the dot are, so a branch doesn't hug the line it branches off.
+  const sideAt = (c: Connection, junctionId: ComponentId): string | null => {
+    const a = c === conn ? anchors : computeConnectionAnchors(viewport, workspaceEl, c);
+    if (!a) return null;
+    const end = c.from.id === junctionId ? a.fromAnchor : a.toAnchor;
+    return `${end.entryOrientation}${end.pilotDir ?? 0}`;
+  };
+  const sharedRun = (other: Connection): boolean => {
+    for (const end of [conn.from, conn.to]) {
+      if (appState.findComponent(end.id)?.type !== JUNCTION_TYPE) continue;
+      if (other.from.id !== end.id && other.to.id !== end.id) continue;
+      const mine = sideAt(conn, end.id);
+      if (mine !== null && mine === sideAt(other, end.id)) return true;
+    }
+    return false;
+  };
   const otherWires: Point[][] = [];
   for (const other of appState.connections) {
     if (other.id === conn.id) continue;
-    if (ownJunctions.has(other.from.id) || ownJunctions.has(other.to.id)) continue;
+    if (sharedRun(other)) continue;
     const route = lastRoute.get(other.id);
     if (route) otherWires.push(route);
   }
