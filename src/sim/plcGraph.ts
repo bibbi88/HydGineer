@@ -44,10 +44,29 @@ export const COIL_TARGETS = ['Q0.0', 'Q0.1', 'Q0.2', 'Q0.3'] as const;
 export type CoilTarget = (typeof COIL_TARGETS)[number];
 export const GATE_OPS = ['AND', 'OR', 'XOR'] as const;
 export type GateOp = (typeof GATE_OPS)[number];
+export const MIN_GATE_INPUTS = 2;
+export const MAX_GATE_INPUTS = 8;
+
+/** How many inputs a gate actually has - XOR is fixed at 2 (a multi-input "=1" means "exactly
+ * one true", which chained XOR doesn't compute), AND/OR take their own `inputs`, clamped. */
+export function gateInputCount(node: { op: GateOp; inputs?: number }): number {
+  if (node.op === 'XOR') return 2;
+  const n = Math.round(node.inputs ?? MIN_GATE_INPUTS);
+  return Math.max(MIN_GATE_INPUTS, Math.min(MAX_GATE_INPUTS, n));
+}
 
 export type GraphNode =
   | { id: string; kind: 'signal'; ref: SignalRef; x: number; y: number }
-  | { id: string; kind: 'gate'; op: GateOp; x: number; y: number }
+  | {
+      id: string;
+      kind: 'gate';
+      op: GateOp;
+      /** Number of input pins for AND/OR (MIN..MAX_GATE_INPUTS); absent means 2, which is also
+       * what every diagram saved before this existed has. XOR always has exactly 2. */
+      inputs?: number;
+      x: number;
+      y: number;
+    }
   | { id: string; kind: 'not'; x: number; y: number }
   | {
       id: string;
@@ -80,7 +99,7 @@ export function inputPinCount(node: GraphNode): number {
     case 'coil':
       return 1;
     case 'gate':
-      return 2;
+      return gateInputCount(node);
     case 'fb':
       return FB_ARG_SHAPE[node.fbType].filter((s) => s === 'bool').length;
   }
@@ -88,7 +107,7 @@ export function inputPinCount(node: GraphNode): number {
 
 /** For an `fb` node, which original TYPE(...) argument index each boolean pin / each `params[]`
  * entry lands at, e.g. CTU's shape `['bool','bool','num']` -> boolPins [0,1], numArgs [2]. */
-function fbArgLayout(fbType: FbType): { boolArgs: number[]; numArgs: number[] } {
+export function fbArgLayout(fbType: FbType): { boolArgs: number[]; numArgs: number[] } {
   const shape = FB_ARG_SHAPE[fbType];
   const boolArgs: number[] = [];
   const numArgs: number[] = [];
@@ -113,7 +132,8 @@ function compileStatements(graph: PlcGraph): Statement[] {
     if (n.kind === 'fb') return n.instance || n.fbType;
     if (n.kind === 'coil') return n.target || 'coil';
     if (n.kind === 'signal') return n.ref || 'signal';
-    return n.kind.toUpperCase();
+    if (n.kind === 'gate') return `an ${n.op} block`;
+    return 'a NOT block';
   }
 
   function exprForPin(node: GraphNode, pin: number, visiting: Set<string>): Expr {
@@ -141,10 +161,12 @@ function compileStatements(graph: PlcGraph): Statement[] {
         visiting.add(node.id);
         try {
           if (node.kind === 'not') return { kind: 'not', arg: exprForPin(node, 0, visiting) };
-          const left = exprForPin(node, 0, visiting);
-          const right = exprForPin(node, 1, visiting);
           const op = node.op === 'AND' ? 'and' : node.op === 'OR' ? 'or' : 'xor';
-          return { kind: 'bin', op, left, right };
+          let expr = exprForPin(node, 0, visiting);
+          for (let pin = 1; pin < gateInputCount(node); pin++) {
+            expr = { kind: 'bin', op, left: expr, right: exprForPin(node, pin, visiting) };
+          }
+          return expr;
         } finally {
           visiting.delete(node.id);
         }
@@ -275,7 +297,8 @@ export function compileGraph(graph: PlcGraph): CompiledProgram {
   try {
     return { statements: compileStatements(graph), error: null };
   } catch (e) {
-    return { statements: [], error: e instanceof Error ? e.message : String(e) };
+    const message = e instanceof Error ? e.message : String(e);
+    return { statements: [], error: message.charAt(0).toUpperCase() + message.slice(1) };
   }
 }
 

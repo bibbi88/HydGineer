@@ -129,7 +129,7 @@ describe('compileGraph', () => {
       ],
       wires: [wire('b', 'a', 0), wire('b', 'a', 1), wire('a', 'b', 0), wire('a', 'b', 1)],
     };
-    expect(compileGraph(graph).error).toMatch(/circular/);
+    expect(compileGraph(graph).error).toMatch(/circular/i);
   });
 
   it('reports two coils driving the same output', () => {
@@ -161,5 +161,55 @@ describe('compileGraph', () => {
       wires: [],
     };
     expect(compileGraph(graph).error).toMatch(/more than one function block/);
+  });
+
+  it('ANDs every input of a gate with more than two inputs', () => {
+    const graph: PlcGraph = {
+      nodes: [
+        { id: 'a', kind: 'signal', ref: 'I0.0', x: 0, y: 0 },
+        { id: 'b', kind: 'signal', ref: 'I0.1', x: 0, y: 20 },
+        { id: 'c', kind: 'signal', ref: 'I0.2', x: 0, y: 40 },
+        { id: 'and', kind: 'gate', op: 'AND', inputs: 3, x: 100, y: 20 },
+        { id: 'coil', kind: 'coil', target: 'Q0.0', x: 200, y: 20 },
+      ],
+      wires: [
+        wire('a', 'and', 0),
+        wire('b', 'and', 1),
+        wire('c', 'and', 2),
+        wire('and', 'coil', 0),
+      ],
+    };
+    const program = compileGraph(graph);
+    expect(program.error).toBeNull();
+    const q = (i: Record<string, boolean>): boolean | undefined =>
+      runScan(program, bools(i), bools({ 'Q0.0': false }), new Map(), 0).outputs.get('Q0.0');
+    expect(q({ 'I0.0': true, 'I0.1': true, 'I0.2': true })).toBe(true);
+    expect(q({ 'I0.0': true, 'I0.1': true, 'I0.2': false })).toBe(false);
+  });
+
+  it('reports the third input of a three-input gate when it is left unwired', () => {
+    const graph: PlcGraph = {
+      nodes: [
+        { id: 'a', kind: 'signal', ref: 'I0.0', x: 0, y: 0 },
+        { id: 'or', kind: 'gate', op: 'OR', inputs: 3, x: 100, y: 20 },
+        { id: 'coil', kind: 'coil', target: 'Q0.0', x: 200, y: 20 },
+      ],
+      wires: [wire('a', 'or', 0), wire('a', 'or', 1), wire('or', 'coil', 0)],
+    };
+    expect(compileGraph(graph).error).toBe('An OR block is missing an input');
+  });
+
+  it('keeps XOR at two inputs whatever its input count says', () => {
+    // A multi-input "=1" means "exactly one true", which chained XOR doesn't compute.
+    const graph: PlcGraph = {
+      nodes: [
+        { id: 'a', kind: 'signal', ref: 'I0.0', x: 0, y: 0 },
+        { id: 'b', kind: 'signal', ref: 'I0.1', x: 0, y: 20 },
+        { id: 'xor', kind: 'gate', op: 'XOR', inputs: 4, x: 100, y: 20 },
+        { id: 'coil', kind: 'coil', target: 'Q0.0', x: 200, y: 20 },
+      ],
+      wires: [wire('a', 'xor', 0), wire('b', 'xor', 1), wire('xor', 'coil', 0)],
+    };
+    expect(graphToText(graph)).toBe('Q0.0 = I0.0 ^ I0.1');
   });
 });

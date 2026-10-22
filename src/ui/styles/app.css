@@ -1361,6 +1361,7 @@ rect.wireHandle.wireStubHandle {
 }
 
 .plcPaletteBtn {
+  white-space: nowrap;
   margin: 0;
   padding: 5px 9px;
   font-size: 12px;
@@ -1372,86 +1373,149 @@ rect.wireHandle.wireStubHandle {
   border-radius: 8px;
   overflow: auto;
   margin-bottom: 10px;
-  background: #fafafa;
+  background-color: #fff;
+  background-image: radial-gradient(#d6d6d6 1px, transparent 1px);
+  background-size: 10px 10px;
 }
 
 .plcCanvas {
   display: block;
 }
 
-.plcOverlayLayer {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-}
-
-.plcOverlayBox {
-  position: absolute;
+/* Properties of the selected block, between the palette and the canvas. */
+.plcProps {
   display: flex;
-  gap: 2px;
-  pointer-events: auto;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  min-height: 34px;
+  margin-bottom: 10px;
+  padding: 4px 8px;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
 }
 
-.plcOverlayName,
-.plcOverlayParam {
-  width: 100%;
-  min-width: 0;
-  font-size: 10px;
-  padding: 1px 3px;
-  border: 1px solid var(--line);
-  border-radius: 3px;
+.plcPropsEmpty .plcPropsHeading {
+  font-weight: normal;
+  color: var(--muted);
 }
 
-.plcOverlayParams {
+.plcPropsHeading {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.plcPropsField {
   display: flex;
-  gap: 3px;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--muted);
 }
 
-.plcOverlayParams .plcOverlayParam {
-  flex: 1;
+.plcPropsControl {
+  font-size: 12px;
 }
 
-.plcNode rect {
+.plcPropsNumber {
+  width: 64px;
+}
+
+.plcPropsName {
+  width: 80px;
+}
+
+.plcPropsDelete {
+  width: auto;
+  margin-left: auto;
+}
+
+/* IEC 61131-3 FBD look: square black-outlined boxes, formal parameter names inside, thin
+   connection lines. */
+.plcStroke {
+  stroke: #111;
+  stroke-width: 1.5;
+}
+
+.plcUnused {
+  stroke: #aaa;
+}
+
+.plcBox {
   fill: #fff;
   stroke: #111;
   stroke-width: 1.5;
+}
+
+.plcNegation {
+  fill: #fff;
+  stroke: #111;
+  stroke-width: 1.5;
+}
+
+.plcNodeHit {
+  fill: transparent;
   cursor: grab;
 }
 
-.plcNode-signal rect {
-  fill: #eef6ff;
+.plcNodeSelected .plcNodeHit {
+  stroke: var(--port);
+  stroke-width: 1;
+  stroke-dasharray: 3 2;
+  fill: rgba(10, 116, 255, 0.06);
 }
 
-.plcNode-coil rect {
-  fill: #fff4e5;
+.plcNodeSelected .plcBox {
+  stroke: var(--port);
 }
 
-/* Labels inside a node must not swallow the drag that moves it - a mousedown anywhere on the
-   node body should grab it, including on the text sitting over that body. */
-.plcNode text {
+.plcBoxTitle,
+.plcVarText {
+  fill: #111;
+}
+
+.plcParamName {
+  fill: #444;
+}
+
+.plcInstanceName {
+  fill: #111;
+  font-weight: 600;
+}
+
+.plcLiteral {
+  fill: #7a3e00;
+}
+
+/* Text must not swallow the drag that moves its block - a mousedown anywhere on the block
+   should grab it, including on the labels drawn over it. */
+.plcNode text,
+.plcNode line,
+.plcNode .plcBox,
+.plcNode .plcNegation {
   pointer-events: none;
   user-select: none;
 }
 
-/* ...except the remove button, which is itself a <text> and so needs its events handed back,
-   or its mousedown (and its hover feedback, and its cursor) never fire at all. Same
-   none-on-the-parent / auto-on-the-interactive-child pattern as .plcWire vs .plcWireHit
-   below. */
-.plcNodeRemove {
-  pointer-events: auto;
-  cursor: pointer;
-  fill: var(--muted);
-}
-
-.plcNodeRemove:hover {
-  fill: var(--accent);
-}
-
 .plcPin {
   fill: var(--port);
-  stroke: #fff;
-  stroke-width: 1.2;
+  pointer-events: none;
+}
+
+.plcPinOpen {
+  fill: #fff;
+  stroke: var(--accent);
+  stroke-width: 1.5;
+}
+
+.plcPinHit {
+  fill: transparent;
   cursor: crosshair;
+}
+
+.plcJunction {
+  fill: #111;
+  pointer-events: none;
 }
 
 .plcWire {
@@ -1461,7 +1525,7 @@ rect.wireHandle.wireStubHandle {
 }
 
 .plcWireSelected {
-  stroke: var(--accent);
+  stroke: var(--port);
   stroke-width: 2.5;
 }
 
