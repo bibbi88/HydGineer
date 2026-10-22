@@ -149,6 +149,10 @@ export function findNearestWireHit(
  * path, and the component is rotated to match the wire's own direction (horizontal or vertical)
  * so both ports land exactly on the original line with no added kink.
  *
+ * `rotation`, when the user turned the component while dragging it (see libraryDrag.ts), is
+ * kept if it runs along the wire - choosing which way round the component goes in; across the
+ * wire it can't splice straight, so the usual orientation is used instead.
+ *
  * Returns the new component, or null if nothing was spliced (wrong type, or nothing close
  * enough) - callers should fall back to a normal unconnected placement in that case.
  */
@@ -158,6 +162,7 @@ export function trySpliceOntoWire(
   viewport: ViewportAdapter,
   workspaceEl: HTMLElement,
   worldPoint: Point,
+  rotation?: number,
 ): Component | null {
   setWireInsertHighlight(null);
   if (!isWireInsertableType(type)) return null;
@@ -171,7 +176,8 @@ export function trySpliceOntoWire(
   const horizontal = a.y === b.y;
 
   const comp = spawnComponent(type, ctx, viewport, splitPoint.x, splitPoint.y);
-  if (horizontal) setComponentRotation(comp, 90);
+  const [usual, reversed] = horizontal ? [90, 270] : [0, 180];
+  setComponentRotation(comp, rotation === reversed ? reversed : usual);
   // Some of these symbols carry their through-line off their own centre (e.g. a one-way flow
   // control's bypass sits beside it) - shift so the IN-OUT line lies exactly on the wire.
   {

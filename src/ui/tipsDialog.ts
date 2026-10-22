@@ -44,6 +44,11 @@ const TIP_SECTIONS: TipSection[] = [
       'Drag a check valve, throttle valve, one-way flow control or flow control valve onto an ' +
         'existing wire (it highlights green when close enough) to splice it in, instead of ' +
         'dropping it unconnected on top.',
+      'R turns the selected components a quarter clockwise, Shift+R counter-clockwise. It ' +
+        'works while dragging too - a component coming out of the library or one already on the ' +
+        'canvas - and so does a right-click with the left button still held. A valve dropped ' +
+        'onto a wire goes in the way you turned it (along the wire). Escape cancels a drag from ' +
+        'the library.',
       'The Examples menu in the toolbar loads ready-made circuits to start from.',
       'Right-click a component for Rotate, Copy, and Delete.',
       'Right-click a hydraulic port to put a tank symbol on it - the quick way to draw a ' +

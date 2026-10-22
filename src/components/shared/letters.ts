@@ -33,3 +33,15 @@ export function nextCylinderLetter(): string {
 export function resetCylinderLetters(): void {
   cylinderCount = 0;
 }
+
+/** Runs `fn` - building a throwaway instance, e.g. the preview dragged out of the library -
+ * without it using up a cylinder letter, so the cylinder actually placed afterwards still gets
+ * the letter the preview showed. */
+export function withoutConsumingLetters<T>(fn: () => T): T {
+  const saved = cylinderCount;
+  try {
+    return fn();
+  } finally {
+    cylinderCount = saved;
+  }
+}

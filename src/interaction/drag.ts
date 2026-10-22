@@ -6,6 +6,7 @@ import { snap } from '../core/grid';
 import { getSelectedComponents, selectOnly, toggleSelection } from './selection';
 import { redrawAllConnections } from '../wires/connection';
 import { computePortSnapCorrection } from './portSnap';
+import { rotateSelection } from './componentContextMenu';
 
 export function makeDraggable(comp: Component, viewport: ViewportAdapter): void {
   comp.el.classList.add('draggable');
@@ -98,12 +99,33 @@ export function makeDraggable(comp: Component, viewport: ViewportAdapter): void 
       redrawAllConnections();
     }
 
-    function onUp(): void {
+    // A right-click while dragging turns the dragged components a quarter (Shift: the other
+    // way) instead of opening the context menu - so they can be turned on the way. The R key
+    // does the same (see keyboard.ts).
+    function onRightDown(ev: MouseEvent): void {
+      if (ev.button !== 2) return;
+      ev.preventDefault();
+      ev.stopPropagation();
+      window.addEventListener('contextmenu', swallowContextMenu, true);
+      rotateSelection(ev.shiftKey ? -90 : 90);
+    }
+    // Browsers send the context menu event on the right button's press or on its release - the
+    // latter possibly after the left one is let go - so it's swallowed once whenever it comes.
+    function swallowContextMenu(ev: MouseEvent): void {
+      ev.preventDefault();
+      ev.stopPropagation();
+      window.removeEventListener('contextmenu', swallowContextMenu, true);
+    }
+
+    function onUp(ev: MouseEvent): void {
+      if (ev.button !== 0) return;
       window.removeEventListener('mousemove', onMove);
       window.removeEventListener('mouseup', onUp);
+      window.removeEventListener('mousedown', onRightDown, true);
     }
 
     window.addEventListener('mousemove', onMove);
     window.addEventListener('mouseup', onUp);
+    window.addEventListener('mousedown', onRightDown, true);
   });
 }

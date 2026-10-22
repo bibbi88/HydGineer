@@ -50,6 +50,18 @@ function rotateComponent(comp: Component, deltaDeg: number): void {
   setComponentRotation(comp, getComponentRotation(comp) + deltaDeg);
 }
 
+/** Rotates every selected component by `deltaDeg` about its own center - the right-click
+ * menu's rotate, applied to the whole selection at once (the toolbar's rotate buttons, the R
+ * key, a right-click while dragging). */
+export function rotateSelection(deltaDeg: number): void {
+  if (!canEdit(appState.mode)) return;
+  const selected = getSelectedComponents();
+  if (selected.length === 0) return;
+  for (const comp of selected) rotateComponent(comp, deltaDeg);
+  redrawAllConnections();
+  appState.markDirty();
+}
+
 export function wireUpComponentContextMenu(comp: Component): void {
   comp.el.addEventListener('contextmenu', (e) => {
     e.preventDefault();

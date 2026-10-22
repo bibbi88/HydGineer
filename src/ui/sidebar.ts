@@ -1,19 +1,58 @@
 import { renderComponentIcon } from '../components/iconPreview';
+import type { LibraryDragHandler } from '../interaction/libraryDrag';
 
-/** Drag payload MIME type carrying a component type from a library tile to the canvas - read by
- * the workspace's drop handler set up in main.ts. */
-export const COMPONENT_DRAG_MIME = 'application/x-pneugineer-component';
+/** How far, px, the pointer has to move with the button down before a press on a tile becomes
+ * a drag rather than a click. */
+const DRAG_THRESHOLD = 5;
 
-// dataTransfer.getData() only actually returns its payload on the 'drop' event itself - browsers
-// withhold it during 'dragover'/'dragenter' (so a page can't snoop a cross-origin drag's contents
-// before the user commits to dropping there). main.ts's dragover handler needs to know which
-// component type is being dragged well before that, to preview whether it'd splice onto a wire -
-// so the type is tracked here instead, in a plain module variable set/cleared alongside the same
-// dragstart/dragend that already exists on each tile.
-let draggedType: string | null = null;
+/**
+ * Lets `tile` be dragged out onto the canvas. A plain mouse drag rather than the browser's own
+ * drag-and-drop: during a native drag the page gets no key presses and no other mouse buttons,
+ * so the component couldn't be rotated (R, or a right-click) before it's dropped.
+ */
+function makeTileDraggable(tile: HTMLButtonElement, type: string, drag: LibraryDragHandler): void {
+  let dragged = false;
 
-export function getDraggedComponentType(): string | null {
-  return draggedType;
+  tile.addEventListener('mousedown', (e) => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    const startX = e.clientX;
+    const startY = e.clientY;
+    dragged = false;
+
+    function onMove(ev: MouseEvent): void {
+      if (!dragged) {
+        if (Math.hypot(ev.clientX - startX, ev.clientY - startY) < DRAG_THRESHOLD) return;
+        dragged = true;
+        tile.classList.add('dragging');
+        drag.start(type);
+      }
+      drag.move(ev.clientX, ev.clientY);
+    }
+
+    function onUp(ev: MouseEvent): void {
+      if (ev.button !== 0) return;
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+      if (!dragged) return;
+      tile.classList.remove('dragging');
+      drag.drop(ev.clientX, ev.clientY);
+    }
+
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+  });
+
+  // A drag released back over its own tile still fires a click there - that's not a click.
+  tile.addEventListener(
+    'click',
+    (e) => {
+      if (!dragged) return;
+      dragged = false;
+      e.stopImmediatePropagation();
+    },
+    true,
+  );
 }
 
 export interface SidebarItemSpec {
@@ -51,7 +90,11 @@ function createCategoryDetails(
   return { details, count };
 }
 
-export function renderComponentLibrary(container: HTMLElement, groups: SidebarGroupSpec[]): void {
+export function renderComponentLibrary(
+  container: HTMLElement,
+  groups: SidebarGroupSpec[],
+  drag?: LibraryDragHandler,
+): void {
   const filterInput = document.createElement('input');
   filterInput.type = 'search';
   filterInput.className = 'libFilter';
@@ -96,20 +139,9 @@ export function renderComponentLibrary(container: HTMLElement, groups: SidebarGr
       tile.appendChild(label);
 
       // Click still places at the view center (fast, no aiming needed); dragging onto the
-      // canvas places it exactly where dropped - both go through the same onClick/spawn path,
-      // just with the drop's world position substituted for the view-center one.
+      // canvas places it exactly where dropped (see interaction/libraryDrag.ts).
       tile.addEventListener('click', item.onClick);
-      tile.draggable = true;
-      tile.addEventListener('dragstart', (e) => {
-        e.dataTransfer?.setData(COMPONENT_DRAG_MIME, item.type);
-        if (e.dataTransfer) e.dataTransfer.effectAllowed = 'copy';
-        tile.classList.add('dragging');
-        draggedType = item.type;
-      });
-      tile.addEventListener('dragend', () => {
-        tile.classList.remove('dragging');
-        draggedType = null;
-      });
+      if (drag) makeTileDraggable(tile, item.type, drag);
       grid.appendChild(tile);
       tiles.push({ el: tile, label: item.label });
     }

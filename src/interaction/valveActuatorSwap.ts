@@ -58,6 +58,25 @@ export function canSwap(fromType: string, toType: string): boolean {
   return fromType !== toType && swapFamilyOf(fromType).some((m) => m.type === toType);
 }
 
+/** The component a library tile of `type` is being dropped onto, if it is one `type` can
+ * replace in place (e.g. a rotary flow divider dropped on a spool one) - see SWAP_FAMILIES. */
+export function dropSwapTarget(type: string, world: { x: number; y: number }): Component | null {
+  for (const c of appState.components) {
+    if (!canSwap(c.type, type)) continue;
+    const b = c.getBounds();
+    const pad = 10;
+    if (
+      world.x >= b.x - pad &&
+      world.x <= b.x + b.w + pad &&
+      world.y >= b.y - pad &&
+      world.y <= b.y + b.h + pad
+    ) {
+      return c;
+    }
+  }
+  return null;
+}
+
 let ctxRef: ComponentFactoryContext | null = null;
 let viewportRef: ViewportAdapter | null = null;
 
