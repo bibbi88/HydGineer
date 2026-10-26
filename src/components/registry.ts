@@ -5,6 +5,7 @@ import {
   createHydTank,
   createHydRelief,
   createHydGauge,
+  createHydFlowMeter,
   createHydPressureSwitch,
   createHydAccumulator,
   HYD_PUMP_LS_TYPE,
@@ -15,6 +16,7 @@ import {
   HYD_TANK_TYPE,
   HYD_RELIEF_TYPE,
   HYD_GAUGE_TYPE,
+  HYD_FLOW_METER_TYPE,
   HYD_PRESSURE_SWITCH_TYPE,
 } from './hyd/supply';
 import {
@@ -353,6 +355,15 @@ export const componentRegistry = new Map<string, RegistryEntry>([
     {
       factory: (ctx, x, y) => createHydGauge(ctx.compLayer, x, y),
       label: 'Pressure gauge',
+      placeable: true,
+      category: ComponentCategory.MEASURING,
+    },
+  ],
+  [
+    HYD_FLOW_METER_TYPE,
+    {
+      factory: (ctx, x, y) => createHydFlowMeter(ctx.compLayer, x, y),
+      label: 'Flow meter',
       placeable: true,
       category: ComponentCategory.MEASURING,
     },

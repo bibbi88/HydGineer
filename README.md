@@ -66,7 +66,8 @@ Units: bar (gauge), L/min, N, Nm, mm, cm³/rev.
   compensating sleeve, and rotary gear type)
 - Actuators: double-acting cylinder, single-acting spring-return cylinder, hydraulic motor
   (fixed or variable displacement)
-- Measuring: pressure gauge, pressure switch (publishes a signal, e.g. S1)
+- Measuring: pressure gauge, flow meter (flow and volume passed), pressure switch (publishes a
+  signal, e.g. S1)
 - Electrical: +24 V / 0 V, push buttons, contacts, relay coils, solenoids, lamps, PLC
 
 The **Examples** menu in the toolbar loads ready-made circuits (meter-out speed control,

@@ -1,5 +1,5 @@
 import type { Component, SimStepContext } from '../../core/types';
-import { accumulatorOil, type HydElement } from '../../sim/hydraulics';
+import { accumulatorOil, orificeKFromRating, type HydElement } from '../../sim/hydraulics';
 import { uid } from '../../core/ids';
 import { createPort, createPortLabel, createSvgEl } from '../shared/svgHelpers';
 import { clearFlow, paintFlow } from './flowPaint';
@@ -29,6 +29,7 @@ export const HYD_PUMP_LS_TYPE = 'hydPumpLS';
 export const HYD_TANK_TYPE = 'hydTank';
 export const HYD_RELIEF_TYPE = 'hydRelief';
 export const HYD_GAUGE_TYPE = 'hydGauge';
+export const HYD_FLOW_METER_TYPE = 'hydFlowMeter';
 export const HYD_PRESSURE_SWITCH_TYPE = 'hydPressureSwitch';
 export const HYD_ACCUMULATOR_TYPE = 'hydAccumulator';
 export const HYD_PUMP_LOOP_TYPE = 'hydPumpLoop';
@@ -464,6 +465,65 @@ export function createHydGauge(compLayer: HTMLElement, x: number, y: number): Co
     reset(): void {
       setNeedle(0);
       shell.setInfo([]);
+    },
+  });
+}
+
+/**
+ * Flow meter, put in a line: shows the flow through it right now, IN → OUT (negative the other
+ * way), and the volume that has passed since the simulation started - e.g. the oil one stroke
+ * takes. It barely restricts the line: about 0.25 bar at 100 L/min.
+ */
+export function createHydFlowMeter(compLayer: HTMLElement, x: number, y: number): Component {
+  const svgW = 40;
+  const svgH = 80;
+  const shell = createHydShell(compLayer, HYD_FLOW_METER_TYPE, x, y, svgW, svgH, 'Flow meter', {
+    x: 4,
+    y: 24,
+    w: 32,
+    h: 32,
+  });
+  const g = shell.g;
+  const inLead = [line(g, 20, 70, 20, 54)];
+  const outLead = [line(g, 20, 26, 20, 10)];
+  g.appendChild(
+    createSvgEl('circle', {
+      cx: 20,
+      cy: 40,
+      r: 14,
+      fill: '#fff',
+      stroke: INK,
+      'stroke-width': STROKE,
+    }),
+  );
+  // The direction it counts as positive, IN → OUT.
+  arrowLine(g, 20, 50, 20, 30);
+  const ports = {
+    IN: createPort(g, 'IN', 20, 70, 'V'),
+    OUT: createPort(g, 'OUT', 20, 10, 'V'),
+  };
+  shell.setInfoSide('right');
+  let total = 0;
+  const comp = hydComponentBase(shell, HYD_FLOW_METER_TYPE, x, y, svgW, svgH, ports);
+  return Object.assign(comp, {
+    hydElements: (): HydElement[] => [
+      { kind: 'orifice', a: 'IN', b: 'OUT', k: orificeKFromRating(100, 0.25) },
+    ],
+    step(dt: number, ctx: SimStepContext): void {
+      const q = ctx.elementValue(0);
+      total += (Math.abs(q) * dt) / 60;
+      shell.setInfo([`Q ${fmtFlow(q)}`, `Σ ${total.toFixed(total < 10 ? 2 : 1)} L`]);
+      paintFlow(inLead, ctx.pressureAt('IN'), q);
+      paintFlow(outLead, ctx.pressureAt('OUT'), q);
+    },
+    snapshot: () => ({ ...nameSnapshot(shell) }),
+    restore(data: Record<string, unknown>): void {
+      restoreName(shell, data);
+    },
+    reset(): void {
+      total = 0;
+      shell.setInfo([]);
+      clearFlow([...inLead, ...outLead]);
     },
   });
 }

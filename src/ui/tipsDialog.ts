@@ -97,6 +97,8 @@ const TIP_SECTIONS: TipSection[] = [
         'cylinder that carries the load (L), with its pilot X from the other cylinder line. It ' +
         'lets oil in freely, holds the load, and lets it down only while the pump drives it ' +
         'down - so the load can never run away.',
+      'Flow meter: drop it onto a line to measure it - it shows the flow right now and the ' +
+        'volume that has passed since Play, e.g. the oil one stroke takes.',
       'Sequence valve: put it in the line to a second actuator. It stays shut until its ' +
         'inlet reaches the setting - while the first cylinder is still moving the pressure is ' +
         'low - and only then lets oil on, e.g. clamp first, then press. Pipe its drain L to ' +
