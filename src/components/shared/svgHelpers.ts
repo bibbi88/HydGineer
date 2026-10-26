@@ -33,6 +33,24 @@ export interface ComponentShell {
    * (a text note). The bounds become the whole new canvas; the component stays centered on
    * its position. */
   resize(w: number, h: number): void;
+  /**
+   * Makes the selection outline, and the area the component can be grabbed by, follow `frame` -
+   * the part of a valve's symbol that slides when it switches - by however far its
+   * `translate(x, y)` transform moves away from (`restX`, `restY`), the position the component's
+   * box was laid out for. getBounds() itself stays put: wire routing, alignment and the like go
+   * by where the component is, not by where its spool happens to be this instant.
+   */
+  followFrame(frame: SVGElement, restX: number, restY: number): void;
+}
+
+/** Where each component's body can be grabbed right now, by its element - see
+ * ComponentShell.followFrame. */
+const hitBoundsByEl = new WeakMap<HTMLElement, () => ComponentBounds>();
+
+/** The box a click has to land in to grab the component whose element is `el` - its bounds,
+ * moved along with a valve's sliding frame. Undefined for a component not built on the shell. */
+export function hitBoundsOf(el: HTMLElement): ComponentBounds | undefined {
+  return hitBoundsByEl.get(el)?.();
 }
 
 export function buildComponentShell(
@@ -99,9 +117,15 @@ export function buildComponentShell(
   // `innerBounds` is. This one is sized/positioned to the same tight box getBounds() reports.
   const boundsEl = document.createElement('div');
   boundsEl.className = 'boundsBox';
+  // How far a valve's sliding frame has moved the outline from `box` (see followFrame).
+  const frameShift = { x: 0, y: 0 };
   function placeBoundsEl(): void {
-    boundsEl.style.left = `${box.x}px`;
-    boundsEl.style.top = `${box.y}px`;
+    // boundsEl sits on comp.el (rotated with it) but outside the mirrored svg, so follow the
+    // mirroring by hand to keep the outline on the artwork.
+    const mirrored = el.dataset.mirror === '1';
+    const left = box.x + frameShift.x;
+    boundsEl.style.left = `${mirrored ? svgW - left - box.w : left}px`;
+    boundsEl.style.top = `${box.y + frameShift.y}px`;
     boundsEl.style.width = `${box.w}px`;
     boundsEl.style.height = `${box.h}px`;
   }
@@ -116,9 +140,9 @@ export function buildComponentShell(
   // own center) - read live from the same attributes the CSS transform is built from, so a
   // rotated component is avoided by the wire router, and hit by a marquee, where it is actually
   // drawn rather than where it would be unrotated.
-  function worldBounds(): ComponentBounds {
-    let x0 = box.x - svgW / 2;
-    const y0 = box.y - svgH / 2;
+  function worldBounds(shift = { x: 0, y: 0 }): ComponentBounds {
+    let x0 = box.x + shift.x - svgW / 2;
+    const y0 = box.y + shift.y - svgH / 2;
     if (el.dataset.mirror === '1') x0 = -(x0 + box.w);
     const rot = (((Number(el.dataset.rot ?? '0') % 360) + 360) % 360) as 0 | 90 | 180 | 270;
     const [ax, ay] = rotateQuarter(x0, y0, rot);
@@ -140,18 +164,16 @@ export function buildComponentShell(
   setPos(x, y);
 
   compLayer.appendChild(el);
+  hitBoundsByEl.set(el, () => worldBounds(frameShift));
 
   return {
     el,
     svg,
     labelEl,
     setPos,
-    getBounds: worldBounds,
+    getBounds: () => worldBounds(),
     setSelected: (sel: boolean) => {
-      // boundsEl sits on comp.el (rotated with it) but outside the mirrored svg, so follow the
-      // mirroring by hand to keep the outline on the artwork.
-      const mirrored = el.dataset.mirror === '1';
-      boundsEl.style.left = `${mirrored ? svgW - box.x - box.w : box.x}px`;
+      placeBoundsEl();
       boundsEl.classList.toggle('selected', sel);
       // Lets CSS bring back the port dots a wire or silencer otherwise hides (see app.css).
       el.classList.toggle('compSelected', sel);
@@ -177,6 +199,21 @@ export function buildComponentShell(
       svg.setAttribute('height', String(h));
       setBox({ x: 0, y: 0, w, h });
       placeBoundsEl();
+    },
+    followFrame: (frame: SVGElement, restX: number, restY: number) => {
+      const update = (): void => {
+        const m = /translate\(\s*([-\d.e]+)[\s,]+([-\d.e]+)/.exec(
+          frame.getAttribute('transform') ?? '',
+        );
+        frameShift.x = m ? Number(m[1]) - restX : 0;
+        frameShift.y = m ? Number(m[2]) - restY : 0;
+        placeBoundsEl();
+      };
+      update();
+      new MutationObserver(update).observe(frame, {
+        attributes: true,
+        attributeFilter: ['transform'],
+      });
     },
   };
 }

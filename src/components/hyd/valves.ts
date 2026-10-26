@@ -338,6 +338,8 @@ export function createHydValve43(compLayer: HTMLElement, x: number, y: number): 
   });
   const slide = createSvgEl('g', { class: 'hydSpool' });
   shell.g.appendChild(slide);
+  // The outline (and the grab area) follow the boxes as they slide; neutral is the rest.
+  shell.followFrame(slide, 0, 0);
   const leads = drawValveLeads(shell.g);
   const ports = makeValvePorts(shell);
   shell.setInfoSide('right');
@@ -440,6 +442,8 @@ export function createHydValve42(compLayer: HTMLElement, x: number, y: number): 
   });
   const slide = createSvgEl('g', { class: 'hydSpool' });
   shell.g.appendChild(slide);
+  // The outline (and the grab area) follow the boxes as they slide; at rest they sit one box left.
+  shell.followFrame(slide, -CELL, 0);
   const leads = drawValveLeads(shell.g);
   const ports = makeValvePorts(shell);
   shell.setInfoSide('right');
@@ -1204,6 +1208,8 @@ export function createHydValveLS(compLayer: HTMLElement, x: number, y: number): 
   });
   const slide = createSvgEl('g');
   shell.g.appendChild(slide);
+  // The outline (and the grab area) follow the boxes as they stroke; neutral is the rest.
+  shell.followFrame(slide, 0, 0);
   const g = shell.g;
   // Port leads, drawn port → body (into the valve), under the neutral box.
   const xa = LS_MID_X + 10;

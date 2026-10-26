@@ -7,6 +7,8 @@ import { getSelectedComponents, selectOnly, toggleSelection } from './selection'
 import { redrawAllConnections } from '../wires/connection';
 import { computePortSnapCorrection } from './portSnap';
 import { rotateSelection } from './componentContextMenu';
+import { startLinkingNear } from './linking';
+import { hitBoundsOf } from '../components/shared/svgHelpers';
 
 export function makeDraggable(comp: Component, viewport: ViewportAdapter): void {
   comp.el.classList.add('draggable');
@@ -23,8 +25,14 @@ export function makeDraggable(comp: Component, viewport: ViewportAdapter): void 
     // handle that happens to pass through it - would instead grab/select the component. Limiting
     // the click-to-drag area to the same tight box the selection outline already uses keeps that
     // margin free for whatever's actually there.
+    // A press just beside one of the component's ports draws a wire from it (see linking.ts) -
+    // only while editing, since during a run a press on a component operates it.
+    if (canEdit(appState.mode) && !e.ctrlKey && !e.metaKey && startLinkingNear(comp, e)) return;
+
+    // The box follows a valve's sliding frame (see ComponentShell.followFrame), so the valve
+    // is grabbed where it's drawn.
     const world = viewport.clientToWorld(e.clientX, e.clientY);
-    const b = comp.getBounds();
+    const b = hitBoundsOf(comp.el) ?? comp.getBounds();
     if (world.x < b.x || world.x > b.x + b.w || world.y < b.y || world.y > b.y + b.h) {
       // This component's own div still spans its full padded canvas (room for pilot stubs,
       // labels, a 5/2 valve's sliding travel, etc.) well beyond the tight box just checked, and -
