@@ -1,8 +1,6 @@
 import { appState } from '../../app/AppState';
 import type { ComponentId } from '../../core/types';
 
-let cylinderCount = 0;
-
 /** True if `letter` (matched case-insensitively) is already some *other* cylinder's letter -
  * two cylinders sharing one would also share every auto-named sensor label derived from it
  * (A0, A1, ...), silently colliding. Pass `excludeCompId` when checking a rename so a cylinder
@@ -17,31 +15,15 @@ export function isCylinderLetterInUse(letter: string, excludeCompId?: ComponentI
   return false;
 }
 
-/** The next letter for a freshly placed cylinder - cycles A-Z, skipping any letter already
- * claimed by another cylinder still on the canvas. Past 26 live cylinders every letter is
- * necessarily taken; rather than refuse to place the 27th, it reuses one (the rename path is
- * still the one place an actual duplicate is blocked outright). */
+/** The letter for a freshly placed (or pasted) cylinder: the first of A-Z not already claimed
+ * by a cylinder on the canvas - so with A in the circuit the next is B, whatever was placed,
+ * pasted or deleted before. Past 26 live cylinders every letter is taken; rather than refuse to
+ * place the 27th, it reuses A (the rename path is still the one place an actual duplicate is
+ * blocked outright). */
 export function nextCylinderLetter(): string {
   for (let i = 0; i < 26; i++) {
-    const letter = String.fromCharCode(65 + (cylinderCount % 26));
-    cylinderCount++;
+    const letter = String.fromCharCode(65 + i);
     if (!isCylinderLetterInUse(letter)) return letter;
   }
-  return String.fromCharCode(65 + (cylinderCount % 26));
-}
-
-export function resetCylinderLetters(): void {
-  cylinderCount = 0;
-}
-
-/** Runs `fn` - building a throwaway instance, e.g. the preview dragged out of the library -
- * without it using up a cylinder letter, so the cylinder actually placed afterwards still gets
- * the letter the preview showed. */
-export function withoutConsumingLetters<T>(fn: () => T): T {
-  const saved = cylinderCount;
-  try {
-    return fn();
-  } finally {
-    cylinderCount = saved;
-  }
+  return 'A';
 }

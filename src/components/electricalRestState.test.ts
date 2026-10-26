@@ -3,7 +3,6 @@ import { appState } from '../app/AppState';
 import { Modes } from '../app/modes';
 import { createElecChangeover, createElecContact } from './electrical';
 import { createHydCylinderDouble as createCylinderDouble } from './hyd/actuators';
-import { resetCylinderLetters } from './shared/letters';
 import { setSignal, resetSignals } from '../sim/signals';
 import type { Component } from '../core/types';
 
@@ -41,7 +40,6 @@ describe('electrical contacts drawn in the initial position while stopped', () =
     appState.components = [];
     appState.connections = [];
     appState.setMode(Modes.STOP);
-    resetCylinderLetters();
     resetSignals();
   });
 

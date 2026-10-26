@@ -10,7 +10,6 @@ import {
 } from '../interaction/componentContextMenu';
 import { createConnection, redrawAllConnections } from '../wires/connection';
 import { clearSelection } from '../interaction/selection';
-import { resetCylinderLetters } from '../components/shared/letters';
 import { renderPageFrame } from '../ui/pageFrame';
 import { getDeviceId } from '../app/deviceId';
 import { CURRENT_SCHEMA_VERSION, type ProjectFileV1 } from './schema';
@@ -74,7 +73,6 @@ export function clearProject(): void {
     appState.removeComponent(comp.id);
   }
   clearSelection();
-  resetCylinderLetters();
 }
 
 export function loadProject(

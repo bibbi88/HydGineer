@@ -23,7 +23,6 @@ import { loadProject } from './persistence/project';
 import { initHistory, pushHistory, resetHistory } from './history/historyStore';
 import { renderInspector } from './ui/inspector';
 import { initPageFrame } from './ui/pageFrame';
-import { resetCylinderLetters } from './components/shared/letters';
 import { snap } from './core/grid';
 import { canEdit } from './app/modes';
 import { initConfirmBeforeUnload } from './app/confirmClose';
@@ -97,10 +96,6 @@ renderComponentLibrary(
   })),
   initLibraryDrag(factoryCtx, viewport, workspaceEl),
 );
-// Building each cylinder's sidebar icon just spawned a real (throwaway) instance of it, which
-// consumed letters from the same counter real placement uses - reset it so the first cylinder
-// the user actually places still starts at "A".
-resetCylinderLetters();
 
 const projectBar = renderTopbar(topbarEl, factoryCtx, viewport, connLayer, frameLayer, workspaceEl);
 // The library is an editing tool, so it greys out and stops responding while the simulation

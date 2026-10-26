@@ -4,7 +4,6 @@ import type { ViewportAdapter } from '../ui/viewport';
 import { appState } from '../app/AppState';
 import { canEdit } from '../app/modes';
 import { snap } from '../core/grid';
-import { withoutConsumingLetters } from '../components/shared/letters';
 import { getComponentRotation, setComponentRotation } from './componentContextMenu';
 import { placeComponent } from './spawn';
 import { dropSwapTarget, swapComponentType } from './valveActuatorSwap';
@@ -129,9 +128,7 @@ export function initLibraryDrag(
       const world = viewport.clientToWorld(clientX, clientY);
       if (!active.ghost) {
         const { type } = active;
-        const ghost = withoutConsumingLetters(() =>
-          createComponent(type, ctx, snap(world.x), snap(world.y)),
-        );
+        const ghost = createComponent(type, ctx, snap(world.x), snap(world.y));
         ghost.el.classList.add('dragGhost');
         setComponentRotation(ghost, active.rotation);
         active.ghost = ghost;

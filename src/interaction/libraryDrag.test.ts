@@ -11,7 +11,6 @@ import { HYD_VALVE_42_TYPE, HYD_VALVE_43_TYPE } from '../components/hyd/valves';
 import { initValveActuatorSwap } from './valveActuatorSwap';
 import { createComponent } from '../components/registry';
 import { HYD_CYLINDER_DOUBLE_TYPE } from '../components/hyd/actuators';
-import { resetCylinderLetters } from '../components/shared/letters';
 import type { ViewportAdapter } from '../ui/viewport';
 
 const viewport: ViewportAdapter = {
@@ -41,7 +40,6 @@ describe('dragging a component out of the library', () => {
     appState.connections = [];
     appState.setMode(Modes.STOP);
     clearSelection();
-    resetCylinderLetters();
     compLayer = document.createElement('div');
     document.body.appendChild(compLayer);
     workspaceEl = document.createElement('div');
