@@ -214,6 +214,47 @@ describe('trySpliceOntoWire', () => {
     expect(pOut.x).toBe(300);
   });
 
+  it('keeps a rotation the user turned in along the wire: a check valve the other way round', () => {
+    const a = createJunction(compLayer(), 300, 100, 'V');
+    const b = createJunction(compLayer(), 300, 500, 'V');
+    appState.addComponent(a);
+    appState.addComponent(b);
+    createConnection({ id: a.id, port: 'P' }, { id: b.id, port: 'P' });
+
+    const comp = trySpliceOntoWire(
+      CHECK_VALVE_TYPE,
+      ctx,
+      viewport,
+      workspaceEl,
+      { x: 300, y: 280 },
+      180,
+    );
+    if (!comp) throw new Error('expected a splice');
+
+    expect(comp.el.dataset.rot).toBe('180');
+    // Turned over, IN now faces a (above).
+    expect(appState.connections.find((c) => c.from.id === a.id)?.to.port).toBe('IN');
+    expect(appState.connections.find((c) => c.to.id === b.id)?.from.port).toBe('OUT');
+  });
+
+  it('ignores a rotation across the wire, which could not splice straight', () => {
+    const a = createJunction(compLayer(), 100, 300, 'H');
+    const b = createJunction(compLayer(), 500, 300, 'H');
+    appState.addComponent(a);
+    appState.addComponent(b);
+    createConnection({ id: a.id, port: 'P' }, { id: b.id, port: 'P' });
+
+    const comp = trySpliceOntoWire(
+      CHECK_VALVE_TYPE,
+      ctx,
+      viewport,
+      workspaceEl,
+      { x: 280, y: 300 },
+      180,
+    );
+    expect(comp?.el.dataset.rot).toBe('90');
+  });
+
   it('leaves the wire alone for a component type that is not wire-insertable', () => {
     const a = createJunction(compLayer(), 300, 100, 'V');
     const b = createJunction(compLayer(), 300, 500, 'V');

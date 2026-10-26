@@ -547,9 +547,11 @@ body {
   pointer-events: none;
 }
 
+/* The box is the drawing inset by 2px (see svgHelpers.ts), so the offset puts the outline a
+   clear 3px outside the artwork - on top of its frame lines it would all but disappear. */
 .boundsBox.selected {
   outline: 2px dashed var(--accent);
-  outline-offset: 4px;
+  outline-offset: 5px;
 }
 
 .label {
@@ -1291,12 +1293,69 @@ rect.wireHandle.wireStubHandle {
   text-align: center;
 }
 
+/* The PDF's paper size, beside its export button. */
+.exportPaperSelect {
+  font: inherit;
+  padding: 0 6px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #fff;
+}
+
 .tipsDialog {
   width: 520px;
 }
 
 .tipsDialog .inspectorSectionHeading:first-of-type {
   margin-top: 0;
+}
+
+.termsDialog {
+  width: 600px;
+  display: flex;
+  flex-direction: column;
+}
+
+.termsBody {
+  overflow: auto;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--ink);
+}
+
+.termsBody .inspectorSectionHeading:first-child {
+  margin-top: 0;
+}
+
+.termsBody p {
+  margin: 0 0 8px;
+}
+
+.termsFooter {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  padding-top: 12px;
+  margin-top: 4px;
+  border-top: 1px solid var(--line);
+}
+
+.termsDontShow {
+  margin-right: auto;
+  white-space: nowrap;
+  font-size: 12.5px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.termsFooter .btn {
+  margin: 0;
+  width: auto;
+  flex: none;
+  padding-left: 20px;
+  padding-right: 20px;
 }
 
 .tipsList {
@@ -1725,7 +1784,7 @@ circle.hydPathReturn {
 }
 
 /* Dragging a library tile over a component it can replace (e.g. one flow divider over the
-   other) - see findReplaceTarget in main.ts. */
+   other) - see dropSwapTarget in interaction/valveActuatorSwap.ts. */
 .comp.replaceTarget .boundsBox {
   outline: 3px solid var(--insert);
   outline-offset: 4px;
@@ -1984,4 +2043,37 @@ circle.hydPathReturn {
   font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
   font-size: 12px;
   white-space: pre-wrap;
+}
+
+/* The component being dragged out of the library (interaction/libraryDrag.ts): the real symbol,
+   see-through, following the pointer - it can be turned with R or a right-click before it's
+   dropped. Never a target itself, so the drop lands on whatever is underneath. */
+.comp.dragGhost {
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+body.libraryDragging,
+body.libraryDragging * {
+  cursor: grabbing !important;
+}
+
+/* Simulation speed slider in the toolbar (ui/toolbar.ts). */
+.simSpeed {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin: 0 4px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.simSpeedSlider {
+  width: 80px;
+}
+
+.simSpeedValue {
+  min-width: 34px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
 }

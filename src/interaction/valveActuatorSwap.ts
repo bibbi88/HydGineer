@@ -16,7 +16,16 @@ import {
   setComponentRotation,
 } from './componentContextMenu';
 import { HYD_ROTARY_DIVIDER_TYPE, HYD_SPOOL_DIVIDER_TYPE } from '../components/hyd/dividers';
-import { HYD_VALVE_42_TYPE, HYD_VALVE_43_TYPE, HYD_VALVE_LS_TYPE } from '../components/hyd/valves';
+import {
+  HYD_CHECK_TYPE,
+  HYD_FLOW_CONTROL_TYPE,
+  HYD_ONE_WAY_FC_TYPE,
+  HYD_PILOT_CHECK_TYPE,
+  HYD_THROTTLE_TYPE,
+  HYD_VALVE_42_TYPE,
+  HYD_VALVE_43_TYPE,
+  HYD_VALVE_LS_TYPE,
+} from '../components/hyd/valves';
 import { HYD_PUMP_LS_TYPE, HYD_PUMP_TYPE } from '../components/hyd/supply';
 import { HYD_MOTOR_TYPE, HYD_MOTOR_VAR_TYPE } from '../components/hyd/actuators';
 
@@ -43,7 +52,40 @@ export const SWAP_FAMILIES: Array<Array<{ type: string; label: string }>> = [
     { type: HYD_MOTOR_TYPE, label: 'Fixed displacement' },
     { type: HYD_MOTOR_VAR_TYPE, label: 'Variable displacement' },
   ],
+  [
+    { type: HYD_CHECK_TYPE, label: 'Check valve' },
+    { type: HYD_PILOT_CHECK_TYPE, label: 'Pilot-operated check valve (X)' },
+  ],
+  [
+    { type: HYD_THROTTLE_TYPE, label: 'Throttle (both ways)' },
+    { type: HYD_ONE_WAY_FC_TYPE, label: 'One-way flow control (bypass check)' },
+    { type: HYD_FLOW_CONTROL_TYPE, label: 'Pressure-compensated flow control' },
+  ],
 ];
+
+/** Ports a type names differently from the rest of its family, by the name they share: the
+ * pilot-operated check's A/B are the check valve's IN/OUT. */
+const PORT_ALIASES: Record<string, Record<string, string>> = {
+  [HYD_PILOT_CHECK_TYPE]: { A: 'IN', B: 'OUT' },
+};
+
+function sharedPortName(type: string, port: string): string {
+  return PORT_ALIASES[type]?.[port] ?? port;
+}
+
+function ownPortName(type: string, shared: string): string {
+  const aliases = PORT_ALIASES[type] ?? {};
+  return Object.keys(aliases).find((k) => aliases[k] === shared) ?? shared;
+}
+
+/** Which way an inline component's IN → OUT runs as drawn (unrotated): +1 down, -1 up, or null
+ * if it has no such pair. */
+function throughDirection(comp: Component): number | null {
+  const pIn = comp.ports[ownPortName(comp.type, 'IN')];
+  const pOut = comp.ports[ownPortName(comp.type, 'OUT')];
+  if (!pIn || !pOut || pIn.cy === pOut.cy) return null;
+  return Math.sign(pOut.cy - pIn.cy);
+}
 
 /** The other types `type` can be swapped with (empty if it has no family). */
 export function swapFamilyOf(type: string): Array<{ type: string; label: string }> {
@@ -56,6 +98,25 @@ function isMotor(type: string): boolean {
 
 export function canSwap(fromType: string, toType: string): boolean {
   return fromType !== toType && swapFamilyOf(fromType).some((m) => m.type === toType);
+}
+
+/** The component a library tile of `type` is being dropped onto, if it is one `type` can
+ * replace in place (e.g. a rotary flow divider dropped on a spool one) - see SWAP_FAMILIES. */
+export function dropSwapTarget(type: string, world: { x: number; y: number }): Component | null {
+  for (const c of appState.components) {
+    if (!canSwap(c.type, type)) continue;
+    const b = c.getBounds();
+    const pad = 10;
+    if (
+      world.x >= b.x - pad &&
+      world.x <= b.x + b.w + pad &&
+      world.y >= b.y - pad &&
+      world.y <= b.y + b.h + pad
+    ) {
+      return c;
+    }
+  }
+  return null;
 }
 
 let ctxRef: ComponentFactoryContext | null = null;
@@ -86,7 +147,7 @@ export function swapComponentType(comp: Component, newType: string): void {
   const { x, y } = comp;
   // Contact <-> push button keeps its NO/NC choice, relay coil <-> solenoid keeps its name;
   // other swaps have no such fields.
-  const { normallyClosed, key, showName, customName, displacement, torque, etaHm } =
+  const { normallyClosed, key, showName, customName, displacement, torque, etaHm, diameter } =
     comp.snapshot() as Record<string, unknown>;
   const rotation = getComponentRotation(comp);
   const mirrored = comp.el.dataset.mirror === '1';
@@ -113,8 +174,16 @@ export function swapComponentType(comp: Component, newType: string): void {
     if (isMotor(comp.type) && isMotor(newType)) {
       next.restore({ ...next.snapshot(), displacement, torque, etaHm });
     }
-    // Same place on the drawing: orientation and naming carry over to the replacement.
-    if (rotation) setComponentRotation(next, rotation);
+    // Throttle <-> one-way flow control keeps its orifice.
+    if (diameter !== undefined && 'diameter' in next.snapshot()) {
+      next.restore({ ...next.snapshot(), diameter });
+    }
+    // Same place on the drawing: orientation and naming carry over to the replacement. One
+    // drawn with its IN -> OUT the other way round is turned over, so the flow keeps its way.
+    const oldDir = throughDirection(comp);
+    const newDir = throughDirection(next);
+    const flip = oldDir !== null && newDir !== null && oldDir !== newDir ? 180 : 0;
+    if (rotation || flip) setComponentRotation(next, (rotation + flip) % 360);
     if (mirrored) setComponentMirrored(next, true);
     if (showName !== undefined || customName !== undefined) {
       next.restore({ ...next.snapshot(), showName, customName });
@@ -126,10 +195,12 @@ export function swapComponentType(comp: Component, newType: string): void {
       // Only the end(s) that were actually on `comp` need to exist on `next` - the other end
       // belongs to some unrelated component (e.g. a source's own 'OUT' port) that the swap
       // never touched, so it's never in question here.
-      if (fromMoved && !next.ports[saved.from.port]) continue;
-      if (toMoved && !next.ports[saved.to.port]) continue;
-      const from = fromMoved ? { id: next.id, port: saved.from.port } : saved.from;
-      const to = toMoved ? { id: next.id, port: saved.to.port } : saved.to;
+      const onNext = (port: string): string =>
+        ownPortName(newType, sharedPortName(comp.type, port));
+      if (fromMoved && !next.ports[onNext(saved.from.port)]) continue;
+      if (toMoved && !next.ports[onNext(saved.to.port)]) continue;
+      const from = fromMoved ? { id: next.id, port: onNext(saved.from.port) } : saved.from;
+      const to = toMoved ? { id: next.id, port: onNext(saved.to.port) } : saved.to;
       const conn = createConnection(from, to);
       conn.guides = saved.guides;
       conn.stubStartLen = saved.stubStartLen;

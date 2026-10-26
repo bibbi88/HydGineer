@@ -10,6 +10,8 @@ import { cancelLinking, isLinking } from './linking';
 import { copySelection, pasteClipboard } from './clipboard';
 import { undo, redo } from '../history/historyStore';
 import { GRID_SIZE } from '../core/grid';
+import { rotateSelection } from './componentContextMenu';
+import { cancelLibraryDrag, isLibraryDragActive, rotateLibraryDrag } from './libraryDrag';
 
 function isTypingTarget(el: Element | null): boolean {
   if (!el) return false;
@@ -55,6 +57,10 @@ export function initKeyboard(): void {
     if (document.querySelector('.modalBackdrop')) return;
 
     if (e.key === 'Escape') {
+      if (isLibraryDragActive()) {
+        cancelLibraryDrag();
+        return;
+      }
       // Cancels whichever's actually in progress, not both at once: a wire drag first (nothing
       // else is usually selected while linking anyway), otherwise the current selection - so a
       // second Escape, or one with nothing in flight, clears the selected component(s)/wire.
@@ -92,6 +98,16 @@ export function initKeyboard(): void {
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'r') {
       e.preventDefault();
       redo();
+      return;
+    }
+
+    // R turns a quarter clockwise, Shift+R counter-clockwise: the component being dragged out
+    // of the library, otherwise the selection (also mid-drag, so it can be turned on the way).
+    if (!e.ctrlKey && !e.metaKey && !e.altKey && e.key.toLowerCase() === 'r') {
+      e.preventDefault();
+      const delta = e.shiftKey ? -90 : 90;
+      if (isLibraryDragActive()) rotateLibraryDrag(delta);
+      else rotateSelection(delta);
       return;
     }
 

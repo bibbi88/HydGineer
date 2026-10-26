@@ -26,14 +26,17 @@ import {
   HYD_ONE_WAY_FC_TYPE,
   HYD_FLOW_CONTROL_TYPE,
 } from '../components/hyd/valves';
+import { HYD_FLOW_METER_TYPE } from '../components/hyd/supply';
 
-/** Component types this can splice onto a wire: the inline two-port valves, whose ports are
- * named 'IN'/'OUT' and lie on one straight line (vertical, IN at the bottom, when unrotated). */
+/** Component types this can splice onto a wire: the inline two-port valves and the flow meter,
+ * whose ports are named 'IN'/'OUT' and lie on one straight line (vertical, IN at the bottom,
+ * when unrotated). */
 const WIRE_INSERTABLE_TYPES = new Set<string>([
   HYD_CHECK_TYPE,
   HYD_THROTTLE_TYPE,
   HYD_ONE_WAY_FC_TYPE,
   HYD_FLOW_CONTROL_TYPE,
+  HYD_FLOW_METER_TYPE,
 ]);
 
 /** How close a drop point needs to land to a wire to splice into it, rather than just landing
@@ -149,6 +152,10 @@ export function findNearestWireHit(
  * path, and the component is rotated to match the wire's own direction (horizontal or vertical)
  * so both ports land exactly on the original line with no added kink.
  *
+ * `rotation`, when the user turned the component while dragging it (see libraryDrag.ts), is
+ * kept if it runs along the wire - choosing which way round the component goes in; across the
+ * wire it can't splice straight, so the usual orientation is used instead.
+ *
  * Returns the new component, or null if nothing was spliced (wrong type, or nothing close
  * enough) - callers should fall back to a normal unconnected placement in that case.
  */
@@ -158,6 +165,7 @@ export function trySpliceOntoWire(
   viewport: ViewportAdapter,
   workspaceEl: HTMLElement,
   worldPoint: Point,
+  rotation?: number,
 ): Component | null {
   setWireInsertHighlight(null);
   if (!isWireInsertableType(type)) return null;
@@ -171,7 +179,8 @@ export function trySpliceOntoWire(
   const horizontal = a.y === b.y;
 
   const comp = spawnComponent(type, ctx, viewport, splitPoint.x, splitPoint.y);
-  if (horizontal) setComponentRotation(comp, 90);
+  const [usual, reversed] = horizontal ? [90, 270] : [0, 180];
+  setComponentRotation(comp, rotation === reversed ? reversed : usual);
   // Some of these symbols carry their through-line off their own centre (e.g. a one-way flow
   // control's bypass sits beside it) - shift so the IN-OUT line lies exactly on the wire.
   {

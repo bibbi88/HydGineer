@@ -330,4 +330,34 @@ describe('example circuits behave as described', () => {
     run(0.1);
     expect(motor.el.querySelector('.hydInfo')!.textContent).toContain('(30 %)');
   });
+  it('sequence valve: the clamp closes first, the press follows once the pressure has risen', () => {
+    const comps = load('Clamp first, then press');
+    const cyls = comps.filter((c) => c.type === 'hydCylinderDouble');
+    const named = (n: string): Component =>
+      cyls.find((c) => (c.snapshot() as { customName?: string }).customName === n)!;
+    const clamp = named('Clamp');
+    const press = named('Press');
+    const seq = byType(comps, 'hydSequence');
+    const valve = byType(comps, 'hydValve43');
+
+    lever(valve, 'left');
+    let frame = run(0.3);
+    // Clamping: low pressure, the press hasn't moved.
+    expect(snap(clamp).pos).toBeGreaterThan(0.05);
+    expect(snap(clamp).pos).toBeLessThan(1);
+    expect(p(frame, seq, 'P')).toBeLessThan(30);
+    expect(snap(press).pos).toBe(0);
+
+    frame = run(4);
+    // Clamped, and the press has followed at the sequence pressure.
+    expect(snap(clamp).pos).toBe(1);
+    expect(snap(press).pos).toBeGreaterThan(0.2);
+    expect(p(frame, seq, 'P')).toBeGreaterThan(55);
+
+    lever(valve, 'left'); // back to centre
+    lever(valve, 'right'); // retract
+    run(10);
+    expect(snap(clamp).pos).toBe(0);
+    expect(snap(press).pos).toBe(0);
+  });
 });

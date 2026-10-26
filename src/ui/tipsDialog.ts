@@ -44,6 +44,11 @@ const TIP_SECTIONS: TipSection[] = [
       'Drag a check valve, throttle valve, one-way flow control or flow control valve onto an ' +
         'existing wire (it highlights green when close enough) to splice it in, instead of ' +
         'dropping it unconnected on top.',
+      'R turns the selected components a quarter clockwise, Shift+R counter-clockwise. It ' +
+        'works while dragging too - a component coming out of the library or one already on the ' +
+        'canvas - and so does a right-click with the left button still held. A valve dropped ' +
+        'onto a wire goes in the way you turned it (along the wire). Escape cancels a drag from ' +
+        'the library.',
       'The Examples menu in the toolbar loads ready-made circuits to start from.',
       'Right-click a component for Rotate, Copy, and Delete.',
       'Right-click a hydraulic port to put a tank symbol on it - the quick way to draw a ' +
@@ -92,6 +97,12 @@ const TIP_SECTIONS: TipSection[] = [
         'cylinder that carries the load (L), with its pilot X from the other cylinder line. It ' +
         'lets oil in freely, holds the load, and lets it down only while the pump drives it ' +
         'down - so the load can never run away.',
+      'Flow meter: drop it onto a line to measure it - it shows the flow right now and the ' +
+        'volume that has passed since Play, e.g. the oil one stroke takes.',
+      'Sequence valve: put it in the line to a second actuator. It stays shut until its ' +
+        'inlet reaches the setting - while the first cylinder is still moving the pressure is ' +
+        'low - and only then lets oil on, e.g. clamp first, then press. Pipe its drain L to ' +
+        'tank; the bypass check lets the return oil back.',
       'Pump: set Displacement to "Variable, pressure compensated" and the pump swivels back ' +
         'near its compensator setting, delivering only what the circuit takes - compare the ' +
         'power with a fixed pump dumping over its relief valve. Its Motor signal "!S1" runs it ' +

@@ -27,6 +27,7 @@ export type IconName =
   | 'flipHorizontal'
   | 'grid'
   | 'tips'
+  | 'document'
   | 'alignLeft'
   | 'alignCenter'
   | 'alignRight'
@@ -133,6 +134,12 @@ const ICONS: Record<IconName, Shape[]> = {
     ['path', { d: 'M9 14c-.2-1-.8-1.8-1.5-2.5A5.5 5.5 0 1 1 16.5 11.5c-.7.7-1.3 1.5-1.5 2.5' }],
     ['path', { d: 'M9 17h6' }],
     ['path', { d: 'M10 21h4' }],
+  ],
+  document: [
+    ['path', { d: 'M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9Z' }],
+    ['path', { d: 'M14 3v6h6' }],
+    ['path', { d: 'M8 13h8' }],
+    ['path', { d: 'M8 17h5' }],
   ],
   alignLeft: [
     ['path', { d: 'M4 2v20' }],

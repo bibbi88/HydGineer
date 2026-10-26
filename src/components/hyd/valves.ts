@@ -35,6 +35,7 @@ export const HYD_ONE_WAY_FC_TYPE = 'hydOneWayFlowControl';
 export const HYD_FLOW_CONTROL_TYPE = 'hydFlowControl';
 export const HYD_REDUCING_TYPE = 'hydReducing';
 export const HYD_COUNTERBALANCE_TYPE = 'hydCounterbalance';
+export const HYD_SEQUENCE_TYPE = 'hydSequence';
 export const HYD_VALVE_LS_TYPE = 'hydValveLS';
 export const HYD_SHUTTLE_TYPE = 'hydShuttle';
 export const HYD_PRESSURE_COMP_TYPE = 'hydPressureCompensator';
@@ -338,6 +339,8 @@ export function createHydValve43(compLayer: HTMLElement, x: number, y: number): 
   });
   const slide = createSvgEl('g', { class: 'hydSpool' });
   shell.g.appendChild(slide);
+  // The outline (and the grab area) follow the boxes as they slide; neutral is the rest.
+  shell.followFrame(slide, 0, 0);
   const leads = drawValveLeads(shell.g);
   const ports = makeValvePorts(shell);
   shell.setInfoSide('right');
@@ -440,6 +443,8 @@ export function createHydValve42(compLayer: HTMLElement, x: number, y: number): 
   });
   const slide = createSvgEl('g', { class: 'hydSpool' });
   shell.g.appendChild(slide);
+  // The outline (and the grab area) follow the boxes as they slide; at rest they sit one box left.
+  shell.followFrame(slide, -CELL, 0);
   const leads = drawValveLeads(shell.g);
   const ports = makeValvePorts(shell);
   shell.setInfoSide('right');
@@ -962,6 +967,138 @@ export function createHydReducing(compLayer: HTMLElement, x: number, y: number):
 }
 
 /**
+ * Sequence valve, P → A: shut until the inlet pressure reaches the setting, then opening to pass
+ * the oil on - so a second actuator on A only moves once the first one, on the same line, has
+ * built up that pressure (clamp first, then drill). Piloted from its own inlet against an
+ * adjustable spring; the spring chamber is drained to tank through L, so the pressure on A
+ * doesn't add to the setting. An optional bypass check lets return oil flow freely A → P.
+ */
+export function createHydSequence(compLayer: HTMLElement, x: number, y: number): Component {
+  const svgW = 100;
+  const svgH = 100;
+  const shell = createHydShell(compLayer, HYD_SEQUENCE_TYPE, x, y, svgW, svgH, 'Sequence valve', {
+    x: 2,
+    y: 12,
+    w: 98,
+    h: 76,
+  });
+  const g = shell.g;
+  g.appendChild(
+    createSvgEl('rect', {
+      x: 25,
+      y: 30,
+      width: 30,
+      height: 40,
+      fill: '#fff',
+      stroke: INK,
+      'stroke-width': STROKE,
+    }),
+  );
+  // Controlled path drawn P (bottom) → A (top); normally closed, so the arrow sits beside it.
+  const pLead = [line(g, 40, 70, 40, 90)];
+  const aLead = [line(g, 40, 10, 40, 30)];
+  const arrowG = createSvgEl('g', { class: 'hydSpool' });
+  g.appendChild(arrowG);
+  const throughArrow = arrowLine(arrowG, 47, 64, 47, 36);
+  springH(g, 55, 70, 40, 4);
+  adjustArrow(g, 63, 40, 8);
+  // Pilot from its own inlet; spring chamber drained to tank through L.
+  const pilot = [
+    path(g, 'M 40 78 H 18 V 60 H 25', { 'stroke-dasharray': '4 3', 'stroke-width': 1.5 }),
+  ];
+  const drain = [path(g, 'M 55 60 H 100', { 'stroke-dasharray': '4 3', 'stroke-width': 1.5 })];
+  for (const el of [...pilot, ...drain]) el.dataset.nodash = '1';
+  const bypassG = createSvgEl('g');
+  g.appendChild(bypassG);
+  createPortLabel(g, 47, 14, 'A', { anchor: 'start', fontSize: 10 });
+  createPortLabel(g, 47, 96, 'P', { anchor: 'start', fontSize: 10 });
+  createPortLabel(g, 94, 54, 'L', { anchor: 'middle', fontSize: 10 });
+  const setText = createSvgEl('text', { x: 60, y: 86, 'font-size': 9 });
+  g.appendChild(setText);
+  const ports = {
+    A: createPort(g, 'A', 40, 10, 'V'),
+    P: createPort(g, 'P', 40, 90, 'V'),
+    L: createPort(g, 'L', 100, 60, 'H'),
+  };
+  shell.setInfoSide('left');
+
+  let setting = 50;
+  let qNom = 30;
+  let check = true;
+  // Bypass drawn in its free-flow direction, A (top) → P (bottom).
+  let bypassA: SVGElement[] = [];
+  let bypassP: SVGElement[] = [];
+  function refresh(): void {
+    setText.textContent = `${setting} bar`;
+    bypassG.replaceChildren();
+    bypassA = [];
+    bypassP = [];
+    if (check) {
+      const glyph = drawBallCheckSymbol(bypassG, 8, 50, 'vertical', -1, 0.6);
+      bypassA = [
+        path(bypassG, 'M 40 16 H 8 V 34'),
+        line(bypassG, 8, 34, 8, Math.min(glyph.inPoint.y, glyph.outPoint.y)),
+      ];
+      bypassP = [
+        line(bypassG, 8, Math.max(glyph.inPoint.y, glyph.outPoint.y), 8, 66),
+        path(bypassG, 'M 8 66 V 86 H 40'),
+      ];
+    }
+  }
+  refresh();
+
+  const comp = hydComponentBase(shell, HYD_SEQUENCE_TYPE, x, y, svgW, svgH, ports);
+  return Object.assign(comp, {
+    hydElements: (): HydElement[] => [
+      {
+        kind: 'sequence',
+        a: 'P',
+        b: 'A',
+        set: setting,
+        k: orificeKFromRating(qNom, VALVE_RATING_DP),
+        band: 5,
+        check,
+      },
+    ],
+    step(_dt: number, ctx: SimStepContext): void {
+      const q = ctx.elementValue(0); // + = sequenced P → A, − = return A → P through the check
+      const pP = ctx.pressureAt('P');
+      const pA = ctx.pressureAt('A');
+      // Open by pressure, not flow: at the end of the second actuator's stroke it stays open
+      // with nothing passing.
+      const open = pP >= setting;
+      const forward = Math.max(0, q);
+      arrowG.setAttribute('transform', open ? 'translate(-7,0)' : '');
+      const lines: string[] = [];
+      if (q < -FLOW_THRESHOLD) lines.push(`return ${fmtFlow(-q)}`);
+      else if (open) lines.push(q > FLOW_THRESHOLD ? `open ${fmtFlow(q)}` : 'open');
+      else if (pP > 1) lines.push(`shut, P ${fmtBar(pP)}`);
+      shell.setInfo(lines);
+      paintFlow(pLead, pP, forward);
+      paintFlow(aLead, pA, forward);
+      paintFlow(throughArrow, pP, forward);
+      paintFlow(bypassA, pA, Math.max(0, -q));
+      paintFlow(bypassP, pP, Math.max(0, -q));
+      paintFlow(pilot, pP, 0);
+      paintFlow(drain, 0, 0);
+    },
+    snapshot: () => ({ ...nameSnapshot(shell), setting, qNom, check }),
+    restore(data: Record<string, unknown>): void {
+      restoreName(shell, data);
+      setting = readNum(data, 'setting', setting, 1, 700);
+      qNom = readNum(data, 'qNom', qNom, 0.5, 2000);
+      if ('check' in data) check = Boolean(data.check);
+      refresh();
+    },
+    reset(): void {
+      arrowG.setAttribute('transform', '');
+      shell.setInfo([]);
+      clearFlow([...pLead, ...aLead, ...throughArrow, ...bypassA, ...bypassP, ...pilot, ...drain]);
+    },
+  });
+}
+
+/**
  * Counterbalance valve (overcentre valve) for an overrunning load - a load that would run away
  * if its return oil were let out freely, like a lifted weight being lowered. Fitted between the
  * directional valve (V) and the load-holding side of the actuator (L). Lifting: free flow V → L
@@ -1204,6 +1341,8 @@ export function createHydValveLS(compLayer: HTMLElement, x: number, y: number): 
   });
   const slide = createSvgEl('g');
   shell.g.appendChild(slide);
+  // The outline (and the grab area) follow the boxes as they stroke; neutral is the rest.
+  shell.followFrame(slide, 0, 0);
   const g = shell.g;
   // Port leads, drawn port → body (into the valve), under the neutral box.
   const xa = LS_MID_X + 10;

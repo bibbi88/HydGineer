@@ -2,26 +2,13 @@ import { appState } from '../app/AppState';
 import { canEdit } from '../app/modes';
 import { getSelectedComponents, onSelectionChange } from '../interaction/selection';
 import {
-  getComponentRotation,
-  setComponentRotation,
+  rotateSelection,
   isComponentMirrored,
   setComponentMirrored,
   isMirrorableType,
 } from '../interaction/componentContextMenu';
 import { redrawAllConnections } from '../wires/connection';
 import { iconButton } from './iconButton';
-
-/** Rotates every selected component by `deltaDeg` about its own center - the same operation the
- * right-click menu performs, applied to the whole selection at once. */
-function rotateSelection(deltaDeg: number): void {
-  const selected = getSelectedComponents();
-  if (selected.length === 0) return;
-  for (const comp of selected) {
-    setComponentRotation(comp, getComponentRotation(comp) + deltaDeg);
-  }
-  redrawAllConnections();
-  appState.markDirty();
-}
 
 /** Flips every selected component horizontally. Each one is toggled independently, so a mixed
  * selection ends up all-flipped rather than some flipping back. */

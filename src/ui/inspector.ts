@@ -1,6 +1,7 @@
 import type { Component } from '../core/types';
 import type { ProjectBarRefs } from './projectBar';
 import { openTipsDialog } from './tipsDialog';
+import { openTermsDialog } from './termsDialog';
 import { createIcon, type IconName } from './icons';
 import { iconButton } from './iconButton';
 import { canEdit } from '../app/modes';
@@ -34,6 +35,7 @@ import {
   HYD_FLOW_CONTROL_TYPE,
   HYD_REDUCING_TYPE,
   HYD_COUNTERBALANCE_TYPE,
+  HYD_SEQUENCE_TYPE,
   HYD_VALVE_LS_TYPE,
   HYD_PRESSURE_COMP_TYPE,
   HYD_CROSS_RELIEF_TYPE,
@@ -432,6 +434,18 @@ const INSPECTOR_FIELDS: Record<string, InspectorField[]> = {
       step: 1,
     },
   ],
+  [HYD_SEQUENCE_TYPE]: [
+    { kind: 'number', key: 'setting', label: 'Opening pressure (bar)', min: 1, max: 700, step: 5 },
+    {
+      kind: 'number',
+      key: 'qNom',
+      label: 'Nominal flow (L/min at Δp 5 bar)',
+      min: 0.5,
+      max: 2000,
+      step: 1,
+    },
+    { kind: 'checkbox', key: 'check', label: 'Bypass check valve (free A→P)' },
+  ],
   [HYD_RELIEF_TYPE]: [
     { kind: 'number', key: 'setting', label: 'Cracking pressure (bar)', min: 0, max: 700, step: 5 },
   ],
@@ -467,15 +481,19 @@ const INSPECTOR_FIELDS: Record<string, InspectorField[]> = {
     VALVE_FLOW_FIELD,
   ],
   [HYD_CHECK_TYPE]: [
+    { kind: 'actuatorMode', label: 'Valve type', options: swapFamilyOf(HYD_CHECK_TYPE) },
     { kind: 'number', key: 'crack', label: 'Cracking pressure (bar)', min: 0, max: 50, step: 0.5 },
   ],
   [HYD_PILOT_CHECK_TYPE]: [
+    { kind: 'actuatorMode', label: 'Valve type', options: swapFamilyOf(HYD_PILOT_CHECK_TYPE) },
     { kind: 'number', key: 'ratio', label: 'Pilot ratio', min: 1, max: 20, step: 0.5 },
   ],
   [HYD_THROTTLE_TYPE]: [
+    { kind: 'actuatorMode', label: 'Valve type', options: swapFamilyOf(HYD_THROTTLE_TYPE) },
     { kind: 'number', key: 'diameter', label: 'Orifice diameter (mm)', min: 0, max: 50, step: 0.1 },
   ],
   [HYD_ONE_WAY_FC_TYPE]: [
+    { kind: 'actuatorMode', label: 'Valve type', options: swapFamilyOf(HYD_ONE_WAY_FC_TYPE) },
     {
       kind: 'number',
       key: 'diameter',
@@ -486,6 +504,7 @@ const INSPECTOR_FIELDS: Record<string, InspectorField[]> = {
     },
   ],
   [HYD_FLOW_CONTROL_TYPE]: [
+    { kind: 'actuatorMode', label: 'Valve type', options: swapFamilyOf(HYD_FLOW_CONTROL_TYPE) },
     { kind: 'number', key: 'qSet', label: 'Set flow (L/min)', min: 0, max: 2000, step: 0.5 },
     { kind: 'checkbox', key: 'bypass', label: 'Bypass check valve (free OUT→IN)' },
   ],
@@ -1357,6 +1376,13 @@ function renderTipsSection(container: HTMLElement): void {
   btn.append(createIcon('tips'), document.createTextNode('Tips & shortcuts'));
   btn.addEventListener('click', () => openTipsDialog());
   section.appendChild(btn);
+
+  const termsBtn = document.createElement('button');
+  termsBtn.className = 'btn inspectorTipsBtn';
+  termsBtn.type = 'button';
+  termsBtn.append(createIcon('document'), document.createTextNode('Terms of use'));
+  termsBtn.addEventListener('click', () => openTermsDialog());
+  section.appendChild(termsBtn);
 
   container.appendChild(section);
 }

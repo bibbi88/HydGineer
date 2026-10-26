@@ -31,6 +31,8 @@ continuation, see `src/sim/hydraulics.ts`):
   leakage, and pressure intensification.
 - **Accumulator**: gas law (p + 1)·V_gas^n = (p0 + 1)·V0^n, charging and discharging over time.
 - **Counterbalance valve**: free flow in, opens for flow out when p_load + ratio·p_pilot ≥ setting.
+- **Sequence valve**: shut until its inlet reaches the setting, then opens and holds the inlet
+  there while passing the oil on; drained spring chamber, optional bypass check for the return.
 - **Pressure-compensated pump**: displacement swivels back over the last few bar below the
   compensator setting, so it delivers only what the circuit takes.
 - **Inertia**: optional moving mass per cylinder, m·dv/dt = net force, solved in 2 ms substeps -
@@ -58,21 +60,24 @@ Units: bar (gauge), L/min, N, Nm, mm, cm³/rev.
 - Directional valves: 4/3 (closed / tandem / float / open centre) and 4/2, solenoid or hand lever;
   proportional load-sensing valve (lever slider or solenoids) with LS port; shuttle valve
 - Pressure control: relief valve, cross-port relief valves, pressure-reducing valve,
-  counterbalance valve, 2-way pressure compensator (LS)
+  counterbalance valve, sequence valve, 2-way pressure compensator (LS)
 - Flow & check: check valve, pilot-operated check valve, throttle, one-way flow control,
   pressure-compensated flow control (optional bypass check), flow divider (spool with
   compensating sleeve, and rotary gear type)
 - Actuators: double-acting cylinder, single-acting spring-return cylinder, hydraulic motor
   (fixed or variable displacement)
-- Measuring: pressure gauge, pressure switch (publishes a signal, e.g. S1)
+- Measuring: pressure gauge, flow meter (flow and volume passed), pressure switch (publishes a
+  signal, e.g. S1)
 - Electrical: +24 V / 0 V, push buttons, contacts, relay coils, solenoids, lamps, PLC
 
 The **Examples** menu in the toolbar loads ready-made circuits (meter-out speed control,
 electro-hydraulic control, motor speed control, load holding, and synchronising two
 cylinders with each type of flow divider, accumulator charging, counterbalance valve,
-pressure-compensated pump, inertia and pressure peaks, load sensing with one and two
+clamp-then-press with a sequence valve, pressure-compensated pump, inertia and pressure peaks, load sensing with one and two
 sections, with and without pressure compensators, hydrostatic transmission with fixed or
-variable motor). Flow dividers, pumps, motors and directional valves can be swapped type in place from the inspector, or by dropping the other type onto them.
+variable motor). Flow dividers, pumps, motors, directional valves, check valves and throttles /
+flow controls can be swapped type in place from the inspector, or by dropping the other type onto
+them.
 
 ## Running
 

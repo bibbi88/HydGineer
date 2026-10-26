@@ -6,7 +6,7 @@ import { JUNCTION_TYPE } from '../components/junction';
 import { createSvgEl } from '../components/shared/svgHelpers';
 import { pathFromPoints, stubPoint } from '../geometry/routing';
 import { worldPortAnchor } from '../geometry/connectionGeometry';
-import { PORT_HOVER_RADIUS, WIRE_STUB } from '../sim/constants';
+import { PORT_GRAB_RADIUS, PORT_SNAP_RADIUS, WIRE_STUB } from '../sim/constants';
 
 export interface PendingPort {
   compId: ComponentId;
@@ -45,31 +45,38 @@ function portWorldPos(comp: Component, portKey: PortKey): { x: number; y: number
   return viewport.clientToWorld(rect.left + rect.width / 2, rect.top + rect.height / 2);
 }
 
-function findPortOwner(el: Element): PendingPort | null {
-  for (const comp of appState.components) {
-    for (const port of Object.values(comp.ports)) {
-      if (port.el === el) return { compId: comp.id, port: port.key };
-    }
-  }
-  return null;
-}
-
-function updateHover(clientX: number, clientY: number): void {
-  let nearest: SVGCircleElement | null = null;
-  let nearestDist = PORT_HOVER_RADIUS;
-
-  for (const c of appState.components) {
+/** The port nearest the pointer within `radius` screen px - when a wire is being drawn, only
+ * one it could actually be connected to (not its own starting port, nor a terminal of the other
+ * domain). `only` limits the search to one component. */
+function nearestPort(
+  clientX: number,
+  clientY: number,
+  radius: number,
+  only?: Component,
+): { comp: Component; port: PortKey; el: SVGCircleElement } | null {
+  let best: { comp: Component; port: PortKey; el: SVGCircleElement } | null = null;
+  let bestDist = radius;
+  for (const c of only ? [only] : appState.components) {
     for (const port of Object.values(c.ports)) {
+      if (pendingPort) {
+        if (pendingPort.compId === c.id && pendingPort.port === port.key) continue;
+        if (!portDomainsCompatible(pendingPort.compId, pendingPort.port, c.id, port.key)) continue;
+      }
       const rect = port.el.getBoundingClientRect();
       const cx = rect.left + rect.width / 2;
       const cy = rect.top + rect.height / 2;
       const dist = Math.hypot(clientX - cx, clientY - cy);
-      if (dist <= nearestDist) {
-        nearestDist = dist;
-        nearest = port.el;
+      if (dist <= bestDist) {
+        bestDist = dist;
+        best = { comp: c, port: port.key, el: port.el as SVGCircleElement };
       }
     }
   }
+  return best;
+}
+
+function updateHover(clientX: number, clientY: number): void {
+  const nearest = nearestPort(clientX, clientY, PORT_SNAP_RADIUS)?.el ?? null;
 
   if (hoveredPortEl && hoveredPortEl !== nearest) {
     hoveredPortEl.classList.remove('portHover');
@@ -111,29 +118,28 @@ function updatePreview(clientX: number, clientY: number): void {
 }
 
 /**
- * Resolves a press-drag-release: whatever's under the pointer at release decides the outcome -
- * a different port completes the connection, a wire hands off to the splice-into-a-junction
- * handler (wireSplitting.ts, registered via setWireClickInterceptor on the wire itself), and
- * anything else (including releasing back over the starting port) just cancels.
+ * Resolves a press-drag-release: a port it can connect to within snap reach of the pointer
+ * (the one lit up) completes the connection - the pointer needn't be right on the port circle;
+ * otherwise a wire under the pointer hands off to the splice-into-a-junction handler
+ * (wireSplitting.ts, registered via setWireClickInterceptor on the wire itself), and anything
+ * else (including releasing back over the starting port) just cancels.
  */
 function onDrop(clientX: number, clientY: number): void {
   if (!pendingPort) return;
   const from = pendingPort;
 
+  const target = nearestPort(clientX, clientY, PORT_SNAP_RADIUS);
+  if (target) {
+    createConnection(
+      { id: from.compId, port: from.port },
+      { id: target.comp.id, port: target.port },
+    );
+    cancelLinking();
+    return;
+  }
+
   const targetEl = document.elementFromPoint(clientX, clientY);
-  const portEl = targetEl?.closest('.port');
-  if (portEl) {
-    const owner = findPortOwner(portEl);
-    if (
-      owner &&
-      (owner.compId !== from.compId || owner.port !== from.port) &&
-      portDomainsCompatible(from.compId, from.port, owner.compId, owner.port)
-    ) {
-      createConnection(
-        { id: from.compId, port: from.port },
-        { id: owner.compId, port: owner.port },
-      );
-    }
+  if (targetEl?.closest('.port')) {
     cancelLinking();
     return;
   }
@@ -162,6 +168,23 @@ export function getPendingPort(): PendingPort | null {
 export function cancelLinking(): void {
   pendingPort = null;
   previewPath?.setAttribute('d', '');
+}
+
+/**
+ * Starts a wire from whichever of `comp`'s ports is within grab reach of the pointer, if any -
+ * so a press just beside a port, not only right on its small circle, draws a wire from it.
+ * Returns whether it did (the caller then leaves the press alone).
+ */
+export function startLinkingNear(comp: Component, e: MouseEvent): boolean {
+  if (pendingPort) return false;
+  const near = nearestPort(e.clientX, e.clientY, PORT_GRAB_RADIUS, comp);
+  if (!near) return false;
+  e.stopPropagation();
+  e.preventDefault();
+  pendingPort = { compId: comp.id, port: near.port };
+  updateHover(e.clientX, e.clientY);
+  updatePreview(e.clientX, e.clientY);
+  return true;
 }
 
 export function wireUpPortLinking(comp: Component): void {

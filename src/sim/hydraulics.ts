@@ -130,6 +130,15 @@ export type HydElement =
       k: number;
       band: number;
     }
+  /**
+   * Sequence valve, inlet `a` → outlet `b`: shut until the inlet pressure reaches `set`, then
+   * opening over `band` bar - so it holds the inlet at about `set` while passing on whatever
+   * the inlet line delivers beyond that, and the next actuator only moves once the first has
+   * built up that pressure. Piloted from its own inlet, spring chamber drained to tank, so the
+   * outlet pressure doesn't shift the setting. With `check`, a bypass check lets return oil
+   * flow freely b → a.
+   */
+  | { kind: 'sequence'; a: string; b: string; set: number; k: number; band: number; check: boolean }
   /** Closed-loop (over-centre) pump: draws `q` from `b` and delivers it into `a`; a negative
    * `q` (swash plate past centre) reverses the flow. No tank connection - any leakage is
    * modelled separately by the component. */
@@ -583,6 +592,12 @@ export function solveHydraulics(input: HydInput): HydSolution {
         const free = seatFlow(e.k, pa - pb - 1);
         const opening = smoothstep((pb + e.ratio * Math.max(0, px) - e.set) / e.band);
         const q = free - opening * orificeFlow(e.k, pb - pa);
+        return { qa: q, qb: -q, value: q };
+      }
+      case 'sequence': {
+        const opening = smoothstep((pa - e.set) / e.band);
+        const back = e.check ? seatFlow(e.k, pb - pa - 1) : 0;
+        const q = opening * orificeFlow(e.k, pa - pb) - back;
         return { qa: q, qb: -q, value: q };
       }
       case 'compensator': {
