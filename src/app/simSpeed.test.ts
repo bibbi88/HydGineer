@@ -19,6 +19,11 @@ describe('simulation speed', () => {
     expect(simulatedDt(0.02)).toBeCloseTo(0.08, 12);
   });
 
+  it('never goes negative, when a frame timestamp comes out before the last one', () => {
+    expect(simulatedDt(-0.004)).toBe(0);
+    expect(simulatedDt(0)).toBe(0);
+  });
+
   it('clamps a long frame before scaling it, so a stalled tab never jumps far ahead', () => {
     setSimSpeed(2);
     expect(simulatedDt(5)).toBeCloseTo(MAX_DT * 2, 12);
