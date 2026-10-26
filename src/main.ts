@@ -17,6 +17,7 @@ import { startSimLoop } from './sim/loop';
 import { appState } from './app/AppState';
 import { renderTopbar } from './ui/topbar';
 import { showRestoreBanner } from './ui/restoreBanner';
+import { openTermsDialog, termsNeedAgreement } from './ui/termsDialog';
 import { scheduleAutosave, readAutosave, clearAutosave } from './persistence/autosave';
 import { loadProject } from './persistence/project';
 import { initHistory, pushHistory, resetHistory } from './history/historyStore';
@@ -140,3 +141,6 @@ if (autosaved) {
     () => clearAutosave(),
   );
 }
+
+// Last, so the terms sit on top of everything else that opens with the app.
+if (termsNeedAgreement()) openTermsDialog({ requireAgreement: true });

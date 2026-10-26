@@ -1,6 +1,7 @@
 import type { Component } from '../core/types';
 import type { ProjectBarRefs } from './projectBar';
 import { openTipsDialog } from './tipsDialog';
+import { openTermsDialog } from './termsDialog';
 import { createIcon, type IconName } from './icons';
 import { iconButton } from './iconButton';
 import { canEdit } from '../app/modes';
@@ -1357,6 +1358,13 @@ function renderTipsSection(container: HTMLElement): void {
   btn.append(createIcon('tips'), document.createTextNode('Tips & shortcuts'));
   btn.addEventListener('click', () => openTipsDialog());
   section.appendChild(btn);
+
+  const termsBtn = document.createElement('button');
+  termsBtn.className = 'btn inspectorTipsBtn';
+  termsBtn.type = 'button';
+  termsBtn.append(createIcon('document'), document.createTextNode('Terms of use'));
+  termsBtn.addEventListener('click', () => openTermsDialog());
+  section.appendChild(termsBtn);
 
   container.appendChild(section);
 }

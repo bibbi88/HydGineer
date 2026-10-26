@@ -1308,6 +1308,54 @@ rect.wireHandle.wireStubHandle {
   margin-top: 0;
 }
 
+.termsDialog {
+  width: 600px;
+  display: flex;
+  flex-direction: column;
+}
+
+.termsBody {
+  overflow: auto;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--ink);
+}
+
+.termsBody .inspectorSectionHeading:first-child {
+  margin-top: 0;
+}
+
+.termsBody p {
+  margin: 0 0 8px;
+}
+
+.termsFooter {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  padding-top: 12px;
+  margin-top: 4px;
+  border-top: 1px solid var(--line);
+}
+
+.termsDontShow {
+  margin-right: auto;
+  white-space: nowrap;
+  font-size: 12.5px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.termsFooter .btn {
+  margin: 0;
+  width: auto;
+  flex: none;
+  padding-left: 20px;
+  padding-right: 20px;
+}
+
 .tipsList {
   margin: 0 0 14px;
   padding-left: 18px;
