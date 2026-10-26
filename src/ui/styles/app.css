@@ -2055,3 +2055,23 @@ body.libraryDragging,
 body.libraryDragging * {
   cursor: grabbing !important;
 }
+
+/* Simulation speed slider in the toolbar (ui/toolbar.ts). */
+.simSpeed {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin: 0 4px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.simSpeedSlider {
+  width: 80px;
+}
+
+.simSpeedValue {
+  min-width: 34px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
