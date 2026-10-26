@@ -2,9 +2,10 @@ import type { Component, Connection, ComponentId, PortKey } from '../core/types'
 import type { ViewportAdapter } from '../ui/viewport';
 import { appState } from '../app/AppState';
 import { componentRotation, portGlobalPosition, rotateQuarter } from './coords';
-import { routeWithGuides, type Point, type PortAnchor } from './routing';
+import { routeWithGuides, stubDirection, type Point, type PortAnchor } from './routing';
 import { autoRouteAStar } from './autoRoute';
 import { JUNCTION_TYPE } from '../components/junction';
+import { WIRE_STUB } from '../sim/constants';
 
 interface CacheEntry {
   topologyVersion: number;
@@ -234,6 +235,79 @@ export function alignJunctionAnchor(junction: PortAnchor, other: PortAnchor): Po
     : { ...junction, entryOrientation };
 }
 
+/** Clear space, px, an L-shaped wire keeps from the components it passes. */
+const L_CLEARANCE = 4;
+
+/** Whether the axis-aligned segment p-q runs along a stretch of `route` (the same line, for
+ * more than a few px) - two wires on top of each other would read as one. */
+function runsAlong(p: Point, q: Point, route: Point[]): boolean {
+  for (let i = 0; i < route.length - 1; i++) {
+    const a = route[i] as Point;
+    const b = route[i + 1] as Point;
+    if (p.y === q.y && a.y === b.y && a.y === p.y) {
+      const overlap =
+        Math.min(Math.max(p.x, q.x), Math.max(a.x, b.x)) -
+        Math.max(Math.min(p.x, q.x), Math.min(a.x, b.x));
+      if (overlap > 2) return true;
+    }
+    if (p.x === q.x && a.x === b.x && a.x === p.x) {
+      const overlap =
+        Math.min(Math.max(p.y, q.y), Math.max(a.y, b.y)) -
+        Math.max(Math.min(p.y, q.y), Math.min(a.y, b.y));
+      if (overlap > 2) return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * The plain L - one horizontal run and one vertical, meeting at a single corner - between a port
+ * whose wire leaves sideways and one whose wire leaves up or down (a pilot port and a valve's
+ * outlet, say), whenever it works: the corner lies at least a stub's length out from each port
+ * the way its wire leaves, neither run crosses a component other than the wire's own two, and
+ * neither runs on top of another wire. null otherwise, and the grid router finds a way round.
+ * Its own preference for few bends isn't enough on its own: near components and other wires
+ * the coarse grid's extra costs can make it pick a jog where this L is plainly free.
+ */
+function lRoute(
+  from: PortAnchor,
+  to: PortAnchor,
+  ownIds: Set<ComponentId>,
+  otherWires: Point[][],
+): Point[] | null {
+  if (from.entryOrientation === to.entryOrientation) return null;
+  const corner =
+    from.entryOrientation === 'H' ? { x: to.pos.x, y: from.pos.y } : { x: from.pos.x, y: to.pos.y };
+  const leavesTowardCorner = (a: PortAnchor): boolean => {
+    const along = a.entryOrientation === 'H' ? corner.x - a.pos.x : corner.y - a.pos.y;
+    return along * stubDirection(a, corner) >= WIRE_STUB;
+  };
+  if (!leavesTowardCorner(from) || !leavesTowardCorner(to)) return null;
+
+  const runs: Array<[Point, Point]> = [
+    [from.pos, corner],
+    [corner, to.pos],
+  ];
+  for (const c of appState.components) {
+    if (ownIds.has(c.id)) continue;
+    const b = c.getBounds();
+    for (const [p, q] of runs) {
+      if (
+        Math.max(p.x, q.x) >= b.x - L_CLEARANCE &&
+        Math.min(p.x, q.x) <= b.x + b.w + L_CLEARANCE &&
+        Math.max(p.y, q.y) >= b.y - L_CLEARANCE &&
+        Math.min(p.y, q.y) <= b.y + b.h + L_CLEARANCE
+      ) {
+        return null;
+      }
+    }
+  }
+  for (const route of otherWires) {
+    for (const [p, q] of runs) if (runsAlong(p, q, route)) return null;
+  }
+  return [from.pos, corner, to.pos];
+}
+
 export function computeConnectionGeometry(
   viewport: ViewportAdapter,
   workspaceEl: HTMLElement,
@@ -304,6 +378,22 @@ export function computeConnectionGeometry(
     if (sharedRun(other)) continue;
     const route = lastRoute.get(other.id);
     if (route) otherWires.push(route);
+  }
+
+  // A sideways port to an up/down one: a plain L when there's room for it.
+  const ell = lRoute(fromAnchor, toAnchor, new Set([conn.from.id, conn.to.id]), otherWires);
+  if (ell) {
+    lastRoute.set(conn.id, ell);
+    cache.set(conn.id, {
+      topologyVersion: appState.topologyVersion,
+      fromX: fromAnchor.pos.x,
+      fromY: fromAnchor.pos.y,
+      toX: toAnchor.pos.x,
+      toY: toAnchor.pos.y,
+      sides,
+      points: ell,
+    });
+    return ell;
   }
 
   // The wire's own two components are obstacles too: every wire now leaves its port outward

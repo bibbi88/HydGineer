@@ -3,6 +3,7 @@ import { autoRouteAStar } from './autoRoute';
 import {
   alignJunctionAnchor,
   computeConnectionAnchors,
+  computeConnectionGeometry,
   worldPortAnchor,
 } from './connectionGeometry';
 import { completeGuides, guideCorners, type Point, type PortAnchor } from './routing';
@@ -16,6 +17,7 @@ import {
   createHydPilotCheck,
 } from '../components/hyd/valves';
 import { createJunction } from '../components/junction';
+import { createHydTank } from '../components/hyd/supply';
 import { setComponentMirrored, setComponentRotation } from '../interaction/componentContextMenu';
 
 const layer = (): HTMLElement => document.createElement('div');
@@ -252,5 +254,52 @@ describe('which side of a junction a free-routed wire uses', () => {
 
     const anchors = computeConnectionAnchors(viewport, workspaceEl, branch);
     expect(anchors?.toAnchor).toMatchObject({ entryOrientation: 'H', pilotDir: 1 });
+  });
+});
+
+describe('a sideways port wired to an up/down one', () => {
+  /** A pilot-operated check valve's pilot X (out to the left) to a 4/2 valve's port A (out the
+   * top), the 4/2 valve below and to the left - and, optionally, something standing in the way. */
+  function pilotToPort(blocker?: Point): Point[] {
+    appState.components = [];
+    appState.connections = [];
+    initWires(
+      document.createElementNS('http://www.w3.org/2000/svg', 'svg') as SVGSVGElement,
+      viewport,
+      workspaceEl,
+    );
+    const check = createHydPilotCheck(layer(), 400, 0);
+    const valve = createValve52Mono(layer(), 0, 260);
+    appState.addComponent(check);
+    appState.addComponent(valve);
+    const cb = check.getBounds();
+    const vb = valve.getBounds();
+    placePort(check, 'X', { x: cb.x - 20, y: cb.y + cb.h / 2 });
+    placePort(valve, 'A', { x: vb.x + vb.w / 2, y: vb.y - 10 });
+    if (blocker) appState.addComponent(createHydTank(layer(), blocker.x, blocker.y));
+    const conn = createConnection({ id: check.id, port: 'X' }, { id: valve.id, port: 'A' });
+    return computeConnectionGeometry(viewport, workspaceEl, conn);
+  }
+
+  it('runs across and then down, one corner and no jog', () => {
+    const points = pilotToPort();
+    expect(points).toHaveLength(3);
+    const [a, corner, b] = points as [Point, Point, Point];
+    expect(corner.y).toBe(a.y);
+    expect(corner.x).toBe(b.x);
+  });
+
+  it('keeps the L with a component standing just beside it, not in its way', () => {
+    // The grid router alone, kept off by its extra cost near components, jogs here.
+    const corner = pilotToPort()[1] as Point;
+    const points = pilotToPort({ x: corner.x + 30, y: corner.y + 80 });
+    expect(points).toHaveLength(3);
+  });
+
+  it('goes round something standing on that L instead', () => {
+    const plain = pilotToPort();
+    const corner = plain[1] as Point;
+    const routed = pilotToPort({ x: corner.x, y: corner.y + 60 });
+    expect(routed.length).toBeGreaterThan(3);
   });
 });
