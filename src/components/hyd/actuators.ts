@@ -39,6 +39,31 @@ const BODY_H = 40;
 const PISTON_W = 6;
 const TRAVEL = 170;
 
+/** Return spring: coils it has with room for them, how far each zig reaches either side of the
+ * centre line, and the closest its zigs get before it drops a coil. */
+const SPRING_COILS = 6;
+const SPRING_AMPLITUDE = BODY_H / 2 - 4;
+const SPRING_MIN_PITCH = 4;
+
+/**
+ * The return spring's zigzag, from the piston face (`x0`) to the end wall it pushes against
+ * (`x1`), around the rod: centred on it, its coils passing behind it. Squeezed short at the end
+ * of the stroke it keeps only as many coils as stay apart, so it reads as a tightly packed
+ * spring rather than a solid block.
+ */
+function springPath(x0: number, x1: number): string {
+  const cy = BODY_Y + BODY_H / 2;
+  const fitting = 2 * Math.floor((x1 - x0) / (2 * SPRING_MIN_PITCH));
+  const zigs = Math.max(4, Math.min(SPRING_COILS * 2, fitting));
+  const step = (x1 - x0) / zigs;
+  let d = `M ${x0} ${cy}`;
+  for (let i = 0; i < zigs; i++) {
+    // Each zig peaks halfway along its step; the last one comes back to the centre line.
+    d += ` L ${x0 + (i + 0.5) * step} ${cy + (i % 2 === 0 ? -1 : 1) * SPRING_AMPLITUDE}`;
+  }
+  return `${d} L ${x1} ${cy}`;
+}
+
 interface CylinderDrawing {
   piston: SVGRectElement;
   rod: SVGRectElement;
@@ -68,7 +93,10 @@ function drawCylinder(shell: HydShell, withSpring: boolean, withPortB: boolean):
     height: 18,
     fill: '#666',
   });
-  const spring = withSpring ? path(g, '', { 'stroke-width': 1.5 }) : null;
+  // Drawn before the rod, so its coils pass behind it - a spring around the rod.
+  const spring = withSpring
+    ? path(g, '', { 'stroke-width': 1.5, 'stroke-linejoin': 'round', 'stroke-linecap': 'round' })
+    : null;
   g.append(piston, rod, tip);
   line(g, 30, BODY_Y + BODY_H, 30, 70);
   if (withPortB) line(g, 170, BODY_Y + BODY_H, 170, 70);
@@ -81,25 +109,16 @@ function drawCylinder(shell: HydShell, withSpring: boolean, withPortB: boolean):
   if (withPortB) createPortLabel(g, 162, 72, 'B', { anchor: 'end', fontSize: 10 });
 
   function update(pos: number): void {
-    const px = BODY_X + 2 + pos * TRAVEL;
+    // With a spring, the piston stops short of the end wall by the spring's packed length.
+    const travel = spring ? TRAVEL - 4 * SPRING_MIN_PITCH : TRAVEL;
+    const px = BODY_X + 2 + pos * travel;
     piston.setAttribute('x', String(px));
     const rodStart = px + PISTON_W;
     const rodEnd = rodStart + 184;
     rod.setAttribute('x', String(rodStart));
     rod.setAttribute('width', String(rodEnd - rodStart));
     tip.setAttribute('x', String(rodEnd));
-    if (spring) {
-      const x1 = rodStart;
-      const x2 = BODY_X + BODY_W;
-      const n = 8;
-      const step = (x2 - x1) / (n + 1);
-      let d = `M ${x1} ${BODY_Y + 12}`;
-      for (let i = 0; i < n; i++) {
-        d += ` L ${x1 + step * (i + 0.5)} ${BODY_Y + (i % 2 === 0 ? 4 : 18)}`;
-      }
-      d += ` L ${x2} ${BODY_Y + 12}`;
-      spring.setAttribute('d', d);
-    }
+    if (spring) spring.setAttribute('d', springPath(rodStart + 1, BODY_X + BODY_W - 1));
   }
   update(0);
   return { piston, rod, tip, spring, update };
