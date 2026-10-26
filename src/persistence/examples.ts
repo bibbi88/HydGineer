@@ -269,6 +269,55 @@ export const EXAMPLES: Array<{ title: string; file: () => ProjectFileV1 }> = [
       }),
   },
   {
+    title: 'Clamp first, then press: sequence valve',
+    file: () =>
+      circuit('Example - sequence valve', (b) => {
+        // Both cylinders hang on the same A line. The clamp needs only ~8 bar to move, so the
+        // pressure stays low while it closes; the sequence valve, set at 60 bar, only lets oil
+        // on to the press once the clamp has stopped against the part and the pressure rises.
+        // Back again, both retract together - the press's return oil through the bypass check.
+        const supply = powerUnit(b, 260, 640, 140);
+        const valve = b.add('hydValve43', 420, 480, {
+          actuation: 'lever',
+          center: 'closed',
+          qNom: 30,
+        });
+        const tank = b.add('hydTank', 520, 560);
+        const clamp = b.add('hydCylinderDouble', 300, 100, {
+          bore: 40,
+          rodD: 22,
+          stroke: 100,
+          load: 1000,
+          friction: 100,
+          showName: true,
+          customName: 'Clamp',
+        });
+        const press = b.add('hydCylinderDouble', 640, 100, {
+          bore: 63,
+          rodD: 36,
+          stroke: 200,
+          load: 10000,
+          friction: 200,
+          showName: true,
+          customName: 'Press',
+        });
+        const seq = b.add('hydSequence', 600, 290, { setting: 60, qNom: 30, check: true });
+        const drainTank = b.add('hydTank', 720, 360);
+        const ja = b.add('junction', 380, 370, { orientation: 'H' });
+        const jb = b.add('junction', 480, 330, { orientation: 'H' });
+        b.wire(supply, 'P', valve, 'P');
+        b.wire(valve, 'T', tank, 'T');
+        b.wire(valve, 'A', ja, 'P');
+        b.wire(ja, 'P', clamp, 'A');
+        b.wire(ja, 'P', seq, 'P');
+        b.wire(seq, 'A', press, 'A');
+        b.wire(seq, 'L', drainTank, 'T');
+        b.wire(valve, 'B', jb, 'P');
+        b.wire(jb, 'P', clamp, 'B');
+        b.wire(jb, 'P', press, 'B');
+      }),
+  },
+  {
     title: 'Clamping with a pressure-compensated pump',
     file: () =>
       circuit('Example - pressure-compensated pump', (b) => {

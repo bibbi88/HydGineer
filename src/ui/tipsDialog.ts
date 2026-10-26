@@ -97,6 +97,10 @@ const TIP_SECTIONS: TipSection[] = [
         'cylinder that carries the load (L), with its pilot X from the other cylinder line. It ' +
         'lets oil in freely, holds the load, and lets it down only while the pump drives it ' +
         'down - so the load can never run away.',
+      'Sequence valve: put it in the line to a second actuator. It stays shut until its ' +
+        'inlet reaches the setting - while the first cylinder is still moving the pressure is ' +
+        'low - and only then lets oil on, e.g. clamp first, then press. Pipe its drain L to ' +
+        'tank; the bypass check lets the return oil back.',
       'Pump: set Displacement to "Variable, pressure compensated" and the pump swivels back ' +
         'near its compensator setting, delivering only what the circuit takes - compare the ' +
         'power with a fixed pump dumping over its relief valve. Its Motor signal "!S1" runs it ' +

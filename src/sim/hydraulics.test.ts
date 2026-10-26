@@ -705,3 +705,67 @@ describe('wireFlows', () => {
     expect(flows.get(3)).toBeCloseTo(-7);
   });
 });
+
+describe('sequence valve', () => {
+  // Pump 10 L/min into P; the valve's outlet A drains to tank through a free-flowing orifice.
+  function seq(set: number, extra: HydElement[] = []) {
+    return solve(
+      ['P', 'A', 'T'],
+      [],
+      [
+        { kind: 'pump', out: 'P', q: 10, leak: 0 },
+        { kind: 'sequence', a: 'P', b: 'A', set, k: 10, band: 5, check: true },
+        { kind: 'orifice', a: 'A', b: 'T', k: 20 },
+        { kind: 'relief', a: 'P', b: 'T', set: 200, gain: 20 },
+        { kind: 'tank', a: 'T' },
+        ...extra,
+      ],
+    );
+  }
+
+  it('holds its inlet at the setting and passes the flow on to the outlet', () => {
+    const s = seq(50);
+    const pP = s.pressure.get('P')!;
+    expect(pP).toBeGreaterThan(50);
+    expect(pP).toBeLessThan(55);
+    expect(s.elementValue[1]).toBeCloseTo(10, 2);
+  });
+
+  it('stays shut while the inlet is below the setting - a first cylinder still moving', () => {
+    // A cylinder on P that takes all the pump flow at 20 bar (4 kN on 50 mm).
+    const areaA = circleAreaCm2(50);
+    const s = seq(50, [
+      {
+        kind: 'piston',
+        a: 'P',
+        areaA,
+        areaB: 0,
+        load: 20 * areaA * 10,
+        friction: 0,
+        atMin: false,
+        atMax: false,
+      },
+    ]);
+    expect(s.pressure.get('P')).toBeCloseTo(20, 0);
+    expect(Math.abs(s.elementValue[1]!)).toBeLessThan(1e-3);
+  });
+
+  it('lets return oil back freely through its check, or not at all without one', () => {
+    const back = (check: boolean) =>
+      solve(
+        ['P', 'A', 'T'],
+        [],
+        [
+          { kind: 'pump', out: 'A', q: 10, leak: 0 },
+          { kind: 'sequence', a: 'P', b: 'A', set: 50, k: 10, band: 5, check },
+          { kind: 'orifice', a: 'P', b: 'T', k: 20 },
+          { kind: 'relief', a: 'A', b: 'T', set: 200, gain: 20 },
+          { kind: 'tank', a: 'T' },
+        ],
+      );
+    expect(back(true).elementValue[1]).toBeCloseTo(-10, 2);
+    expect(back(true).pressure.get('A')).toBeLessThan(5);
+    expect(Math.abs(back(false).elementValue[1]!)).toBeLessThan(1e-3);
+    expect(back(false).pressure.get('A')).toBeGreaterThan(199);
+  });
+});

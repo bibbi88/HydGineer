@@ -35,6 +35,7 @@ import {
   HYD_FLOW_CONTROL_TYPE,
   HYD_REDUCING_TYPE,
   HYD_COUNTERBALANCE_TYPE,
+  HYD_SEQUENCE_TYPE,
   HYD_VALVE_LS_TYPE,
   HYD_PRESSURE_COMP_TYPE,
   HYD_CROSS_RELIEF_TYPE,
@@ -432,6 +433,18 @@ const INSPECTOR_FIELDS: Record<string, InspectorField[]> = {
       max: 2000,
       step: 1,
     },
+  ],
+  [HYD_SEQUENCE_TYPE]: [
+    { kind: 'number', key: 'setting', label: 'Opening pressure (bar)', min: 1, max: 700, step: 5 },
+    {
+      kind: 'number',
+      key: 'qNom',
+      label: 'Nominal flow (L/min at Δp 5 bar)',
+      min: 0.5,
+      max: 2000,
+      step: 1,
+    },
+    { kind: 'checkbox', key: 'check', label: 'Bypass check valve (free A→P)' },
   ],
   [HYD_RELIEF_TYPE]: [
     { kind: 'number', key: 'setting', label: 'Cracking pressure (bar)', min: 0, max: 700, step: 5 },
