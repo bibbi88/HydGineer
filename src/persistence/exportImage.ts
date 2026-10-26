@@ -1,5 +1,6 @@
 import { appState } from '../app/AppState';
 import { computeContentBounds, type WorldBounds } from '../geometry/contentBounds';
+import { buildPdf, MM } from './pdfWriter';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 const EXPORT_PADDING = 40;
@@ -34,6 +35,58 @@ const EXPORT_STYLE = `
  * exactly that rect (no extra padding added - the caller already picked the exact edges, e.g.
  * the page frame's own sheet, or whatever's currently on screen). */
 export type ExportRegion = 'auto' | WorldBounds;
+
+/** Text a component shows as HTML over its drawing rather than inside its svg - its name label
+ * (when switched on) and a cylinder's force readout - which an export has to redraw as svg text,
+ * or it would silently go missing. */
+const OVERLAY_TEXT_SELECTOR = '.compNameText, .forceLabel';
+
+function isShown(el: HTMLElement, stopAt: HTMLElement): boolean {
+  for (let node: HTMLElement | null = el; node && node !== stopAt; node = node.parentElement) {
+    if (node.style.display === 'none' || getComputedStyle(node).display === 'none') return false;
+  }
+  return true;
+}
+
+/** `el`'s box in its component's own (unrotated) coordinates - offsetLeft/Top ignore CSS
+ * transforms, which is exactly what's wanted, since the export applies the rotation itself. */
+function localBox(
+  el: HTMLElement,
+  compEl: HTMLElement,
+): { x: number; y: number; w: number; h: number } {
+  let x = 0;
+  let y = 0;
+  let node: HTMLElement | null = el;
+  while (node && node !== compEl) {
+    x += node.offsetLeft;
+    y += node.offsetTop;
+    node = node.offsetParent as HTMLElement | null;
+  }
+  return { x, y, w: el.offsetWidth, h: el.offsetHeight };
+}
+
+/** Svg text for every shown overlay label of `compEl`, centered where it sits on the canvas. */
+function overlayTexts(compEl: HTMLElement): SVGTextElement[] {
+  const out: SVGTextElement[] = [];
+  for (const el of Array.from(compEl.querySelectorAll<HTMLElement>(OVERLAY_TEXT_SELECTOR))) {
+    const text = el.textContent?.trim();
+    if (!text || el.closest('svg') || !isShown(el, compEl)) continue;
+    const box = localBox(el, compEl);
+    const style = getComputedStyle(el);
+    const t = document.createElementNS(SVG_NS, 'text');
+    t.setAttribute('x', String(box.x + box.w / 2));
+    t.setAttribute('y', String(box.y + box.h / 2));
+    t.setAttribute('text-anchor', 'middle');
+    t.setAttribute('dominant-baseline', 'central');
+    t.setAttribute('font-size', style.fontSize || '12px');
+    if (style.fontFamily) t.setAttribute('font-family', style.fontFamily);
+    if (style.fontWeight) t.setAttribute('font-weight', style.fontWeight);
+    t.setAttribute('fill', style.color || '#666');
+    t.textContent = text;
+    out.push(t);
+  }
+  return out;
+}
 
 function resolveExportBounds(region: ExportRegion): WorldBounds {
   if (region !== 'auto') return region;
@@ -116,6 +169,19 @@ export function buildExportSvg(
       g.appendChild(clone);
     }
     svg.appendChild(g);
+
+    // The labels turn with the component, as on the canvas, but aren't mirrored with its
+    // artwork (they sit outside its svg) - so they get their own group without the flip.
+    const texts = overlayTexts(c.el);
+    if (texts.length > 0) {
+      const tg = document.createElementNS(SVG_NS, 'g');
+      tg.setAttribute(
+        'transform',
+        `translate(${c.x}, ${c.y}) rotate(${rot}) translate(${-c.svgW / 2}, ${-c.svgH / 2})`,
+      );
+      tg.append(...texts);
+      svg.appendChild(tg);
+    }
   }
 
   return svg;
@@ -129,22 +195,14 @@ export function exportProjectAsSvg(
 ): void {
   const svg = buildExportSvg(connLayer, frameLayer, region);
   const serialized = new XMLSerializer().serializeToString(svg);
-  const blob = new Blob([serialized], { type: 'image/svg+xml' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `${name}.svg`;
-  a.click();
-  URL.revokeObjectURL(url);
+  download(new Blob([serialized], { type: 'image/svg+xml' }), `${name}.svg`);
 }
 
-export async function exportProjectAsPng(
-  name: string,
-  connLayer: SVGSVGElement,
-  frameLayer: SVGSVGElement | null,
-  region: ExportRegion,
-): Promise<void> {
-  const svg = buildExportSvg(connLayer, frameLayer, region);
+/** Draws the export svg onto a canvas `scale` times its own size. */
+async function renderToCanvas(
+  svg: SVGSVGElement,
+  scale: number,
+): Promise<HTMLCanvasElement | null> {
   const width = Number(svg.getAttribute('width'));
   const height = Number(svg.getAttribute('height'));
   const serialized = new XMLSerializer().serializeToString(svg);
@@ -155,19 +213,98 @@ export async function exportProjectAsPng(
   await img.decode();
 
   const canvas = document.createElement('canvas');
-  canvas.width = width;
-  canvas.height = height;
+  canvas.width = Math.round(width * scale);
+  canvas.height = Math.round(height * scale);
   const context = canvas.getContext('2d');
-  if (!context) return;
-  context.drawImage(img, 0, 0, width, height);
+  if (!context) return null;
+  context.drawImage(img, 0, 0, canvas.width, canvas.height);
+  return canvas;
+}
 
-  const blob: Blob | null = await new Promise((resolve) => canvas.toBlob(resolve, 'image/png'));
-  if (!blob) return;
-
+function download(blob: Blob, filename: string): void {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `${name}.png`;
+  a.download = filename;
   a.click();
   URL.revokeObjectURL(url);
+}
+
+export async function exportProjectAsPng(
+  name: string,
+  connLayer: SVGSVGElement,
+  frameLayer: SVGSVGElement | null,
+  region: ExportRegion,
+): Promise<void> {
+  const canvas = await renderToCanvas(buildExportSvg(connLayer, frameLayer, region), 1);
+  if (!canvas) return;
+  const blob: Blob | null = await new Promise((resolve) => canvas.toBlob(resolve, 'image/png'));
+  if (blob) download(blob, `${name}.png`);
+}
+
+/** Paper sizes, mm, portrait. */
+const PAPER_MM = { a4: { w: 210, h: 297 }, a3: { w: 297, h: 420 } };
+export type PdfPaper = keyof typeof PAPER_MM;
+const PDF_MARGIN_MM = 10;
+/** Print resolution of the drawing, dots per inch - sharp on paper, a few MB at most. */
+const PDF_DPI = 200;
+/** Browsers refuse canvases much past this many pixels (Safari's limit is about 16.7 million). */
+const MAX_CANVAS_PIXELS = 16_000_000;
+
+/** Where a drawing `aspect` (width / height) goes on `paper`: turned to whichever orientation
+ * suits it, scaled to fit inside the margins and centered. Sizes in pt. */
+export function layoutPdfPage(
+  paper: PdfPaper,
+  aspect: number,
+): { width: number; height: number; imageRect: { x: number; y: number; w: number; h: number } } {
+  const { w: shortMm, h: longMm } = PAPER_MM[paper];
+  const landscape = aspect >= 1;
+  const width = (landscape ? longMm : shortMm) * MM;
+  const height = (landscape ? shortMm : longMm) * MM;
+  const boxW = width - 2 * PDF_MARGIN_MM * MM;
+  const boxH = height - 2 * PDF_MARGIN_MM * MM;
+  const w = Math.min(boxW, boxH * aspect);
+  const h = w / aspect;
+  return { width, height, imageRect: { x: (width - w) / 2, y: (height - h) / 2, w, h } };
+}
+
+/** zlib-compresses `data` (what a PDF's FlateDecode filter expects). */
+async function deflate(data: Uint8Array): Promise<Uint8Array> {
+  const stream = new Blob([data as BlobPart])
+    .stream()
+    .pipeThrough(new CompressionStream('deflate'));
+  return new Uint8Array(await new Response(stream).arrayBuffer());
+}
+
+/** Exports as a one-page PDF on A4 or A3 paper, the drawing fitted inside a 10 mm margin. */
+export async function exportProjectAsPdf(
+  name: string,
+  connLayer: SVGSVGElement,
+  frameLayer: SVGSVGElement | null,
+  region: ExportRegion,
+  paper: PdfPaper,
+): Promise<void> {
+  const svg = buildExportSvg(connLayer, frameLayer, region);
+  const width = Number(svg.getAttribute('width'));
+  const height = Number(svg.getAttribute('height'));
+  const page = layoutPdfPage(paper, width / height);
+
+  const wanted = ((page.imageRect.w / 72) * PDF_DPI) / width;
+  const scale = Math.min(wanted, Math.sqrt(MAX_CANVAS_PIXELS / (width * height)));
+  const canvas = await renderToCanvas(svg, scale);
+  const context = canvas?.getContext('2d');
+  if (!canvas || !context) return;
+
+  const rgba = context.getImageData(0, 0, canvas.width, canvas.height).data;
+  const rgb = new Uint8Array(canvas.width * canvas.height * 3);
+  for (let i = 0, j = 0; i < rgba.length; i += 4, j += 3) {
+    rgb[j] = rgba[i] ?? 255;
+    rgb[j + 1] = rgba[i + 1] ?? 255;
+    rgb[j + 2] = rgba[i + 2] ?? 255;
+  }
+  const pdf = buildPdf(
+    { ...page, title: name },
+    { width: canvas.width, height: canvas.height, deflated: await deflate(rgb) },
+  );
+  download(new Blob([pdf as BlobPart], { type: 'application/pdf' }), `${name}.pdf`);
 }

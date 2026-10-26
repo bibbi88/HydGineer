@@ -1291,6 +1291,15 @@ rect.wireHandle.wireStubHandle {
   text-align: center;
 }
 
+/* The PDF's paper size, beside its export button. */
+.exportPaperSelect {
+  font: inherit;
+  padding: 0 6px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #fff;
+}
+
 .tipsDialog {
   width: 520px;
 }

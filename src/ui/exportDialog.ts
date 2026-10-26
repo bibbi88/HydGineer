@@ -6,8 +6,11 @@ import {
   buildExportSvg,
   exportProjectAsSvg,
   exportProjectAsPng,
+  exportProjectAsPdf,
   type ExportRegion,
+  type PdfPaper,
 } from '../persistence/exportImage';
+import { appState } from '../app/AppState';
 
 type RegionChoice = 'auto' | 'frame' | 'view';
 
@@ -116,11 +119,27 @@ export function openExportDialog(
   const pngBtn = document.createElement('button');
   pngBtn.className = 'btn';
   pngBtn.textContent = 'Export as PNG';
+  const pdfBtn = document.createElement('button');
+  pdfBtn.className = 'btn';
+  pdfBtn.textContent = 'Export as PDF';
+  // The PDF's paper - the page frame's own size when there is one, A4 otherwise. The drawing is
+  // fitted onto it, turned to whichever orientation suits it.
+  const paperSelect = document.createElement('select');
+  paperSelect.className = 'exportPaperSelect';
+  paperSelect.setAttribute('aria-label', 'PDF paper size');
+  paperSelect.title = 'Paper size for the PDF';
+  for (const [value, label] of [
+    ['a4', 'A4'],
+    ['a3', 'A3'],
+  ] as const) {
+    paperSelect.append(new Option(label, value));
+  }
+  paperSelect.value = appState.pageFrameSize === 'a3' ? 'a3' : 'a4';
   const cancelBtn = document.createElement('button');
   cancelBtn.className = 'btn';
   cancelBtn.textContent = 'Cancel';
   cancelBtn.addEventListener('click', () => close());
-  buttonRow.append(svgBtn, pngBtn, cancelBtn);
+  buttonRow.append(svgBtn, pngBtn, pdfBtn, paperSelect, cancelBtn);
   dialog.appendChild(buttonRow);
 
   function close(): void {
@@ -157,10 +176,12 @@ export function openExportDialog(
       previewBox.appendChild(empty);
       svgBtn.disabled = true;
       pngBtn.disabled = true;
+      pdfBtn.disabled = true;
       return;
     }
     svgBtn.disabled = false;
     pngBtn.disabled = false;
+    pdfBtn.disabled = false;
     const region = resolveRegion(choice, viewport, workspaceEl);
     const preview = buildExportSvg(connLayer, frameLayer, region);
     preview.classList.add('exportPreviewSvg');
@@ -177,6 +198,17 @@ export function openExportDialog(
       connLayer,
       frameLayer,
       resolveRegion(choice, viewport, workspaceEl),
+    );
+    close();
+  });
+
+  pdfBtn.addEventListener('click', () => {
+    void exportProjectAsPdf(
+      name,
+      connLayer,
+      frameLayer,
+      resolveRegion(choice, viewport, workspaceEl),
+      paperSelect.value as PdfPaper,
     );
     close();
   });

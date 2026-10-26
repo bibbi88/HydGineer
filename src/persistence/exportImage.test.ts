@@ -1,7 +1,10 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { appState } from '../app/AppState';
-import { buildExportSvg } from './exportImage';
+import { buildExportSvg, layoutPdfPage } from './exportImage';
 import { createHydPump as createSource } from '../components/hyd/supply';
+import { createHydCylinderDouble as createCylinderDouble } from '../components/hyd/actuators';
+import { setComponentRotation } from '../interaction/componentContextMenu';
+import { MM } from './pdfWriter';
 
 function compLayer(): HTMLElement {
   return document.createElement('div');
@@ -92,5 +95,61 @@ describe('buildExportSvg', () => {
     expect(style?.textContent).toMatch(/\.wire\s*\{[^}]*fill:\s*none/);
     expect(style?.textContent).toContain('.port');
     expect(style?.textContent).toContain('.pageFrameRect');
+  });
+});
+
+describe('buildExportSvg - labels', () => {
+  beforeEach(() => {
+    appState.components = [];
+  });
+
+  function texts(svg: SVGSVGElement): string[] {
+    return Array.from(svg.querySelectorAll(':scope > g > text')).map((t) => t.textContent ?? '');
+  }
+
+  it("draws a component's name label when it is switched on, and not when it is off", () => {
+    const cyl = createCylinderDouble(compLayer(), 300, 200);
+    appState.addComponent(cyl);
+    cyl.restore({ ...cyl.snapshot(), showName: true, customName: 'Clamp' });
+
+    const shown = buildExportSvg(svgLayer(), null, 'auto');
+    expect(texts(shown)).toContain('Clamp');
+    const label = shown.querySelector(':scope > g > text');
+    expect(label?.getAttribute('text-anchor')).toBe('middle');
+
+    cyl.restore({ ...cyl.snapshot(), showName: false });
+    expect(texts(buildExportSvg(svgLayer(), null, 'auto'))).not.toContain('Clamp');
+  });
+
+  it('turns the label with the component, as on the canvas', () => {
+    const src = createSource(compLayer(), 300, 200);
+    appState.addComponent(src);
+    src.restore({ ...src.snapshot(), showName: true });
+    setComponentRotation(src, 90);
+
+    const svg = buildExportSvg(svgLayer(), null, 'auto');
+    const group = svg.querySelector(':scope > g > text')?.parentElement;
+    expect(group?.getAttribute('transform')).toContain('rotate(90)');
+  });
+});
+
+describe('layoutPdfPage', () => {
+  it('turns A4 landscape for a wide drawing and fits it inside 10 mm margins, centered', () => {
+    const page = layoutPdfPage('a4', 2);
+    expect(page.width).toBeCloseTo(297 * MM);
+    expect(page.height).toBeCloseTo(210 * MM);
+    const r = page.imageRect;
+    expect(r.w).toBeCloseTo(277 * MM);
+    expect(r.h).toBeCloseTo(138.5 * MM);
+    expect(r.x).toBeCloseTo(10 * MM);
+    expect(r.y + r.h / 2).toBeCloseTo(page.height / 2);
+  });
+
+  it('stays portrait for a tall drawing, limited by the height', () => {
+    const page = layoutPdfPage('a3', 0.5);
+    expect(page.width).toBeCloseTo(297 * MM);
+    expect(page.height).toBeCloseTo(420 * MM);
+    expect(page.imageRect.h).toBeCloseTo(400 * MM);
+    expect(page.imageRect.w).toBeCloseTo(200 * MM);
   });
 });
