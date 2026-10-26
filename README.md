@@ -75,7 +75,9 @@ electro-hydraulic control, motor speed control, load holding, and synchronising 
 cylinders with each type of flow divider, accumulator charging, counterbalance valve,
 clamp-then-press with a sequence valve, pressure-compensated pump, inertia and pressure peaks, load sensing with one and two
 sections, with and without pressure compensators, hydrostatic transmission with fixed or
-variable motor). Flow dividers, pumps, motors and directional valves can be swapped type in place from the inspector, or by dropping the other type onto them.
+variable motor). Flow dividers, pumps, motors, directional valves, check valves and throttles /
+flow controls can be swapped type in place from the inspector, or by dropping the other type onto
+them.
 
 ## Running
 

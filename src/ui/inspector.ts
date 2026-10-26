@@ -481,15 +481,19 @@ const INSPECTOR_FIELDS: Record<string, InspectorField[]> = {
     VALVE_FLOW_FIELD,
   ],
   [HYD_CHECK_TYPE]: [
+    { kind: 'actuatorMode', label: 'Valve type', options: swapFamilyOf(HYD_CHECK_TYPE) },
     { kind: 'number', key: 'crack', label: 'Cracking pressure (bar)', min: 0, max: 50, step: 0.5 },
   ],
   [HYD_PILOT_CHECK_TYPE]: [
+    { kind: 'actuatorMode', label: 'Valve type', options: swapFamilyOf(HYD_PILOT_CHECK_TYPE) },
     { kind: 'number', key: 'ratio', label: 'Pilot ratio', min: 1, max: 20, step: 0.5 },
   ],
   [HYD_THROTTLE_TYPE]: [
+    { kind: 'actuatorMode', label: 'Valve type', options: swapFamilyOf(HYD_THROTTLE_TYPE) },
     { kind: 'number', key: 'diameter', label: 'Orifice diameter (mm)', min: 0, max: 50, step: 0.1 },
   ],
   [HYD_ONE_WAY_FC_TYPE]: [
+    { kind: 'actuatorMode', label: 'Valve type', options: swapFamilyOf(HYD_ONE_WAY_FC_TYPE) },
     {
       kind: 'number',
       key: 'diameter',
@@ -500,6 +504,7 @@ const INSPECTOR_FIELDS: Record<string, InspectorField[]> = {
     },
   ],
   [HYD_FLOW_CONTROL_TYPE]: [
+    { kind: 'actuatorMode', label: 'Valve type', options: swapFamilyOf(HYD_FLOW_CONTROL_TYPE) },
     { kind: 'number', key: 'qSet', label: 'Set flow (L/min)', min: 0, max: 2000, step: 0.5 },
     { kind: 'checkbox', key: 'bypass', label: 'Bypass check valve (free OUT→IN)' },
   ],
