@@ -155,3 +155,22 @@ export function isValidSensorArray(data: unknown): data is CylinderSensor[] {
     )
   );
 }
+
+/** Whether the sensor `key` (matched case-insensitively) reads triggered with every cylinder
+ * where it is now - while the simulation is stopped, the circuit's initial position. That's the
+ * state a limit valve is drawn in by convention: one its cylinder holds down at rest (e.g. a0,
+ * with the cylinder retracted) is drawn actuated. */
+export function isSensorTriggeredAtRest(key: string): boolean {
+  const target = key.trim().toUpperCase();
+  if (!target) return false;
+  for (const comp of appState.components) {
+    const data = comp.snapshot() as Record<string, unknown>;
+    if (!isValidSensorArray(data.sensors) || typeof data.pos !== 'number') continue;
+    for (const sensor of data.sensors) {
+      if (sensor.label.trim().toUpperCase() === target && isInSensorRange(data.pos, sensor)) {
+        return true;
+      }
+    }
+  }
+  return false;
+}

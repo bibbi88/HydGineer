@@ -4,6 +4,7 @@ import { appState } from '../app/AppState';
 import { Modes } from '../app/modes';
 import { getSignal } from '../sim/signals';
 import { buildComponentShell, createPort, createSvgEl } from './shared/svgHelpers';
+import { isSensorLabelInUse, isSensorTriggeredAtRest } from './shared/sensorPositions';
 
 export const ELEC_RAIL_PLUS_TYPE = 'elecRailPlus';
 export const ELEC_RAIL_ZERO_TYPE = 'elecRailZero';
@@ -96,7 +97,9 @@ function drawContactSymbol(
   g: SVGElement,
   normallyClosed: boolean,
 ): {
-  setOperated(operated: boolean): void;
+  /** `highlight: false` draws it operated in plain black - the initial position on a diagram,
+   * rather than a signal acting on it during a run. */
+  setOperated(operated: boolean, highlight?: boolean): void;
   setNormallyClosed(nc: boolean): void;
   /** Where the blade crosses height `y`, for attaching an actuator's mechanical link. */
   bladeXAt(y: number): number;
@@ -109,6 +112,7 @@ function drawContactSymbol(
 
   let nc = normallyClosed;
   let operated = false;
+  let highlighted = true;
   let end = { x: CX, y: CONTACT_TOP_Y };
   function apply(): void {
     if (nc) {
@@ -118,14 +122,15 @@ function drawContactSymbol(
     }
     blade.setAttribute('x2', String(end.x));
     blade.setAttribute('y2', String(end.y));
-    blade.setAttribute('stroke', operated ? OPERATED_STROKE : STROKE);
+    blade.setAttribute('stroke', operated && highlighted ? OPERATED_STROKE : STROKE);
     hook.style.display = nc ? '' : 'none';
   }
   apply();
 
   return {
-    setOperated(v: boolean): void {
+    setOperated(v: boolean, highlight = true): void {
       operated = v;
+      highlighted = highlight;
       apply();
     },
     setNormallyClosed(v: boolean): void {
@@ -134,6 +139,51 @@ function drawContactSymbol(
     },
     bladeXAt: (y: number) => CX + ((end.x - CX) * (CONTACT_BOT_Y - y)) / (CONTACT_BOT_Y - end.y),
   };
+}
+
+/** Height at which a cylinder's cam is drawn pressing a contact's blade. */
+const CAM_Y = 50;
+
+/** The trip cam of the cylinder whose sensor holds a contact operated: a solid wedge pointing at
+ * the blade from the right (the signal name is on the left), its tip just off the blade. */
+function camMarker(g: SVGElement): { show(bladeX: number | null): void } {
+  const cam = createSvgEl('path', {
+    d: 'M 0 0 L 14 -8 L 14 8 Z',
+    fill: STROKE,
+    class: 'contactCam',
+  });
+  cam.style.display = 'none';
+  g.appendChild(cam);
+  return {
+    show(bladeX: number | null): void {
+      cam.style.display = bladeX === null ? 'none' : '';
+      if (bladeX !== null) cam.setAttribute('transform', `translate(${bladeX + 3}, ${CAM_Y})`);
+    },
+  };
+}
+
+/**
+ * Keeps a sensor-driven contact drawn the way a circuit diagram shows it while the simulation is
+ * stopped: in the initial position, operated if its cylinder rests on the sensor (e.g. a0 with
+ * the cylinder retracted), with the cam on it - see isSensorTriggeredAtRest. Only the drawing;
+ * what the contact conducts is still decided by the simulation once it runs. `draw` shows the
+ * contact operated or not, plain black, with the cam if `cam`.
+ */
+function followRestState(
+  getKey: () => string,
+  draw: (operated: boolean, highlight: boolean, cam: boolean) => void,
+): { refresh(): void; isSensorKey(): boolean } {
+  let sensorKey = false;
+  function refresh(): void {
+    const key = getKey();
+    sensorKey = key !== '' && isSensorLabelInUse(key);
+    if (appState.mode !== Modes.STOP) return;
+    const atRest = sensorKey && isSensorTriggeredAtRest(key);
+    draw(atRest, false, atRest);
+  }
+  appState.onChange(refresh);
+  appState.onModeChange(refresh);
+  return { refresh, isSensorKey: () => sensorKey };
 }
 
 /** The signal / coil name beside a contact or coil: on the left of the symbol, level with its
@@ -238,12 +288,19 @@ export function createElecContact(compLayer: HTMLElement, x: number, y: number):
   const symbol = drawContactSymbol(g, normallyClosed);
   const label = keyLabel(g);
   const ports = twoTerminalPorts(g);
+  const cam = camMarker(g);
 
   function refreshLabel(): void {
     label.textContent = key;
     symbol.setNormallyClosed(normallyClosed);
   }
   refreshLabel();
+
+  function draw(operated: boolean, highlight: boolean, withCam: boolean): void {
+    symbol.setOperated(operated, highlight);
+    cam.show(withCam ? symbol.bladeXAt(CAM_Y) : null);
+  }
+  const rest = followRestState(() => key, draw);
 
   const comp: Component = {
     id: uid(),
@@ -263,7 +320,7 @@ export function createElecContact(compLayer: HTMLElement, x: number, y: number):
     recompute(): void {
       const sig = key ? getSignal(key) : false;
       closed = normallyClosed ? !sig : sig;
-      symbol.setOperated(sig);
+      draw(sig, true, sig && rest.isSensorKey());
     },
     snapshot: () => ({
       key,
@@ -278,10 +335,12 @@ export function createElecContact(compLayer: HTMLElement, x: number, y: number):
       shell.setCustomName((data.customName as string | null) ?? null);
       refreshLabel();
       comp.recompute?.();
+      rest.refresh();
     },
     reset(): void {
       closed = false;
       comp.recompute?.();
+      rest.refresh();
     },
     setPos(nx: number, ny: number): void {
       comp.x = nx;
@@ -321,12 +380,22 @@ export function createElecChangeover(compLayer: HTMLElement, x: number, y: numbe
     COM: createPort(g, 'COM', CX, BOT_Y, 'V', { electrical: true }),
   };
 
+  const cam = camMarker(g);
+
+  /** Draws the blade operated or not - in plain black unless `highlight` (a signal acting on it
+   * during a run) - and the cam pressing it if `withCam`. */
+  function drawBlade(shown: boolean, highlight: boolean, withCam: boolean): void {
+    // At rest the blade leans left past the NC hook; operated it stands up onto the NO contact.
+    blade.setAttribute('x2', String(shown ? CX : NC_X + 6));
+    blade.setAttribute('y2', String(shown ? CONTACT_TOP_Y : CONTACT_TOP_Y - 3));
+    blade.setAttribute('stroke', shown && highlight ? OPERATED_STROKE : STROKE);
+    cam.show(withCam ? CX : null);
+  }
+  const rest = followRestState(() => key, drawBlade);
+
   function refresh(): void {
     label.textContent = key;
-    // At rest the blade leans left past the NC hook; operated it stands up onto the NO contact.
-    blade.setAttribute('x2', String(operated ? CX : NC_X + 6));
-    blade.setAttribute('y2', String(operated ? CONTACT_TOP_Y : CONTACT_TOP_Y - 3));
-    blade.setAttribute('stroke', operated ? OPERATED_STROKE : STROKE);
+    drawBlade(operated, true, operated && rest.isSensorKey());
   }
   refresh();
 
@@ -359,9 +428,11 @@ export function createElecChangeover(compLayer: HTMLElement, x: number, y: numbe
       shell.setNameVisible(Boolean(data.showName));
       shell.setCustomName((data.customName as string | null) ?? null);
       comp.recompute?.();
+      rest.refresh();
     },
     reset(): void {
       comp.recompute?.();
+      rest.refresh();
     },
     setPos(nx: number, ny: number): void {
       comp.x = nx;
