@@ -18,7 +18,7 @@ import { appState } from './app/AppState';
 import { renderTopbar } from './ui/topbar';
 import { showRestoreBanner } from './ui/restoreBanner';
 import { openTermsDialog, termsNeedAgreement } from './ui/termsDialog';
-import { scheduleAutosave, readAutosave, clearAutosave } from './persistence/autosave';
+import { readAutosave, clearAutosave } from './persistence/autosave';
 import { loadProject } from './persistence/project';
 import { initHistory, pushHistory, resetHistory } from './history/historyStore';
 import { renderInspector } from './ui/inspector';
@@ -26,6 +26,9 @@ import { initPageFrame } from './ui/pageFrame';
 import { snap } from './core/grid';
 import { canEdit } from './app/modes';
 import { initConfirmBeforeUnload } from './app/confirmClose';
+import { initDocuments, onDocumentsChange, storeDocumentsSoon } from './app/documents';
+import { onSettingsChange } from './app/settings';
+import { renderDocumentTabs } from './ui/documentTabs';
 
 const workspaceQuery = document.querySelector<HTMLElement>('.workspace');
 const viewportQuery = document.getElementById('viewport');
@@ -37,6 +40,7 @@ const handleLayerQuery = document.getElementById('handleLayer') as SVGSVGElement
 const sidebarButtonsQuery = document.getElementById('sidebarButtons');
 const topbarQuery = document.getElementById('topbar');
 const inspectorQuery = document.getElementById('inspector');
+const tabbarQuery = document.getElementById('tabbar');
 
 if (
   !workspaceQuery ||
@@ -48,7 +52,8 @@ if (
   !handleLayerQuery ||
   !sidebarButtonsQuery ||
   !topbarQuery ||
-  !inspectorQuery
+  !inspectorQuery ||
+  !tabbarQuery
 ) {
   throw new Error('Missing required DOM scaffold elements');
 }
@@ -62,6 +67,7 @@ const handleLayer: SVGSVGElement = handleLayerQuery;
 const sidebarButtons: HTMLElement = sidebarButtonsQuery;
 const topbarEl: HTMLElement = topbarQuery;
 const inspectorEl: HTMLElement = inspectorQuery;
+const tabbarEl: HTMLElement = tabbarQuery;
 
 const viewport = initViewport(viewportQuery, workspaceEl, gridLayerEl);
 initWires(connLayer, viewport, workspaceEl);
@@ -120,22 +126,38 @@ initPageFrame(frameLayer, projectBar, viewport, workspaceEl);
 startSimLoop();
 
 appState.onChange(() => {
-  const name = projectBar.getName();
-  scheduleAutosave(name);
-  pushHistory(name);
+  pushHistory(projectBar.getName());
+  storeDocumentsSoon();
 });
 
+// The open documents, as tabs above the canvas (or listed in the inspector - a setting).
+const refreshTabs = (): void => renderDocumentTabs(tabbarEl);
+onDocumentsChange(refreshTabs);
+onSettingsChange(refreshTabs);
+
+// Documents kept in the browser come back as they were. Before there were documents, only the
+// one circuit was kept (autosave) - offered back once, into the first document.
+const restored = initDocuments({
+  ctx: factoryCtx,
+  viewport,
+  getName: () => projectBar.getName(),
+  setName: (name) => projectBar.setName(name),
+});
 const autosaved = readAutosave();
-if (autosaved) {
+if (restored) {
+  clearAutosave();
+} else if (autosaved) {
   showRestoreBanner(
     () => {
       resetHistory();
       loadProject(autosaved.file, factoryCtx, viewport);
       projectBar.setName(autosaved.file.name);
+      clearAutosave();
     },
     () => clearAutosave(),
   );
 }
+refreshTabs();
 
 // Last, so the terms sit on top of everything else that opens with the app.
 if (termsNeedAgreement()) openTermsDialog({ requireAgreement: true });

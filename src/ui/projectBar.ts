@@ -10,6 +10,7 @@ import { loadProject } from '../persistence/project';
 import { zoomToFit } from '../interaction/zoomToFit';
 import { appState } from '../app/AppState';
 import { canEdit } from '../app/modes';
+import { activeNameChanged, prepareToOpen } from '../app/documents';
 
 /** World px kept free right of an example's drawing for its readouts (see zoomToFit). */
 const EXAMPLE_READOUT_ROOM = 130;
@@ -43,12 +44,20 @@ export function renderProjectBar(
     () => void saveProjectToFile(nameInput.value || 'project'),
   );
 
+  nameInput.addEventListener('input', () => activeNameChanged());
+
   const loadBtn = iconButton('folderOpen', 'Load project', () => {
-    // Reset history only once a file was actually picked - loadProjectFromPicker itself
-    // does the clear+rebuild, so this must run right before that, not before the picker
-    // even opens (a cancelled picker shouldn't wipe undo history for nothing).
-    void loadProjectFromPicker(ctx, viewport, resetHistory).then((loadedName) => {
-      if (loadedName) nameInput.value = loadedName;
+    // Only once a file was actually picked - loadProjectFromPicker itself does the
+    // clear+rebuild, so this must run right before that, not before the picker even opens (a
+    // cancelled picker shouldn't open a document or wipe undo history for nothing). In a new
+    // document it starts its own history; loaded over the current one, the history is reset.
+    void loadProjectFromPicker(ctx, viewport, () => {
+      if (prepareToOpen() === 'current') resetHistory();
+    }).then((loadedName) => {
+      if (loadedName) {
+        nameInput.value = loadedName;
+        activeNameChanged();
+      }
     });
   });
 
@@ -56,8 +65,9 @@ export function renderProjectBar(
     openExportDialog(nameInput.value || 'project', connLayer, frameLayer, viewport, workspaceEl);
   });
 
-  // Ready-made circuits to start from - replaces whatever is on the canvas (Undo brings it
-  // back; no confirm() dialog, which embedded viewers suppress).
+  // Ready-made circuits to start from - opened in a new document (or, if the setting is off,
+  // replacing whatever is on the canvas: Undo brings it back; no confirm() dialog, which
+  // embedded viewers suppress).
   const examples = document.createElement('select');
   examples.className = 'exampleSelect';
   examples.title = 'Load an example circuit';
@@ -76,8 +86,10 @@ export function renderProjectBar(
     examples.value = '';
     if (!ex || !canEdit(appState.mode)) return;
     const file = ex.file();
+    prepareToOpen();
     loadProject(file, ctx, viewport);
     nameInput.value = file.name;
+    activeNameChanged();
     appState.markDirty();
     // Room on the right for the simulation readouts beside the right-most components.
     requestAnimationFrame(() => zoomToFit(viewport, workspaceEl, EXAMPLE_READOUT_ROOM));
@@ -89,6 +101,7 @@ export function renderProjectBar(
     getName: () => nameInput.value || 'project',
     setName: (name: string) => {
       nameInput.value = name;
+      activeNameChanged();
     },
   };
 }

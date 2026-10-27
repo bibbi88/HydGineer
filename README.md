@@ -79,6 +79,10 @@ variable motor). Flow dividers, pumps, motors, directional valves, check valves 
 flow controls can be swapped type in place from the inspector, or by dropping the other type onto
 them.
 
+Several circuits can be open at once, as **tabs** above the canvas (or listed in the inspector -
+see **Settings**, the gear in the toolbar), each with its own undo history. Examples and loaded
+files open in a new tab. Every open circuit is kept in the browser and is back after a reload.
+
 ## Running
 
 ```bash

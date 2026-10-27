@@ -5,6 +5,8 @@ import { renderToolbar } from './toolbar';
 import { renderViewControls } from './viewControls';
 import { renderArrangeControls } from './arrangeControls';
 import { createSvgEl } from '../components/shared/svgHelpers';
+import { iconButton } from './iconButton';
+import { openSettingsDialog } from './settingsDialog';
 
 /** The app's mark and name, with the build version (yymmdd, see vite.config.ts) under it. The
  * mark is a double-acting cylinder: barrel, piston and rod. */
@@ -64,7 +66,7 @@ function renderBrand(container: HTMLElement): void {
 /** Builds the application toolbar across the top of the window, grouped so related controls sit
  * together with a divider between groups: the project (name, save, load, export), the
  * simulation and its history (play/stop, pause, step, undo, redo), the view (zoom, fit to
- * window, zoom to selection) and arranging the selection (rotate, flip).
+ * window, zoom to selection), arranging the selection (rotate, flip) and the settings.
  *
  * Returns the project refs, since the project name field lives in the first section and both
  * the inspector and the page frame's title block read it from there.
@@ -101,6 +103,7 @@ export function renderTopbar(
   renderToolbar(section('Simulation'));
   renderViewControls(section('View'), viewport, workspaceEl);
   renderArrangeControls(section('Arrange'));
+  section('Settings').appendChild(iconButton('settings', 'Settings', () => openSettingsDialog()));
 
   return projectRefs;
 }
