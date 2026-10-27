@@ -65,6 +65,9 @@ import {
   ELEC_CHANGEOVER_TYPE,
 } from '../components/electrical';
 import { NOTE_STYLES, TEXT_ANNOTATION_TYPE } from '../components/textAnnotation';
+import { renderDocumentListSection } from './documentTabs';
+import { onDocumentsChange } from '../app/documents';
+import { onSettingsChange } from '../app/settings';
 
 type FieldLabel = string | ((comp: Component) => string);
 
@@ -1471,6 +1474,7 @@ export function renderInspector(container: HTMLElement, projectBar: ProjectBarRe
       // only get their own section here while nothing is selected, so they don't compete for
       // space with (or look like part of) whatever's actually being edited.
       if (selected.length === 0) {
+        renderDocumentListSection(container);
         renderProjectInfoSection(container, projectBar);
       } else {
         renderAlignSection(container, selected);
@@ -1527,6 +1531,9 @@ export function renderInspector(container: HTMLElement, projectBar: ProjectBarRe
   }
 
   onSelectionChange(refresh);
+  // The documents list (when shown here) follows switching, renaming and the settings.
+  onDocumentsChange(refresh);
+  onSettingsChange(refresh);
   // The Align buttons are only usable while editing.
   appState.onModeChange(refresh);
   // Also catches edits that don't go through this panel's own fields, e.g. saving a PLC's

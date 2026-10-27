@@ -80,3 +80,30 @@ export function resetHistory(): void {
   future = [];
   notify();
 }
+
+/** One document's undo/redo stacks, kept aside while another document is open (see
+ * app/documents.ts). */
+export interface HistoryState {
+  history: ProjectFileV1[];
+  future: ProjectFileV1[];
+}
+
+export function getHistoryState(): HistoryState {
+  return { history: [...history], future: [...future] };
+}
+
+export function setHistoryState(state: HistoryState): void {
+  history = [...state.history];
+  future = [...state.future];
+  notify();
+}
+
+/** Runs `fn` (e.g. loading another document onto the canvas) without recording it as an edit. */
+export function withoutHistory(fn: () => void): void {
+  suppressPush = true;
+  try {
+    fn();
+  } finally {
+    suppressPush = false;
+  }
+}
