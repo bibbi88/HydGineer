@@ -141,8 +141,13 @@ export function initValveActuatorSwap(
  * '14', but only the bistable one has a second pilot port, '12'. Either way, a wire on a port
  * that doesn't exist on the new component is dropped rather than reconnected somewhere invalid,
  * instead of silently becoming an invisible, un-removable connection with nowhere to land.
+ * `extra` settings are applied to the new component in the same undo step.
  */
-export function swapComponentType(comp: Component, newType: string): void {
+export function swapComponentType(
+  comp: Component,
+  newType: string,
+  extra?: Record<string, unknown>,
+): void {
   if (!ctxRef || !viewportRef) return;
   const { x, y } = comp;
   // Contact <-> push button keeps its NO/NC choice, relay coil <-> solenoid keeps its name;
@@ -188,6 +193,8 @@ export function swapComponentType(comp: Component, newType: string): void {
     if (showName !== undefined || customName !== undefined) {
       next.restore({ ...next.snapshot(), showName, customName });
     }
+    // Settings the caller picked along with the type (e.g. a pump's control), in the same step.
+    if (extra) next.restore({ ...next.snapshot(), ...extra });
 
     for (const saved of related) {
       const fromMoved = saved.from.id === comp.id;

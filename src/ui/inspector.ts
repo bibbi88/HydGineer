@@ -127,6 +127,12 @@ interface ActuatorModeField {
   options: Array<{ type: string; label: string }>;
 }
 
+/** A pump's type in one dropdown: fixed or pressure-compensated (the same component, its
+ * `control` setting) or load-sensing (a different component, with an LS port, swapped in). */
+interface PumpTypeField {
+  kind: 'pumpType';
+}
+
 /** A component's own identifying label (currently just a cylinder's letter), renamed through
  * `comp.renameLabel()` rather than a plain snapshot key/value - that's what cascades the rename
  * into the cylinder's sensor labels and anything bound to them. */
@@ -178,6 +184,7 @@ type InspectorField =
   | CheckboxField
   | SensorListField
   | ActuatorModeField
+  | PumpTypeField
   | SensorKeySelectField
   | RelabelField
   | CylinderModeField
@@ -209,7 +216,7 @@ const VALVE_FLOW_FIELD: NumberField = {
 
 const INSPECTOR_FIELDS: Record<string, InspectorField[]> = {
   [HYD_PUMP_TYPE]: [
-    { kind: 'actuatorMode', label: 'Pump type', options: swapFamilyOf(HYD_PUMP_TYPE) },
+    { kind: 'pumpType' },
     {
       kind: 'number',
       key: 'displacement',
@@ -237,18 +244,9 @@ const INSPECTOR_FIELDS: Record<string, InspectorField[]> = {
       step: 10,
     },
     {
-      kind: 'select',
-      key: 'control',
-      label: 'Displacement',
-      options: [
-        { value: 'fixed', label: 'Fixed' },
-        { value: 'pc', label: 'Variable, pressure compensated' },
-      ],
-    },
-    {
       kind: 'number',
       key: 'compSetting',
-      label: 'Compensator setting (bar) - variable pump only',
+      label: 'Compensator setting (bar) - pressure compensated only',
       min: 1,
       max: 1000,
       step: 5,
@@ -260,7 +258,7 @@ const INSPECTOR_FIELDS: Record<string, InspectorField[]> = {
     },
   ],
   [HYD_PUMP_LS_TYPE]: [
-    { kind: 'actuatorMode', label: 'Pump type', options: swapFamilyOf(HYD_PUMP_LS_TYPE) },
+    { kind: 'pumpType' },
     {
       kind: 'number',
       key: 'displacement',
@@ -830,6 +828,42 @@ function renderCheckboxField(
   });
 
   row.append(span, checkbox);
+  container.appendChild(row);
+}
+
+const PUMP_TYPES: Array<{ value: 'fixed' | 'pc' | 'ls'; label: string }> = [
+  { value: 'fixed', label: 'Fixed displacement' },
+  { value: 'pc', label: 'Pressure compensated' },
+  { value: 'ls', label: 'Load sensing (LS port)' },
+];
+
+function renderPumpTypeField(container: HTMLElement, comp: Component): void {
+  const row = document.createElement('label');
+  row.className = 'inspectorRow';
+  const span = document.createElement('span');
+  span.textContent = 'Pump type';
+  const select = document.createElement('select');
+  for (const t of PUMP_TYPES) {
+    const option = document.createElement('option');
+    option.value = t.value;
+    option.textContent = t.label;
+    select.appendChild(option);
+  }
+  const isLS = comp.type === HYD_PUMP_LS_TYPE;
+  select.value = isLS ? 'ls' : String((comp.snapshot() as { control?: string }).control ?? 'fixed');
+
+  select.addEventListener('change', () => {
+    const value = select.value;
+    if (value === 'ls') {
+      if (!isLS) swapComponentType(comp, HYD_PUMP_LS_TYPE);
+    } else if (isLS) {
+      swapComponentType(comp, HYD_PUMP_TYPE, { control: value });
+    } else {
+      updateComponentField(comp, 'control', value);
+    }
+  });
+
+  row.append(span, select);
   container.appendChild(row);
 }
 
@@ -1471,6 +1505,7 @@ export function renderInspector(container: HTMLElement, projectBar: ProjectBarRe
     for (const field of fields) {
       if (field.kind === 'sensorList') renderSensorListField(container, comp, field, snap, refresh);
       else if (field.kind === 'actuatorMode') renderActuatorModeField(container, comp, field);
+      else if (field.kind === 'pumpType') renderPumpTypeField(container, comp);
       else if (field.kind === 'sensorKeySelect')
         renderSensorKeySelectField(container, comp, field, snap, refresh);
       else if (field.kind === 'relabel') renderRelabelField(container, comp, field, refresh);

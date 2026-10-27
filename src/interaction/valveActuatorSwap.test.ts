@@ -108,3 +108,18 @@ describe('swapComponentType: inline hydraulic valves', () => {
     expect(appState.connections.find((c) => c.to.id === above.id)?.from.port).toBe('OUT');
   });
 });
+
+describe('swapComponentType: pump types', () => {
+  it('load-sensing -> pressure-compensated pump in one step, with the control set', async () => {
+    const supply = await import('../components/hyd/supply');
+    appState.components = [];
+    appState.connections = [];
+    initValveActuatorSwap(ctx, viewport);
+    const ls = supply.createHydPump(compLayer(), 100, 100, 'ls');
+    appState.addComponent(ls);
+
+    swapComponentType(ls, supply.HYD_PUMP_TYPE, { control: 'pc' });
+    const pump = appState.components.find((c) => c.type === supply.HYD_PUMP_TYPE)!;
+    expect((pump.snapshot() as { control: string }).control).toBe('pc');
+  });
+});
