@@ -1,4 +1,5 @@
-/** The toolbar's icon set: the conventional glyph for each action - a floppy disk for save, an
+/** The toolbar's icon set: the conventional glyph for each action - a page with a plus for new,
+ * a floppy disk for save, an
  * open folder for load, a tray-and-arrow for export, transport controls for the simulation,
  * curved arrows for undo/redo, magnifiers for zoom - drawn inline as 24x24 SVG so the app needs
  * no icon font, sprite sheet or third-party dependency to render them.
@@ -9,6 +10,7 @@
  * play triangle, the stop square, the pause and step bars - say so per shape.
  */
 export type IconName =
+  | 'newDocument'
   | 'save'
   | 'folderOpen'
   | 'download'
@@ -43,6 +45,12 @@ type Shape = [tag: string, attrs: Record<string, string | number>];
 const FILLED = { fill: 'currentColor', stroke: 'none' } as const;
 
 const ICONS: Record<IconName, Shape[]> = {
+  newDocument: [
+    ['path', { d: 'M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9Z' }],
+    ['path', { d: 'M14 3v6h6' }],
+    ['path', { d: 'M12 12v6' }],
+    ['path', { d: 'M9 15h6' }],
+  ],
   save: [
     ['path', { d: 'M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2Z' }],
     ['path', { d: 'M17 21v-8H7v8' }],
