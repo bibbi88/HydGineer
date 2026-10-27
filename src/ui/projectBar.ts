@@ -10,7 +10,7 @@ import { loadProject } from '../persistence/project';
 import { zoomToFit } from '../interaction/zoomToFit';
 import { appState } from '../app/AppState';
 import { canEdit } from '../app/modes';
-import { activeNameChanged, prepareToOpen } from '../app/documents';
+import { activeNameChanged, newDocument, prepareToOpen } from '../app/documents';
 
 /** World px kept free right of an example's drawing for its readouts (see zoomToFit). */
 const EXAMPLE_READOUT_ROOM = 130;
@@ -20,7 +20,7 @@ export interface ProjectBarRefs {
   setName(name: string): void;
 }
 
-/** The toolbar's project section: the project name, then save, load and export. The name field
+/** The toolbar's project section: the project name, then new, save, load and export. The name field
  * is the canonical copy - the inspector's own "Project name" row and the page frame's title
  * block both read and write it through the refs returned here, rather than keeping their own. */
 export function renderProjectBar(
@@ -37,6 +37,9 @@ export function renderProjectBar(
   nameInput.className = 'projectName';
   nameInput.title = 'Project name';
   nameInput.setAttribute('aria-label', 'Project name');
+
+  // A new, empty circuit in a tab of its own - the same as the tab bar's +.
+  const newBtn = iconButton('newDocument', 'New circuit', () => newDocument());
 
   const saveBtn = iconButton(
     'save',
@@ -95,7 +98,7 @@ export function renderProjectBar(
     requestAnimationFrame(() => zoomToFit(viewport, workspaceEl, EXAMPLE_READOUT_ROOM));
   });
 
-  container.append(nameInput, saveBtn, loadBtn, exportBtn, examples);
+  container.append(nameInput, newBtn, saveBtn, loadBtn, exportBtn, examples);
 
   return {
     getName: () => nameInput.value || 'project',
