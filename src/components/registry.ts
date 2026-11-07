@@ -6,6 +6,7 @@ import {
   createHydRelief,
   createHydGauge,
   createHydFlowMeter,
+  createHydFilter,
   createHydPressureSwitch,
   createHydAccumulator,
   HYD_PUMP_LS_TYPE,
@@ -17,6 +18,7 @@ import {
   HYD_RELIEF_TYPE,
   HYD_GAUGE_TYPE,
   HYD_FLOW_METER_TYPE,
+  HYD_FILTER_TYPE,
   HYD_PRESSURE_SWITCH_TYPE,
 } from './hyd/supply';
 import {
@@ -35,7 +37,9 @@ import {
   HYD_VALVE_LS_TYPE,
   HYD_SHUTTLE_TYPE,
   createHydPressureCompensator,
+  createHydLsBypassCompensator,
   HYD_PRESSURE_COMP_TYPE,
+  HYD_LS_BYPASS_COMP_TYPE,
   createHydCrossRelief,
   HYD_CROSS_RELIEF_TYPE,
   HYD_COUNTERBALANCE_TYPE,
@@ -162,6 +166,15 @@ export const componentRegistry = new Map<string, RegistryEntry>([
     },
   ],
   [
+    HYD_FILTER_TYPE,
+    {
+      factory: (ctx, x, y) => createHydFilter(ctx.compLayer, x, y),
+      label: 'Filter (bypass check)',
+      placeable: true,
+      category: ComponentCategory.SUPPLY,
+    },
+  ],
+  [
     HYD_VALVE_43_TYPE,
     {
       factory: (ctx, x, y) => createHydValve43(ctx.compLayer, x, y),
@@ -238,6 +251,15 @@ export const componentRegistry = new Map<string, RegistryEntry>([
     {
       factory: (ctx, x, y) => createHydPressureCompensator(ctx.compLayer, x, y),
       label: 'Pressure compensator (LS)',
+      placeable: true,
+      category: ComponentCategory.PRESSURE,
+    },
+  ],
+  [
+    HYD_LS_BYPASS_COMP_TYPE,
+    {
+      factory: (ctx, x, y) => createHydLsBypassCompensator(ctx.compLayer, x, y),
+      label: '3-way pressure compensator (LS, fixed pump)',
       placeable: true,
       category: ComponentCategory.PRESSURE,
     },

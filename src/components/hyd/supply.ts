@@ -2,6 +2,7 @@ import type { Component, SimStepContext } from '../../core/types';
 import { accumulatorOil, orificeKFromRating, type HydElement } from '../../sim/hydraulics';
 import { uid } from '../../core/ids';
 import { createPort, createPortLabel, createSvgEl } from '../shared/svgHelpers';
+import { drawBallCheckSymbol } from '../shared/checkValveSymbol';
 import { clearFlow, paintFlow } from './flowPaint';
 import { getSignal } from '../../sim/signals';
 import { appState } from '../../app/AppState';
@@ -30,6 +31,7 @@ export const HYD_TANK_TYPE = 'hydTank';
 export const HYD_RELIEF_TYPE = 'hydRelief';
 export const HYD_GAUGE_TYPE = 'hydGauge';
 export const HYD_FLOW_METER_TYPE = 'hydFlowMeter';
+export const HYD_FILTER_TYPE = 'hydFilter';
 export const HYD_PRESSURE_SWITCH_TYPE = 'hydPressureSwitch';
 export const HYD_ACCUMULATOR_TYPE = 'hydAccumulator';
 export const HYD_PUMP_LOOP_TYPE = 'hydPumpLoop';
@@ -524,6 +526,112 @@ export function createHydFlowMeter(compLayer: HTMLElement, x: number, y: number)
       total = 0;
       shell.setInfo([]);
       clearFlow([...inLead, ...outLead]);
+    },
+  });
+}
+
+/**
+ * Filter, e.g. in the return line: a small pressure drop while clean (0.5 bar at its nominal
+ * flow), growing as the element clogs (`clogged`, %). Its bypass check (cracking at 2 bar, on by
+ * default) then opens and lets the oil past unfiltered rather than letting the pressure build up.
+ */
+export function createHydFilter(compLayer: HTMLElement, x: number, y: number): Component {
+  const svgW = 100;
+  const svgH = 80;
+  const shell = createHydShell(compLayer, HYD_FILTER_TYPE, x, y, svgW, svgH, 'Filter', {
+    x: 20,
+    y: 20,
+    w: 66,
+    h: 40,
+  });
+  const g = shell.g;
+  // Flow drawn IN (top) → OUT (bottom), as in a return line down to tank.
+  const inLead = [line(g, 40, 10, 40, 24)];
+  const outLead = [line(g, 40, 56, 40, 70)];
+  g.appendChild(
+    createSvgEl('path', {
+      d: 'M 40 24 L 56 40 L 40 56 L 24 40 Z',
+      fill: '#fff',
+      stroke: INK,
+      'stroke-width': STROKE,
+    }),
+  );
+  // The filter element, across the flow.
+  path(g, 'M 26 40 H 54', { 'stroke-dasharray': '3 2', 'stroke-width': 1.5 });
+  const bypassG = createSvgEl('g');
+  g.appendChild(bypassG);
+  const ports = {
+    IN: createPort(g, 'IN', 40, 10, 'V'),
+    OUT: createPort(g, 'OUT', 40, 70, 'V'),
+  };
+  shell.setInfoSide('right');
+
+  let qNom = 60; // L/min at 0.5 bar through a clean element
+  let clogged = 0; // %
+  let bypass = true;
+  // Bypass drawn in its free-flow direction, IN (top) → OUT (bottom).
+  let bypassIn: SVGElement[] = [];
+  let bypassOut: SVGElement[] = [];
+  function refresh(): void {
+    bypassG.replaceChildren();
+    bypassIn = [];
+    bypassOut = [];
+    if (!bypass) return;
+    const glyph = drawBallCheckSymbol(bypassG, 76, 40, 'vertical', -1, 0.6);
+    bypassIn = [
+      path(bypassG, 'M 40 16 H 76 V 26'),
+      line(bypassG, 76, 26, 76, Math.min(glyph.inPoint.y, glyph.outPoint.y)),
+    ];
+    bypassOut = [
+      line(bypassG, 76, Math.max(glyph.inPoint.y, glyph.outPoint.y), 76, 54),
+      path(bypassG, 'M 76 54 V 64 H 40'),
+    ];
+  }
+  refresh();
+
+  const comp = hydComponentBase(shell, HYD_FILTER_TYPE, x, y, svgW, svgH, ports);
+  return Object.assign(comp, {
+    hydElements(): HydElement[] {
+      const els: HydElement[] = [
+        {
+          kind: 'orifice',
+          a: 'IN',
+          b: 'OUT',
+          k: orificeKFromRating(qNom, 0.5) * (1 - clogged / 100),
+        },
+      ];
+      if (bypass) {
+        els.push({ kind: 'check', a: 'IN', b: 'OUT', crack: 2, k: orificeKFromRating(qNom, 1) });
+      }
+      return els;
+    },
+    step(_dt: number, ctx: SimStepContext): void {
+      const qMain = ctx.elementValue(0);
+      const qBypass = bypass ? ctx.elementValue(1) : 0;
+      const pIn = ctx.pressureAt('IN');
+      const pOut = ctx.pressureAt('OUT');
+      const lines: string[] = [];
+      if (Math.abs(qMain + qBypass) >= 0.005) {
+        lines.push(`Q ${fmtFlow(qMain + qBypass)}`, `Δp ${fmtBar(pIn - pOut)}`);
+      }
+      if (qBypass > 0.05) lines.push(`bypass ${fmtFlow(qBypass)}`);
+      shell.setInfo(lines);
+      paintFlow(inLead, pIn, qMain + qBypass);
+      paintFlow(outLead, pOut, qMain + qBypass);
+      paintFlow(bypassIn, pIn, qBypass);
+      paintFlow(bypassOut, pOut, qBypass);
+    },
+    snapshot: () => ({ ...nameSnapshot(shell), qNom, clogged, bypass }),
+    restore(data: Record<string, unknown>): void {
+      restoreName(shell, data);
+      qNom = readNum(data, 'qNom', qNom, 0.5, 2000);
+      clogged = readNum(data, 'clogged', clogged, 0, 100);
+      if ('bypass' in data) bypass = Boolean(data.bypass);
+      refresh();
+    },
+    reset(): void {
+      shell.setInfo([]);
+      clearFlow([...inLead, ...outLead, ...bypassIn, ...bypassOut]);
     },
   });
 }

@@ -19,6 +19,7 @@ import {
   HYD_PUMP_TYPE,
   HYD_RELIEF_TYPE,
   HYD_GAUGE_TYPE,
+  HYD_FILTER_TYPE,
   HYD_PRESSURE_SWITCH_TYPE,
   HYD_ACCUMULATOR_TYPE,
   HYD_PUMP_LS_TYPE,
@@ -38,6 +39,7 @@ import {
   HYD_SEQUENCE_TYPE,
   HYD_VALVE_LS_TYPE,
   HYD_PRESSURE_COMP_TYPE,
+  HYD_LS_BYPASS_COMP_TYPE,
   HYD_CROSS_RELIEF_TYPE,
 } from '../components/hyd/valves';
 import {
@@ -358,6 +360,36 @@ const INSPECTOR_FIELDS: Record<string, InspectorField[]> = {
       max: 2000,
       step: 1,
     },
+  ],
+  [HYD_LS_BYPASS_COMP_TYPE]: [
+    {
+      kind: 'number',
+      key: 'setting',
+      label: 'Δp pump above LS pressure (bar)',
+      min: 0.5,
+      max: 100,
+      step: 0.5,
+    },
+    {
+      kind: 'number',
+      key: 'qNom',
+      label: 'Nominal flow (L/min at Δp 5 bar, fully open)',
+      min: 0.5,
+      max: 2000,
+      step: 1,
+    },
+  ],
+  [HYD_FILTER_TYPE]: [
+    {
+      kind: 'number',
+      key: 'qNom',
+      label: 'Nominal flow (L/min at 0.5 bar, clean)',
+      min: 0.5,
+      max: 2000,
+      step: 1,
+    },
+    { kind: 'number', key: 'clogged', label: 'Clogged (%)', min: 0, max: 100, step: 5 },
+    { kind: 'checkbox', key: 'bypass', label: 'Bypass check valve (opens at 2 bar)' },
   ],
   [HYD_PUMP_LOOP_TYPE]: [
     {

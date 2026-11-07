@@ -11,13 +11,14 @@ function circuit(name: string, build: (b: Builder) => void): ProjectFileV1 {
       comps.push({ id, type, x, y, data, ...(rot ? { rot } : {}) });
       return id;
     },
-    wire(a, ap, c, cp) {
+    wire(a, ap, c, cp, dashed) {
       conns.push({
         from: { id: a, port: ap },
         to: { id: c, port: cp },
         guides: [],
         stubStartLen: null,
         stubEndLen: null,
+        ...(dashed ? { dashed: true } : {}),
       });
     },
   };
@@ -27,7 +28,8 @@ function circuit(name: string, build: (b: Builder) => void): ProjectFileV1 {
 
 interface Builder {
   add(type: string, x: number, y: number, data?: Record<string, unknown>, rot?: number): number;
-  wire(a: number, ap: string, b: number, bp: string): void;
+  /** `dashed` draws it as a pilot/signal line. */
+  wire(a: number, ap: string, b: number, bp: string, dashed?: boolean): void;
 }
 
 /** Pump with relief valve and gauge, feeding P of a valve; returns the junction on the supply
@@ -481,51 +483,48 @@ export const EXAMPLES: Array<{ title: string; file: () => ProjectFileV1 }> = [
     title: 'Load sensing with a fixed pump',
     file: () =>
       circuit('Example - load sensing with a fixed pump', (b) => {
-        // The same two sections and compensators, fed by a fixed pump (about 27.6 L/min) with
-        // a relief valve. Each compensator still holds its valve's inlet 10 bar above that
-        // section's load, so the cylinders move at their levers' speed whatever their loads.
-        // But with nothing to tell the pump what the loads need, the oil the levers don't take
-        // goes over the relief valve at 160 bar - compare the pump power with the LS pump.
-        const pump = b.add('hydPump', 200, 700, {
+        // A fixed pump (about 27.6 L/min) and a 3-way pressure compensator: the LS line from
+        // the valve (dashed) tells the compensator the load pressure, and it lets the oil the
+        // valve doesn't take go to tank at that pressure + 15 bar. In neutral the pump idles at
+        // 15 bar; working, it runs at the load + 15 bar - the relief valve is only a safety
+        // valve. The return oil goes through a filter with a bypass check (try "Clogged").
+        const cyl = b.add('hydCylinderDouble', 520, 100, {
+          bore: 63,
+          rodD: 36,
+          stroke: 500,
+          load: 15000,
+          friction: 200,
+          showName: true,
+        });
+        const valve = b.add('hydValveLS', 520, 300, {
+          actuation: 'lever',
+          qNom: 40,
+          compensated: false,
+        });
+        const supply = b.add('junction', 500, 440, { orientation: 'H' });
+        const pump = b.add('hydPump', 510, 600, {
           displacement: 20,
           speed: 1450,
           etaV: 95,
           control: 'fixed',
-          showName: true,
-          customName: 'Fixed pump',
         });
-        const supply = b.add('junction', 190, 590, { orientation: 'H' });
-        const relief = b.add('hydRelief', 70, 640, { setting: 160 });
-        const tank = b.add('hydTank', 70, 740);
-        const gauge = b.add('hydGauge', 130, 550, { range: 250 });
+        const comp = b.add('hydLsBypassCompensator', 280, 470, { setting: 15, qNom: 60 });
+        const compTank = b.add('hydTank', 280, 580);
+        const relief = b.add('hydRelief', 660, 500, { setting: 200 });
+        const reliefTank = b.add('hydTank', 660, 600);
+        const filter = b.add('hydFilter', 810, 470, { qNom: 60 });
+        const filterTank = b.add('hydTank', 800, 580);
+        b.wire(valve, 'A', cyl, 'A');
+        b.wire(valve, 'B', cyl, 'B');
         b.wire(pump, 'P', supply, 'P');
+        b.wire(supply, 'P', valve, 'P');
+        b.wire(supply, 'P', comp, 'P');
+        b.wire(comp, 'T', compTank, 'T');
         b.wire(supply, 'P', relief, 'P');
-        b.wire(relief, 'T', tank, 'T');
-        b.wire(supply, 'P', gauge, 'P');
-        for (const { x, load } of [
-          { x: 420, load: 5000 },
-          { x: 880, load: 25000 },
-        ]) {
-          const valve = b.add('hydValveLS', x, 420, { actuation: 'lever', qNom: 30 });
-          const comp = b.add('hydPressureCompensator', x - 20, 540, { setting: 10, qNom: 40 });
-          const ls = b.add('junction', x + 20, 540, { orientation: 'H' });
-          const t = b.add('hydTank', x + 80, 510);
-          const cyl = b.add('hydCylinderDouble', x + 40, 170, {
-            bore: 50,
-            rodD: 30,
-            stroke: 400,
-            friction: 150,
-            load,
-            showName: true,
-          });
-          b.wire(supply, 'P', comp, 'IN');
-          b.wire(comp, 'OUT', valve, 'P');
-          b.wire(valve, 'T', t, 'T');
-          b.wire(valve, 'LS', ls, 'P');
-          b.wire(ls, 'P', comp, 'LS');
-          b.wire(valve, 'A', cyl, 'A');
-          b.wire(valve, 'B', cyl, 'B');
-        }
+        b.wire(relief, 'T', reliefTank, 'T');
+        b.wire(valve, 'T', filter, 'IN');
+        b.wire(filter, 'OUT', filterTank, 'T');
+        b.wire(valve, 'LS', comp, 'LS', true);
       }),
   },
   {

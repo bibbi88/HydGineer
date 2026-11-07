@@ -137,8 +137,22 @@ export type HydElement =
    * built up that pressure. Piloted from its own inlet, spring chamber drained to tank, so the
    * outlet pressure doesn't shift the setting. With `check`, a bypass check lets return oil
    * flow freely b → a.
+   *
+   * With a pilot `x`, the setting is relative to that port's pressure: it opens once
+   * p_a ≥ p_x + set. With x on the load-sensing line and b to tank, that's the 3-way pressure
+   * compensator of a fixed pump's LS system - it lets the surplus oil to tank at the load
+   * pressure plus `set`. No flow passes through `x`.
    */
-  | { kind: 'sequence'; a: string; b: string; set: number; k: number; band: number; check: boolean }
+  | {
+      kind: 'sequence';
+      a: string;
+      b: string;
+      set: number;
+      k: number;
+      band: number;
+      check: boolean;
+      x?: string;
+    }
   /** Closed-loop (over-centre) pump: draws `q` from `b` and delivers it into `a`; a negative
    * `q` (swash plate past centre) reverses the flow. No tank connection - any leakage is
    * modelled separately by the component. */
@@ -595,7 +609,8 @@ export function solveHydraulics(input: HydInput): HydSolution {
         return { qa: q, qb: -q, value: q };
       }
       case 'sequence': {
-        const opening = smoothstep((pa - e.set) / e.band);
+        const ref = tX[i] ? pressureOf(xx, tX[i]!) : 0;
+        const opening = smoothstep((pa - ref - e.set) / e.band);
         const back = e.check ? seatFlow(e.k, pb - pa - 1) : 0;
         const q = opening * orificeFlow(e.k, pa - pb) - back;
         return { qa: q, qb: -q, value: q };

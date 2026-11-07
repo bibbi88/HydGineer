@@ -26,9 +26,9 @@ import {
   HYD_ONE_WAY_FC_TYPE,
   HYD_FLOW_CONTROL_TYPE,
 } from '../components/hyd/valves';
-import { HYD_FLOW_METER_TYPE } from '../components/hyd/supply';
+import { HYD_FILTER_TYPE, HYD_FLOW_METER_TYPE } from '../components/hyd/supply';
 
-/** Component types this can splice onto a wire: the inline two-port valves and the flow meter,
+/** Component types this can splice onto a wire: the inline two-port valves, the flow meter and the filter,
  * whose ports are named 'IN'/'OUT' and lie on one straight line (vertical, IN at the bottom,
  * when unrotated). */
 const WIRE_INSERTABLE_TYPES = new Set<string>([
@@ -37,6 +37,7 @@ const WIRE_INSERTABLE_TYPES = new Set<string>([
   HYD_ONE_WAY_FC_TYPE,
   HYD_FLOW_CONTROL_TYPE,
   HYD_FLOW_METER_TYPE,
+  HYD_FILTER_TYPE,
 ]);
 
 /** How close a drop point needs to land to a wire to splice into it, rather than just landing

@@ -104,6 +104,9 @@ const TIP_SECTIONS: TipSection[] = [
         'down - so the load can never run away.',
       'Flow meter: drop it onto a line to measure it - it shows the flow right now and the ' +
         'volume that has passed since Play, e.g. the oil one stroke takes.',
+      '3-way pressure compensator: load sensing with a fixed pump. Put it between the pump ' +
+        'line (P) and tank (T) and pipe the LS line to it: the oil the valves don\u2019t take goes ' +
+        'to tank at the load pressure + its Δp, so in neutral the pump idles at just that Δp.',
       'Sequence valve: put it in the line to a second actuator. It stays shut until its ' +
         'inlet reaches the setting - while the first cylinder is still moving the pressure is ' +
         'low - and only then lets oil on, e.g. clamp first, then press. Pipe its drain L to ' +

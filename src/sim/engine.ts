@@ -44,6 +44,7 @@ function globalize(id: number, e: HydElement): HydElement {
     case 'compensator':
       return { ...e, a: k(e.a), b: k(e.b), x: k(e.x), y: k(e.y) };
     case 'reducing':
+    case 'sequence':
       return { ...e, a: k(e.a), b: k(e.b), x: e.x === undefined ? undefined : k(e.x) };
     default:
       return { ...e, a: k(e.a), b: k(e.b) };

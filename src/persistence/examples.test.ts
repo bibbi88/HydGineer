@@ -228,36 +228,36 @@ describe('example circuits behave as described', () => {
     expect(Math.abs(-flowOut(f, cyls[0]!, 'A') - qSlow) / qSlow).toBeLessThan(0.05);
   });
 
-  it('LS with a fixed pump: flow set by the levers whatever the loads, surplus over the relief', () => {
+  it('LS with a fixed pump: 3-way compensator idles it in neutral, holds load + margin working', () => {
     const comps = load('Load sensing with a fixed pump');
     const pump = byType(comps, 'hydPump');
-    const valves = comps.filter((c) => c.type === 'hydValveLS');
-    const cyls = comps.filter((c) => c.type === 'hydCylinderDouble');
-    // Neutral: everything the pump delivers goes over the relief valve.
+    const valve = byType(comps, 'hydValveLS');
+    const cyl = byType(comps, 'hydCylinderDouble');
+    const comp = byType(comps, 'hydLsBypassCompensator');
+    const filter = byType(comps, 'hydFilter');
+    // Neutral: the whole pump flow goes to tank through the compensator at about 15 bar.
     let f = run(1);
-    expect(p(f, pump, 'P')).toBeGreaterThan(155);
+    expect(p(f, pump, 'P')).toBeGreaterThan(13);
+    expect(p(f, pump, 'P')).toBeLessThan(20);
+    expect(-flowOut(f, comp, 'P')).toBeGreaterThan(25);
 
-    for (const v of valves) setLever(v, -60);
+    setLever(valve, -50);
     f = run(0.5);
-    const qa = -flowOut(f, cyls[0]!, 'A');
-    const qb = -flowOut(f, cyls[1]!, 'A');
-    expect(qa).toBeGreaterThan(1);
-    expect(Math.abs(qa - qb) / qa).toBeLessThan(0.1); // 5 kN and 25 kN, the same speed
+    const pLoad = p(f, cyl, 'A');
+    expect(pLoad).toBeGreaterThan(15000 / (31.17 * 10)); // carrying the 15 kN
+    const margin = p(f, pump, 'P') - pLoad;
+    expect(margin).toBeGreaterThan(12);
+    expect(margin).toBeLessThan(20);
+    const q50 = -flowOut(f, cyl, 'A');
+    expect(q50).toBeGreaterThan(3);
+    // The return oil goes through the filter.
+    expect(-flowOut(f, filter, 'IN')).toBeGreaterThan(1);
 
-    // Slowing the light one doesn't change the heavy one.
-    setLever(valves[0]!, -20);
+    // A much lighter load: (nearly) the same flow, at a lower pump pressure.
+    cyl.restore({ ...cyl.snapshot(), load: 2000 });
     f = run(0.3);
-    expect(-flowOut(f, cyls[0]!, 'A')).toBeLessThan(qa * 0.5);
-    expect(Math.abs(-flowOut(f, cyls[1]!, 'A') - qb) / qb).toBeLessThan(0.1);
-
-    // Both run out, then come back.
-    run(8);
-    expect(snap(cyls[0]!).pos).toBe(1);
-    expect(snap(cyls[1]!).pos).toBe(1);
-    for (const v of valves) setLever(v, 100);
-    run(10);
-    expect(snap(cyls[0]!).pos).toBe(0);
-    expect(snap(cyls[1]!).pos).toBe(0);
+    expect(Math.abs(-flowOut(f, cyl, 'A') - q50) / q50).toBeLessThan(0.1);
+    expect(p(f, pump, 'P')).toBeLessThan(pLoad);
   });
 
   it('hydrostatic transmission: speed and direction from the swash plate, charge holds the low side', () => {
