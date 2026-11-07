@@ -228,6 +228,38 @@ describe('example circuits behave as described', () => {
     expect(Math.abs(-flowOut(f, cyls[0]!, 'A') - qSlow) / qSlow).toBeLessThan(0.05);
   });
 
+  it('LS with a fixed pump: flow set by the levers whatever the loads, surplus over the relief', () => {
+    const comps = load('Load sensing with a fixed pump');
+    const pump = byType(comps, 'hydPump');
+    const valves = comps.filter((c) => c.type === 'hydValveLS');
+    const cyls = comps.filter((c) => c.type === 'hydCylinderDouble');
+    // Neutral: everything the pump delivers goes over the relief valve.
+    let f = run(1);
+    expect(p(f, pump, 'P')).toBeGreaterThan(155);
+
+    for (const v of valves) setLever(v, -60);
+    f = run(0.5);
+    const qa = -flowOut(f, cyls[0]!, 'A');
+    const qb = -flowOut(f, cyls[1]!, 'A');
+    expect(qa).toBeGreaterThan(1);
+    expect(Math.abs(qa - qb) / qa).toBeLessThan(0.1); // 5 kN and 25 kN, the same speed
+
+    // Slowing the light one doesn't change the heavy one.
+    setLever(valves[0]!, -20);
+    f = run(0.3);
+    expect(-flowOut(f, cyls[0]!, 'A')).toBeLessThan(qa * 0.5);
+    expect(Math.abs(-flowOut(f, cyls[1]!, 'A') - qb) / qb).toBeLessThan(0.1);
+
+    // Both run out, then come back.
+    run(8);
+    expect(snap(cyls[0]!).pos).toBe(1);
+    expect(snap(cyls[1]!).pos).toBe(1);
+    for (const v of valves) setLever(v, 100);
+    run(10);
+    expect(snap(cyls[0]!).pos).toBe(0);
+    expect(snap(cyls[1]!).pos).toBe(0);
+  });
+
   it('hydrostatic transmission: speed and direction from the swash plate, charge holds the low side', () => {
     const comps = load('Hydrostatic transmission');
     const pump = byType(comps, 'hydPumpLoop');

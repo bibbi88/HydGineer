@@ -478,6 +478,57 @@ export const EXAMPLES: Array<{ title: string; file: () => ProjectFileV1 }> = [
       }),
   },
   {
+    title: 'Load sensing with a fixed pump',
+    file: () =>
+      circuit('Example - load sensing with a fixed pump', (b) => {
+        // The same two sections and compensators, fed by a fixed pump (about 27.6 L/min) with
+        // a relief valve. Each compensator still holds its valve's inlet 10 bar above that
+        // section's load, so the cylinders move at their levers' speed whatever their loads.
+        // But with nothing to tell the pump what the loads need, the oil the levers don't take
+        // goes over the relief valve at 160 bar - compare the pump power with the LS pump.
+        const pump = b.add('hydPump', 200, 700, {
+          displacement: 20,
+          speed: 1450,
+          etaV: 95,
+          control: 'fixed',
+          showName: true,
+          customName: 'Fixed pump',
+        });
+        const supply = b.add('junction', 190, 590, { orientation: 'H' });
+        const relief = b.add('hydRelief', 70, 640, { setting: 160 });
+        const tank = b.add('hydTank', 70, 740);
+        const gauge = b.add('hydGauge', 130, 550, { range: 250 });
+        b.wire(pump, 'P', supply, 'P');
+        b.wire(supply, 'P', relief, 'P');
+        b.wire(relief, 'T', tank, 'T');
+        b.wire(supply, 'P', gauge, 'P');
+        for (const { x, load } of [
+          { x: 420, load: 5000 },
+          { x: 880, load: 25000 },
+        ]) {
+          const valve = b.add('hydValveLS', x, 420, { actuation: 'lever', qNom: 30 });
+          const comp = b.add('hydPressureCompensator', x - 20, 540, { setting: 10, qNom: 40 });
+          const ls = b.add('junction', x + 20, 540, { orientation: 'H' });
+          const t = b.add('hydTank', x + 80, 510);
+          const cyl = b.add('hydCylinderDouble', x + 40, 170, {
+            bore: 50,
+            rodD: 30,
+            stroke: 400,
+            friction: 150,
+            load,
+            showName: true,
+          });
+          b.wire(supply, 'P', comp, 'IN');
+          b.wire(comp, 'OUT', valve, 'P');
+          b.wire(valve, 'T', t, 'T');
+          b.wire(valve, 'LS', ls, 'P');
+          b.wire(ls, 'P', comp, 'LS');
+          b.wire(valve, 'A', cyl, 'A');
+          b.wire(valve, 'B', cyl, 'B');
+        }
+      }),
+  },
+  {
     title: 'Hydrostatic transmission (closed loop)',
     // An over-centre pump drives the motor in a closed loop: the swash-plate slider beside the
     // pump sets the motor's speed and direction steplessly, through zero.

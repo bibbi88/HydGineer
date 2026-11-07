@@ -74,7 +74,7 @@ The **Examples** menu in the toolbar loads ready-made circuits (meter-out speed 
 electro-hydraulic control, motor speed control, load holding, and synchronising two
 cylinders with each type of flow divider, accumulator charging, counterbalance valve,
 clamp-then-press with a sequence valve, pressure-compensated pump, inertia and pressure peaks, load sensing with one and two
-sections, with and without pressure compensators, hydrostatic transmission with fixed or
+sections, with and without pressure compensators, load sensing with a fixed pump, hydrostatic transmission with fixed or
 variable motor). Flow dividers, pumps, motors, directional valves, check valves and throttles /
 flow controls can be swapped type in place from the inspector, or by dropping the other type onto
 them.
