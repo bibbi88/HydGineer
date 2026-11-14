@@ -84,7 +84,14 @@ them.
 
 Several circuits can be open at once, as **tabs** above the canvas (or listed in the inspector -
 see **Settings**, the gear in the toolbar), each with its own undo history. Examples and loaded
-files open in a new tab. Every open circuit is kept in the browser and is back after a reload.
+files open in a new tab. Every open circuit is kept in the browser (IndexedDB) and is back after a
+reload; Save all and Export all sheets (one PDF) cover every tab at once.
+
+Drawing: wires snap to a port within 16 px, a wire let go on another joins it with a tap
+junction without cutting it, and crossing wires get ISO line jumps. Live pressure/flow labels
+keep clear of the other wires, symbols and readouts. Cylinders mark the sensors something reads
+(a0, a1...) at the rod, lit while on during a run. Pictures can be pasted, dropped or chosen onto
+the canvas, and a run can be recorded as a video (the record button while simulating).
 
 ## Running
 
