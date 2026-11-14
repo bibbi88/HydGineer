@@ -2382,3 +2382,67 @@ body.libraryDragging * {
 .comp[data-type='picture'] {
   z-index: -1;
 }
+
+/* The 5/2 valve configurator (ui/valveConfigurator.ts): the valve drawn across the inspector,
+   a dropdown under each end. */
+.valveConfigPreview {
+  display: block;
+  width: 100%;
+  height: auto;
+  background: #fff;
+  border: 1px solid var(--line-soft);
+  border-radius: 6px;
+}
+
+.valveConfigEnds {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 6px 0 4px;
+}
+
+.valveConfigEnds select {
+  flex: 0 1 46%;
+  min-width: 0;
+  padding: 4px 6px;
+  border: 1px solid #bbb;
+  border-radius: 4px;
+  font: inherit;
+  font-size: 12.5px;
+}
+
+/* A cylinder sensor that is on during a run: its name gets a yellow box (sensorMarks.ts). Canvas
+   only - exports don't carry this style. */
+.sensorMarkActive .sensorMarkBg {
+  fill: #ffe14d;
+  stroke: #d4b000;
+  stroke-width: 1;
+}
+
+/* Record video (ui/recordButton.ts): only while simulating, red while recording, the time
+   beside it. */
+.iconBtn[hidden] {
+  display: none;
+}
+
+.iconBtn.iconBtn--recording,
+.iconBtn.iconBtn--recording:hover:not(:disabled) {
+  color: #fff;
+  background: #d00;
+  border-color: #d00;
+  animation: recordPulse 1.2s ease-in-out infinite;
+}
+
+@keyframes recordPulse {
+  50% {
+    opacity: 0.7;
+  }
+}
+
+.recordTime {
+  align-self: center;
+  min-width: 2.6em;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: #d00;
+}

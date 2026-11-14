@@ -2,6 +2,7 @@ import type { ComponentFactoryContext } from '../components/registry';
 import type { ViewportAdapter } from './viewport';
 import { renderProjectBar, type ProjectBarRefs } from './projectBar';
 import { renderToolbar } from './toolbar';
+import { renderRecordButton } from './recordButton';
 import { renderViewControls } from './viewControls';
 import { renderArrangeControls } from './arrangeControls';
 import { createSvgEl } from '../components/shared/svgHelpers';
@@ -101,7 +102,15 @@ export function renderTopbar(
     frameLayer,
     workspaceEl,
   );
-  renderToolbar(section('Simulation'));
+  const simulation = section('Simulation');
+  renderToolbar(simulation);
+  renderRecordButton(simulation, {
+    getName: () => projectRefs.getName(),
+    connLayer,
+    frameLayer,
+    viewport,
+    workspaceEl,
+  });
   renderViewControls(section('View'), viewport, workspaceEl);
   renderArrangeControls(section('Arrange'));
   // Tips: a toggle, lit while on - the canvas shortcuts and the short explanations in the

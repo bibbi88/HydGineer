@@ -109,6 +109,10 @@ export function buildExportSvg(
   connLayer: SVGSVGElement,
   frameLayer: SVGSVGElement | null,
   region: ExportRegion,
+  /** For a video frame (persistence/recordVideo.ts): keep the simulation's own look - pressurized
+   * lines, exhaust flow, active sensors - styled by `css` (the app's own stylesheet) instead of
+   * the plain drawing an export is. */
+  live?: { css: string },
 ): SVGSVGElement {
   const { minX, minY, maxX, maxY } = resolveExportBounds(region);
   const width = maxX - minX;
@@ -121,7 +125,7 @@ export function buildExportSvg(
   svg.setAttribute('height', String(height));
 
   const style = document.createElementNS(SVG_NS, 'style');
-  style.textContent = EXPORT_STYLE;
+  style.textContent = live ? live.css : EXPORT_STYLE;
   svg.appendChild(style);
 
   const bg = document.createElementNS(SVG_NS, 'rect');
@@ -132,11 +136,19 @@ export function buildExportSvg(
   bg.setAttribute('fill', '#ffffff');
   svg.appendChild(bg);
 
+  // A live frame sits in a group carrying the canvas's own classes, so the stylesheet's
+  // simulation rules (port dots hidden while running, and so on) apply as they do on screen.
+  const root: Element = live ? document.createElementNS(SVG_NS, 'g') : svg;
+  if (live) {
+    root.setAttribute('class', 'workspace simulating');
+    svg.appendChild(root);
+  }
+
   // Page frame + title block first, so the diagram itself paints on top of it - same stacking
   // as the live canvas (see #frameLayer's own doc in app.css).
   if (frameLayer) {
     for (const child of Array.from(frameLayer.children)) {
-      svg.appendChild(child.cloneNode(true) as Element);
+      root.appendChild(child.cloneNode(true) as Element);
     }
   }
 
@@ -144,9 +156,13 @@ export function buildExportSvg(
     if (!(child instanceof SVGPathElement)) continue;
     if (child.classList.contains('wireHit') || child.classList.contains('wireGhost')) continue;
     const clone = child.cloneNode(true) as SVGPathElement;
-    clone.setAttribute('stroke', '#000');
-    clone.classList.remove('active', 'selected');
-    svg.appendChild(clone);
+    if (live) {
+      clone.classList.remove('selected', 'wireInsertTarget');
+    } else {
+      clone.setAttribute('stroke', '#000');
+      clone.classList.remove('active', 'selected');
+    }
+    root.appendChild(clone);
   }
 
   for (const c of appState.components) {
@@ -165,7 +181,7 @@ export function buildExportSvg(
     );
     for (const child of Array.from(inner.children)) {
       const clone = child.cloneNode(true) as Element;
-      clone.classList.remove('pressurized');
+      if (!live) clone.classList.remove('pressurized');
       g.appendChild(clone);
     }
     // A mirrored cylinder's sensor names flipped back to read left to right, as on the canvas.
@@ -175,7 +191,7 @@ export function buildExportSvg(
         label.setAttribute('transform', `translate(${2 * lx}, 0) scale(-1, 1)`);
       }
     }
-    svg.appendChild(g);
+    root.appendChild(g);
 
     // The labels turn with the component, as on the canvas, but aren't mirrored with its
     // artwork (they sit outside its svg) - so they get their own group without the flip.
@@ -187,7 +203,7 @@ export function buildExportSvg(
         `translate(${c.x}, ${c.y}) rotate(${rot}) translate(${-c.svgW / 2}, ${-c.svgH / 2})`,
       );
       tg.append(...texts);
-      svg.appendChild(tg);
+      root.appendChild(tg);
     }
   }
 
