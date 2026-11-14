@@ -49,7 +49,7 @@ let pendingPaste: ReturnType<typeof setTimeout> | undefined;
 
 /** Put on the system clipboard when components are copied, in place of whatever was there - so
  * a picture copied earlier (a screenshot, say) isn't what Ctrl+V pastes next. */
-const COPIED_COMPONENTS_MARKER = 'PneuGineer components';
+const COPIED_COMPONENTS_MARKER = 'HydGineer components';
 
 function onCopy(e: ClipboardEvent): void {
   if (isTypingTarget(document.activeElement) || document.querySelector('.modalBackdrop')) return;

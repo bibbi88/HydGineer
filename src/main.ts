@@ -26,6 +26,7 @@ import { initPageFrame } from './ui/pageFrame';
 import { snap } from './core/grid';
 import { canEdit } from './app/modes';
 import { initConfirmBeforeUnload } from './app/confirmClose';
+import { desktopBridge } from './app/desktopBridge';
 import { initDocuments, onDocumentsChange, storeDocumentsSoon } from './app/documents';
 import { onSettingsChange } from './app/settings';
 import { renderDocumentTabs } from './ui/documentTabs';
@@ -143,13 +144,18 @@ onSettingsChange(refreshTabs);
 
 // Documents kept in the browser come back as they were. Before there were documents, only the
 // one circuit was kept (autosave) - offered back once, into the first document.
-const restored = initDocuments({
-  ctx: factoryCtx,
-  viewport,
-  getName: () => projectBar.getName(),
-  setName: (name) => projectBar.setName(name),
-});
-const autosaved = readAutosave();
+// The desktop app starts with one empty circuit, as desktop programs do - its circuits are files.
+const isDesktop = desktopBridge() !== null;
+const restored = initDocuments(
+  {
+    ctx: factoryCtx,
+    viewport,
+    getName: () => projectBar.getName(),
+    setName: (name) => projectBar.setName(name),
+  },
+  { fresh: isDesktop },
+);
+const autosaved = isDesktop ? null : readAutosave();
 if (restored) {
   clearAutosave();
 } else if (autosaved) {

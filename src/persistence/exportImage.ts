@@ -1,6 +1,6 @@
 import { appState } from '../app/AppState';
 import { computeContentBounds, type WorldBounds } from '../geometry/contentBounds';
-import { buildPdf, MM } from './pdfWriter';
+import { buildPdfPages, MM, type PdfImage, type PdfPage } from './pdfWriter';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 const EXPORT_PADDING = 40;
@@ -299,14 +299,15 @@ async function deflate(data: Uint8Array): Promise<Uint8Array> {
   return new Uint8Array(await new Response(stream).arrayBuffer());
 }
 
-/** Exports as a one-page PDF on A4 or A3 paper, the drawing fitted inside a 10 mm margin. */
-export async function exportProjectAsPdf(
-  name: string,
+/** One PDF page: the circuit on the canvas now, cropped to `region`, fitted on `paper` inside a
+ * 10 mm margin. Null if it couldn't be drawn. */
+export async function renderPdfPage(
+  title: string,
   connLayer: SVGSVGElement,
   frameLayer: SVGSVGElement | null,
   region: ExportRegion,
   paper: PdfPaper,
-): Promise<void> {
+): Promise<{ page: PdfPage; image: PdfImage } | null> {
   const svg = buildExportSvg(connLayer, frameLayer, region);
   const width = Number(svg.getAttribute('width'));
   const height = Number(svg.getAttribute('height'));
@@ -316,7 +317,7 @@ export async function exportProjectAsPdf(
   const scale = Math.min(wanted, Math.sqrt(MAX_CANVAS_PIXELS / (width * height)));
   const canvas = await renderToCanvas(svg, scale);
   const context = canvas?.getContext('2d');
-  if (!canvas || !context) return;
+  if (!canvas || !context) return null;
 
   const rgba = context.getImageData(0, 0, canvas.width, canvas.height).data;
   const rgb = new Uint8Array(canvas.width * canvas.height * 3);
@@ -325,9 +326,26 @@ export async function exportProjectAsPdf(
     rgb[j + 1] = rgba[i + 1] ?? 255;
     rgb[j + 2] = rgba[i + 2] ?? 255;
   }
-  const pdf = buildPdf(
-    { ...page, title: name },
-    { width: canvas.width, height: canvas.height, deflated: await deflate(rgb) },
-  );
+  return {
+    page: { ...page, title },
+    image: { width: canvas.width, height: canvas.height, deflated: await deflate(rgb) },
+  };
+}
+
+/** Saves `pages` as one PDF, `name`.pdf. */
+export function downloadPdf(name: string, pages: Array<{ page: PdfPage; image: PdfImage }>): void {
+  const pdf = buildPdfPages(pages);
   download(new Blob([pdf as BlobPart], { type: 'application/pdf' }), `${name}.pdf`);
+}
+
+/** Exports as a one-page PDF on A4 or A3 paper, the drawing fitted inside a 10 mm margin. */
+export async function exportProjectAsPdf(
+  name: string,
+  connLayer: SVGSVGElement,
+  frameLayer: SVGSVGElement | null,
+  region: ExportRegion,
+  paper: PdfPaper,
+): Promise<void> {
+  const page = await renderPdfPage(name, connLayer, frameLayer, region, paper);
+  if (page) downloadPdf(name, [page]);
 }

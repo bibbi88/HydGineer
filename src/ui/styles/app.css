@@ -183,6 +183,24 @@ body.panelResizing * {
   cursor: default;
 }
 
+/* A toolbar button with a narrow ▾ beside it for related actions (Save all, Export all sheets -
+   ui/projectBar.ts). */
+.splitButton {
+  display: inline-flex;
+  align-items: center;
+}
+
+.iconBtn.iconBtn--menuArrow {
+  width: 16px;
+  margin-left: -3px;
+  padding: 0;
+}
+
+.iconBtn.iconBtn--menuArrow svg {
+  width: 12px;
+  height: 12px;
+}
+
 /* Stop is the one transport control that interrupts something, so it's the one given color. */
 .iconBtn--danger {
   color: var(--accent);

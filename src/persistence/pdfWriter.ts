@@ -1,5 +1,5 @@
 /**
- * A minimal PDF writer: one page with one image on it - all an export needs, without pulling a
+ * A minimal PDF writer: pages with one image on each - all an export needs, without pulling a
  * PDF library into the single-file build. The image is RGB, 8 bits per channel, compressed with
  * zlib (FlateDecode), so the drawing goes in losslessly.
  */
@@ -36,6 +36,12 @@ function num(n: number): string {
 }
 
 export function buildPdf(page: PdfPage, image: PdfImage): Uint8Array {
+  return buildPdfPages([{ page, image }]);
+}
+
+/** A PDF of several pages, one image each - "export all sheets". The document's title is the
+ * first page's. */
+export function buildPdfPages(pages: Array<{ page: PdfPage; image: PdfImage }>): Uint8Array {
   const encoder = new TextEncoder();
   const chunks: Uint8Array[] = [];
   let length = 0;
@@ -53,30 +59,41 @@ export function buildPdf(page: PdfPage, image: PdfImage): Uint8Array {
     write('\nendobj\n');
   };
 
-  // PDF's own origin is the bottom-left corner.
-  const { x, y, w, h } = page.imageRect;
-  const content = `q ${num(w)} 0 0 ${num(h)} ${num(x)} ${num(page.height - y - h)} cm /Im0 Do Q`;
-
+  // Objects: 1 catalog, 2 page tree, 3 info, then three per page (page, content, image).
+  const pageId = (i: number): number => 4 + i * 3;
   write('%PDF-1.4\n%\xe2\xe3\xcf\xd3\n');
   object(1, () => write('<< /Type /Catalog /Pages 2 0 R >>'));
-  object(2, () => write('<< /Type /Pages /Kids [3 0 R] /Count 1 >>'));
-  object(3, () =>
+  object(2, () =>
     write(
-      `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${num(page.width)} ${num(page.height)}] ` +
-        '/Resources << /XObject << /Im0 5 0 R >> >> /Contents 4 0 R >>',
+      `<< /Type /Pages /Kids [${pages.map((_, i) => `${pageId(i)} 0 R`).join(' ')}] ` +
+        `/Count ${pages.length} >>`,
     ),
   );
-  object(4, () => write(`<< /Length ${content.length} >>\nstream\n${content}\nendstream`));
-  object(5, () => {
-    write(
-      `<< /Type /XObject /Subtype /Image /Width ${image.width} /Height ${image.height} ` +
-        '/ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /FlateDecode ' +
-        `/Length ${image.deflated.length} >>\nstream\n`,
+  object(3, () =>
+    write(`<< /Title ${pdfString(pages[0]?.page.title ?? '')} /Producer (HydGineer) >>`),
+  );
+  pages.forEach(({ page, image }, i) => {
+    const id = pageId(i);
+    // PDF's own origin is the bottom-left corner.
+    const { x, y, w, h } = page.imageRect;
+    const content = `q ${num(w)} 0 0 ${num(h)} ${num(x)} ${num(page.height - y - h)} cm /Im0 Do Q`;
+    object(id, () =>
+      write(
+        `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${num(page.width)} ${num(page.height)}] ` +
+          `/Resources << /XObject << /Im0 ${id + 2} 0 R >> >> /Contents ${id + 1} 0 R >>`,
+      ),
     );
-    write(image.deflated);
-    write('\nendstream');
+    object(id + 1, () => write(`<< /Length ${content.length} >>\nstream\n${content}\nendstream`));
+    object(id + 2, () => {
+      write(
+        `<< /Type /XObject /Subtype /Image /Width ${image.width} /Height ${image.height} ` +
+          '/ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /FlateDecode ' +
+          `/Length ${image.deflated.length} >>\nstream\n`,
+      );
+      write(image.deflated);
+      write('\nendstream');
+    });
   });
-  object(6, () => write(`<< /Title ${pdfString(page.title)} /Producer (PneuGineer) >>`));
 
   const xrefAt = length;
   const count = offsets.length;
@@ -84,7 +101,7 @@ export function buildPdf(page: PdfPage, image: PdfImage): Uint8Array {
   for (let id = 1; id < count; id++) {
     write(`${String(offsets[id]).padStart(10, '0')} 00000 n \n`);
   }
-  write(`trailer\n<< /Size ${count} /Root 1 0 R /Info 6 0 R >>\nstartxref\n${xrefAt}\n%%EOF\n`);
+  write(`trailer\n<< /Size ${count} /Root 1 0 R /Info 3 0 R >>\nstartxref\n${xrefAt}\n%%EOF\n`);
 
   const out = new Uint8Array(length);
   let at = 0;

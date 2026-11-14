@@ -1,8 +1,5 @@
-import { saveProjectToFile } from '../persistence/save';
-import { loadProjectFromPicker } from '../persistence/load';
 import type { ComponentFactoryContext } from '../components/registry';
 import type { ViewportAdapter } from './viewport';
-import { resetHistory } from '../history/historyStore';
 import { openExportDialog } from './exportDialog';
 import { iconButton } from './iconButton';
 import { EXAMPLES } from '../persistence/examples';
@@ -10,7 +7,26 @@ import { loadProject } from '../persistence/project';
 import { zoomToFit } from '../interaction/zoomToFit';
 import { appState } from '../app/AppState';
 import { canEdit } from '../app/modes';
-import { activeNameChanged, newDocument, prepareToOpen } from '../app/documents';
+import { activeNameChanged, listDocuments, newDocument, prepareToOpen } from '../app/documents';
+import { createFileActions } from './fileActions';
+import { showContextMenu, type ContextMenuItem } from '../interaction/contextMenu';
+
+/** A narrow ▾ button beside a toolbar button, opening a menu of related actions under it. */
+function menuArrow(label: string, items: () => ContextMenuItem[]): HTMLButtonElement {
+  const btn = iconButton('chevronDown', label, () => {
+    const r = btn.getBoundingClientRect();
+    showContextMenu(r.left, r.bottom + 2, items());
+  });
+  btn.classList.add('iconBtn--menuArrow');
+  return btn;
+}
+
+function splitButton(main: HTMLButtonElement, arrow: HTMLButtonElement): HTMLElement {
+  const wrap = document.createElement('span');
+  wrap.className = 'splitButton';
+  wrap.append(main, arrow);
+  return wrap;
+}
 
 /** World px kept free right of an example's drawing for its readouts (see zoomToFit). */
 const EXAMPLE_READOUT_ROOM = 130;
@@ -39,30 +55,45 @@ export function renderProjectBar(
   // A new, empty circuit in a tab of its own - the same as the tab bar's +.
   const newBtn = iconButton('newDocument', 'New circuit', () => newDocument());
 
-  const saveBtn = iconButton(
-    'save',
-    'Save project',
-    () => void saveProjectToFile(projectName || 'project'),
-  );
-
-  const loadBtn = iconButton('folderOpen', 'Load project', () => {
-    // Only once a file was actually picked - loadProjectFromPicker itself does the
-    // clear+rebuild, so this must run right before that, not before the picker even opens (a
-    // cancelled picker shouldn't open a document or wipe undo history for nothing). In a new
-    // document it starts its own history; loaded over the current one, the history is reset.
-    void loadProjectFromPicker(ctx, viewport, () => {
-      if (prepareToOpen() === 'current') resetHistory();
-    }).then((loadedName) => {
-      if (loadedName) {
-        projectName = loadedName;
-        activeNameChanged();
-      }
-    });
+  // Save, Open and Export, and their ▾ menus - files on disk in the desktop app, downloads and
+  // the browser's pickers in a browser (see fileActions.ts).
+  const files = createFileActions({
+    ctx,
+    viewport,
+    connLayer,
+    frameLayer,
+    getName: () => projectName || 'project',
+    setName: (name) => {
+      projectName = name;
+      activeNameChanged();
+    },
   });
 
-  const exportBtn = iconButton('download', 'Export image…', () => {
+  const saveBtn = iconButton('save', 'Save project', () => void files.save());
+  const saveMenu = menuArrow('More ways to save', () => [
+    { label: 'Save', onClick: () => void files.save() },
+    ...(files.isDesktop ? [{ label: 'Save as…', onClick: () => void files.saveAs() }] : []),
+    {
+      label: listDocuments().length > 1 ? `Save all (${listDocuments().length})` : 'Save all',
+      onClick: () => void files.saveAll(),
+    },
+  ]);
+
+  const loadBtn = iconButton('folderOpen', 'Open project', () => void files.open());
+
+  const openExport = (): void =>
     openExportDialog(projectName || 'project', connLayer, frameLayer, viewport, workspaceEl);
-  });
+  const exportBtn = iconButton('download', 'Export image…', openExport);
+  const exportMenu = menuArrow('More ways to export', () => [
+    { label: 'Export…', onClick: openExport },
+    {
+      label:
+        listDocuments().length > 1
+          ? `Export all sheets (${listDocuments().length}) as PDF`
+          : 'Export all sheets as PDF',
+      onClick: () => void files.exportAllSheets(),
+    },
+  ]);
 
   // Ready-made circuits to start from - opened in a new document (or, if the setting is off,
   // replacing whatever is on the canvas: Undo brings it back; no confirm() dialog, which
@@ -94,7 +125,13 @@ export function renderProjectBar(
     requestAnimationFrame(() => zoomToFit(viewport, workspaceEl, EXAMPLE_READOUT_ROOM));
   });
 
-  container.append(newBtn, saveBtn, loadBtn, exportBtn, examples);
+  container.append(
+    newBtn,
+    splitButton(saveBtn, saveMenu),
+    loadBtn,
+    splitButton(exportBtn, exportMenu),
+    examples,
+  );
 
   return {
     getName: () => projectName || 'project',

@@ -35,6 +35,9 @@ export interface ProjectDocument {
   view?: DocumentView;
   /** Undo/redo while another document is open; not kept across reloads. */
   history?: HistoryState;
+  /** The desktop app: the file on disk this document was opened from or last saved to, which
+   * Save writes back to. Never set in the browser, which has no file paths. */
+  path?: string;
 }
 
 interface StoredDocuments {
@@ -162,11 +165,15 @@ export function activeNameChanged(): void {
  * the active one on the canvas - and true is returned; otherwise whatever is on the canvas
  * becomes the one open document.
  */
-export function initDocuments(d: DocumentsDeps): boolean {
+export function initDocuments(d: DocumentsDeps, opts: { fresh?: boolean } = {}): boolean {
   deps = d;
   let stored: StoredDocuments | null = null;
   try {
-    stored = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? 'null') as StoredDocuments | null;
+    // The desktop app starts with one empty circuit, as desktop programs do: its circuits are
+    // files, opened when wanted.
+    stored = opts.fresh
+      ? null
+      : (JSON.parse(localStorage.getItem(STORAGE_KEY) ?? 'null') as StoredDocuments | null);
   } catch {
     stored = null;
   }
@@ -230,6 +237,7 @@ export function closeDocument(id: string): void {
     only.file = emptyFile(only.name);
     only.view = undefined;
     only.history = undefined;
+    only.path = undefined;
     showDocument(only);
     notify();
     store();
@@ -274,6 +282,60 @@ export function duplicateDocument(id: string): void {
   delete copy.LS;
   delete copy.lastSaved;
   newDocument(name, { ...copy, name, ct: unixNow() });
+}
+
+/** The desktop app: the file the active document belongs to, if any. */
+export function activeDocumentPath(): string | undefined {
+  return active()?.path;
+}
+
+/** The desktop app: the active document now belongs to `path` (opened from it, or saved to it). */
+export function setActiveDocumentPath(path: string | undefined): void {
+  const doc = active();
+  if (doc) doc.path = path;
+}
+
+/** Every open document as it is now - the active one fresh from the canvas - for Save all. */
+export function snapshotDocuments(): Array<{
+  id: string;
+  name: string;
+  file: ProjectFileV1;
+  path?: string;
+}> {
+  captureActive();
+  return docs.map(({ id, name, file, path }) => ({ id, name, file, ...(path ? { path } : {}) }));
+}
+
+/** Replaces the kept copy of a document that isn't on the canvas - Save all stamping the time it
+ * was saved into it. The active one lives on the canvas and isn't touched. */
+export function updateDocumentFile(id: string, file: ProjectFileV1): void {
+  const doc = docs.find((d) => d.id === id);
+  if (doc && id !== activeId) doc.file = file;
+  storeDocumentsSoon();
+}
+
+/** The desktop app: document `id` now belongs to `path`. */
+export function setDocumentPath(id: string, path: string): void {
+  const doc = docs.find((d) => d.id === id);
+  if (doc) doc.path = path;
+}
+
+/** Puts each document on the canvas in turn, tab order, and runs `fn` on it - then goes back to
+ * the one that was open. For Export all sheets, which draws each from the canvas. */
+export async function forEachDocumentOnCanvas(
+  fn: (doc: { id: string; name: string }) => Promise<void>,
+): Promise<void> {
+  const startId = activeId;
+  try {
+    for (const doc of [...docs]) {
+      switchDocument(doc.id);
+      // Let wires and labels settle into place before drawing.
+      await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+      await fn({ id: doc.id, name: doc.name });
+    }
+  } finally {
+    switchDocument(startId);
+  }
 }
 
 /** Moves a document one place left (-1) or right (+1). */
