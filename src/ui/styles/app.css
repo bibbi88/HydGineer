@@ -916,10 +916,17 @@ rect.wireHandle.wireStubHandle {
 
 .marquee {
   position: fixed;
-  border: 1px dashed var(--port);
+  border: 1px solid var(--port);
   background: rgba(10, 116, 255, 0.08);
   pointer-events: none;
   z-index: 999;
+}
+
+/* Dragged right to left: selects whatever it touches, not only what's wholly inside - drawn
+   dashed and green, as CAD programs tell the two apart. */
+.marquee.marqueeCrossing {
+  border: 1px dashed var(--insert);
+  background: rgba(26, 156, 74, 0.08);
 }
 
 .ctxmenu {
