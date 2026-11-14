@@ -11,11 +11,18 @@ export interface Settings {
   /** Examples and loaded files open in a new document rather than replacing the current one
    * (an empty current document is used either way). */
   openInNewDoc: boolean;
+  /** Show tips: the canvas shortcuts and the short explanations in the inspector. */
+  showTips: boolean;
 }
 
 const STORAGE_KEY = 'hydgineer.settings';
 
-const DEFAULTS: Settings = { docsPlace: 'tabs', docsAlways: true, openInNewDoc: true };
+const DEFAULTS: Settings = {
+  docsPlace: 'tabs',
+  docsAlways: true,
+  openInNewDoc: true,
+  showTips: false,
+};
 
 let settings: Settings = load();
 const listeners: Array<() => void> = [];
@@ -28,6 +35,7 @@ function load(): Settings {
       docsAlways: typeof saved.docsAlways === 'boolean' ? saved.docsAlways : DEFAULTS.docsAlways,
       openInNewDoc:
         typeof saved.openInNewDoc === 'boolean' ? saved.openInNewDoc : DEFAULTS.openInNewDoc,
+      showTips: typeof saved.showTips === 'boolean' ? saved.showTips : DEFAULTS.showTips,
     };
   } catch {
     return { ...DEFAULTS };

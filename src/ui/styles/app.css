@@ -117,6 +117,12 @@ body.panelResizing * {
   padding-left: 0;
 }
 
+/* The project section (after the brand) gives way first on a narrow window: its name field
+   shrinks before any button is pushed off the end of the toolbar. */
+.brand + .topbarSection {
+  flex: 0 1 auto;
+}
+
 /* App name and version at the far left of the toolbar. */
 .brand {
   display: flex;
@@ -1198,8 +1204,11 @@ rect.wireHandle.wireStubHandle {
 .projectName {
   /* Sized for the toolbar rather than stretched to a panel width: wide enough for a typical
      project name, and allowed to shrink before the icon buttons beside it do. */
-  flex: 0 1 180px;
-  min-width: 90px;
+  flex: 0 1 140px;
+  /* A zero width, so its basis and the bounds decide - a field's own default width would stop
+     the section from shrinking at all. */
+  width: 0;
+  min-width: 60px;
   padding: 6px 8px;
   border: 1px solid #bbb;
   border-radius: 6px;
@@ -1234,36 +1243,18 @@ rect.wireHandle.wireStubHandle {
   font-size: 12px;
 }
 
-/* One row of orientation for a new canvas: what to do with the sidebar, and the two mouse
-   gestures that are otherwise undiscoverable. Wraps rather than running past the workspace edge
-   on a narrow window, so it stays a single row wherever there is room for one. */
-.hint {
-  position: absolute;
-  bottom: 8px;
-  left: 8px;
-  right: 8px;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 4px 8px;
-  width: fit-content;
-  max-width: calc(100% - 16px);
-  padding: 6px 8px;
+/* Tips (the toolbar's lightbulb, app/settings.ts showTips): the canvas shortcuts and the short
+   explanations in the inspector show only while it's on. */
+body:not(.tipsOn) .tipText {
+  display: none;
+}
+
+.inspectorTipList {
+  margin: 0 0 10px;
+  padding-left: 16px;
   font-size: 12px;
-  color: #333;
-  background: #ffffffcc;
-  border: 1px solid #ddd;
-  border-radius: 6px;
-  z-index: 3;
-}
-
-.hint .hintSep {
-  color: var(--faint);
-}
-
-.hint .hintKey {
-  font-weight: 600;
-  color: var(--ink);
+  line-height: 1.5;
+  color: var(--muted);
 }
 
 /* ---------- Export dialog ---------- */
@@ -1789,13 +1780,6 @@ rect.wireHandle.wireStubHandle {
   pointer-events: none;
 }
 
-.exampleSelect {
-  margin-left: 4px;
-  max-width: 130px;
-  font: inherit;
-  font-size: 12px;
-}
-
 .hydInfo[data-side='left'] {
   top: 50%;
   left: auto;
@@ -2193,6 +2177,17 @@ body.libraryDragging * {
   min-width: 34px;
   font-variant-numeric: tabular-nums;
   color: var(--ink);
+}
+
+/* The toolbar's Examples menu (ui/projectBar.ts). */
+.exampleSelect {
+  margin-left: 4px;
+  flex: 0 1 108px;
+  width: 0;
+  min-width: 56px;
+  max-width: 108px;
+  font: inherit;
+  font-size: 12px;
 }
 
 /* ---------- Open documents (ui/documentTabs.ts) ---------- */

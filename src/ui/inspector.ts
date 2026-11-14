@@ -1193,7 +1193,7 @@ function renderSensorListField(
   container.appendChild(heading);
 
   const hint = document.createElement('p');
-  hint.className = 'inspectorHint';
+  hint.className = 'inspectorHint tipText';
   hint.textContent =
     'On while the piston is in its range: 0% in, 100% out. A contact or PLC input with the ' +
     'same name switches with it.';
@@ -1459,12 +1459,20 @@ function renderProjectInfoSection(container: HTMLElement, projectBar: ProjectBar
   container.appendChild(frameRow);
 
   const frameHint = document.createElement('p');
-  frameHint.className = 'inspectorHint';
+  frameHint.className = 'inspectorHint tipText';
   frameHint.textContent =
-    'Draws a sheet outline with the fields above as a title block - a visual guide only, ' +
-    'centered on the current diagram when picked.';
+    'A sheet outline with the fields above as its title block, centered on the diagram.';
   container.appendChild(frameHint);
 }
+
+/** What the bar under the canvas used to say - now shown in the inspector while tips are on. */
+const CANVAS_TIPS: Array<[string, string]> = [
+  ['', 'Drag components from the library onto the canvas.'],
+  ['Pan:', 'middle-drag, or Alt + drag.'],
+  ['Zoom:', 'scroll.'],
+  ['Select:', 'drag on empty canvas.'],
+  ['Rotate:', 'R, also while dragging.'],
+];
 
 /** Pinned to the bottom of the panel, below whatever else is showing. It's help rather than a
  * setting, so it renders unconditionally - the one thing here that's always available no matter
@@ -1477,6 +1485,20 @@ function renderTipsSection(container: HTMLElement): void {
   heading.className = 'inspectorSectionHeading';
   heading.textContent = 'Help';
   section.appendChild(heading);
+
+  // The canvas shortcuts, while tips are on (the toolbar's lightbulb).
+  const tips = document.createElement('ul');
+  tips.className = 'inspectorTipList tipText';
+  for (const [key, text] of CANVAS_TIPS) {
+    const item = document.createElement('li');
+    if (key) {
+      const k = document.createElement('b');
+      k.textContent = key;
+      item.append(k, document.createTextNode(` ${text}`));
+    } else item.textContent = text;
+    tips.appendChild(item);
+  }
+  section.appendChild(tips);
 
   const btn = document.createElement('button');
   btn.className = 'btn inspectorTipsBtn';
@@ -1552,7 +1574,7 @@ export function renderInspector(container: HTMLElement, projectBar: ProjectBarRe
       }
 
       const hint = document.createElement('p');
-      hint.className = 'inspectorHint';
+      hint.className = 'inspectorHint tipText';
       hint.textContent =
         selected.length === 0
           ? 'Select a component to edit its properties.'
@@ -1570,7 +1592,7 @@ export function renderInspector(container: HTMLElement, projectBar: ProjectBarRe
     if (!fields || fields.length === 0) {
       if (!showsNameSection) {
         const hint = document.createElement('p');
-        hint.className = 'inspectorHint';
+        hint.className = 'inspectorHint tipText';
         hint.textContent = 'This component has nothing to configure here.';
         container.appendChild(hint);
       }

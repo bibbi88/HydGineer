@@ -7,6 +7,7 @@ import { renderArrangeControls } from './arrangeControls';
 import { createSvgEl } from '../components/shared/svgHelpers';
 import { iconButton } from './iconButton';
 import { openSettingsDialog } from './settingsDialog';
+import { getSettings, onSettingsChange, updateSettings } from '../app/settings';
 
 /** The app's mark and name, with the build version (yymmdd, see vite.config.ts) under it. The
  * mark is a double-acting cylinder: barrel, piston and rod. */
@@ -103,7 +104,23 @@ export function renderTopbar(
   renderToolbar(section('Simulation'));
   renderViewControls(section('View'), viewport, workspaceEl);
   renderArrangeControls(section('Arrange'));
-  section('Settings').appendChild(iconButton('settings', 'Settings', () => openSettingsDialog()));
+  // Tips: a toggle, lit while on - the canvas shortcuts and the short explanations in the
+  // inspector show only then.
+  const tipsBtn = iconButton('tips', 'Show tips', () =>
+    updateSettings({ showTips: !getSettings().showTips }),
+  );
+  const refreshTips = (): void => {
+    const on = getSettings().showTips;
+    tipsBtn.classList.toggle('iconBtn--active', on);
+    tipsBtn.setAttribute('aria-pressed', String(on));
+    document.body.classList.toggle('tipsOn', on);
+  };
+  onSettingsChange(refreshTips);
+  refreshTips();
+  section('Settings').append(
+    tipsBtn,
+    iconButton('settings', 'Settings', () => openSettingsDialog()),
+  );
 
   return projectRefs;
 }

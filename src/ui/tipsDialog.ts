@@ -52,9 +52,13 @@ const TIP_SECTIONS: TipSection[] = [
       'The Examples menu in the toolbar loads ready-made circuits to start from - each in a ' +
         'new tab, like a loaded file.',
       'Tabs above the canvas hold several circuits at once, each with its own undo history. ' +
-        'Click + for a new one, double-click a tab to rename it, middle-click or × to close ' +
-        'it, right-click for more. They are kept in the browser, so they are back after a ' +
-        'reload. Settings (the gear) can list them in the inspector instead.',
+        'Click + (or the New circuit button) for a new one, double-click a tab to rename it, ' +
+        'middle-click or × to close it, right-click for more. They are kept in the browser, so ' +
+        'they are back after a reload. Settings (the gear) can list them in the inspector ' +
+        'instead.',
+      'The lightbulb in the toolbar turns tips on: the canvas shortcuts and short ' +
+        'explanations in the inspector. Drag the inner edge of the library or the inspector to ' +
+        'make it wider or narrower (double-click the edge for the default width).',
       'Right-click a component for Rotate, Copy, and Delete.',
       'Right-click a hydraulic port to put a tank symbol on it - the quick way to draw a ' +
         'return line, e.g. on a valve’s T port.',
