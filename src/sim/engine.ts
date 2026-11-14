@@ -3,6 +3,7 @@ import { appState } from '../app/AppState';
 import { getSignal, setSignal } from './signals';
 import { solveElectrical } from './electrical';
 import { portKey } from './ports';
+import { tapLinks } from '../wires/taps';
 import { setPressureScale } from './pressureScale';
 import { solveHydraulics, wireFlows, type HydElement, type HydSolution } from './hydraulics';
 
@@ -79,6 +80,12 @@ export function stepSimulation(dt: number): HydFrame {
     if (!isHydraulic.has(from) || !isHydraulic.has(to)) continue;
     links.push([from, to]);
     wires.push({ id: conn.id, from, to });
+  }
+  // A tap junction is part of the line of the wire it sits on (wires/taps.ts).
+  for (const [j, end] of tapLinks()) {
+    const a = portKey(j.id, j.port);
+    const b = portKey(end.id, end.port);
+    if (isHydraulic.has(a) && isHydraulic.has(b)) links.push([a, b]);
   }
 
   if (appState.topologyVersion !== lastTopology) {

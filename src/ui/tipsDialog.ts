@@ -66,6 +66,10 @@ const TIP_SECTIONS: TipSection[] = [
       'Delete or Backspace removes the current selection.',
       'Ctrl+C / Ctrl+V copies and pastes the selection.',
       'Ctrl+Z undoes, Ctrl+R redoes.',
+      'Let a new wire go on an existing one to join it there: a junction dot is put on that ' +
+        'wire, which stays one wire, and the dot keeps to it when things move. Where wires ' +
+        'cross without being joined, the horizontal one jumps over the other - "Line jumps at ' +
+        'crossings" under Project info turns that off.',
       'Escape cancels a wire you’re in the middle of drawing, or clears the current selection ' +
         'if nothing is being drawn.',
     ],

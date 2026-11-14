@@ -1492,6 +1492,23 @@ function renderProjectInfoSection(container: HTMLElement, projectBar: ProjectBar
   frameRow.append(frameSpan, frameSelect);
   container.appendChild(frameRow);
 
+  // A drawing choice for the whole project: a small jump where a wire crosses another it isn't
+  // connected to (ISO style).
+  const jumpsRow = document.createElement('label');
+  jumpsRow.className = 'inspectorRow';
+  const jumpsSpan = document.createElement('span');
+  jumpsSpan.textContent = 'Line jumps at crossings';
+  const jumpsBox = document.createElement('input');
+  jumpsBox.type = 'checkbox';
+  jumpsBox.checked = appState.lineJumps;
+  jumpsBox.addEventListener('change', () => {
+    appState.lineJumps = jumpsBox.checked;
+    redrawAllConnections();
+    appState.markDirty();
+  });
+  jumpsRow.append(jumpsSpan, jumpsBox);
+  container.appendChild(jumpsRow);
+
   const frameHint = document.createElement('p');
   frameHint.className = 'inspectorHint tipText';
   frameHint.textContent =

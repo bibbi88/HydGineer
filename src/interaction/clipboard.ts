@@ -1,3 +1,4 @@
+import { retargetTaps } from '../persistence/project';
 import type { ComponentFactoryContext } from '../components/registry';
 import type { ViewportAdapter } from '../ui/viewport';
 import type { ComponentId, ConnectionEndpoint, WireGuide } from '../core/types';
@@ -122,6 +123,8 @@ function pasteWithOffset(offsetFor: (comps: ClipboardComp[]) => { dx: number; dy
       idMap.set(c.origId, comp.id);
       pastedIds.push(comp.id);
     }
+    // A pasted tap junction sits on the pasted copy of its wire, if that came along.
+    retargetTaps(idMap);
 
     for (const conn of clipboard!.conns) {
       const fromId = idMap.get(conn.from.id);

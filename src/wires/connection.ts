@@ -28,6 +28,7 @@ import { WIRE_STUB } from '../sim/constants';
 import { selectConnection } from '../interaction/selection';
 import { showContextMenu } from '../interaction/contextMenu';
 import { placeLabels, type LabelRequest, type Rect } from './labelPlacement';
+import { placeTapsOn } from './taps';
 
 let connLayerEl: SVGSVGElement | null = null;
 /** The wires' live labels, in a layer of their own drawn over every wire, so a wire drawn later
@@ -175,6 +176,8 @@ export function removeConnection(connId: number): void {
   appState.removeConnection(connId);
   updatePortConnectionVisual(conn.from.id, conn.from.port);
   updatePortConnectionVisual(conn.to.id, conn.to.port);
+  // The jumps other wires made over it go with it.
+  applyLineJumps();
 }
 
 /**
@@ -273,13 +276,13 @@ function addBendAtWorldPoint(conn: Connection, worldPoint: Point): void {
   appState.markDirty();
 }
 
-export function redrawConnection(conn: Connection): void {
+/** Works out one wire's route and draws everything but its line jumps (see applyLineJumps). */
+function drawRoute(conn: Connection): void {
   if (!viewportRef || !workspaceRef) return;
   const points = computeConnectionGeometry(viewportRef, workspaceRef, conn);
-  const d = pathFromPoints(points);
-  if (conn.pathEl.getAttribute('d') !== d) {
-    conn.pathEl.setAttribute('d', d);
-    conn.hitEl.setAttribute('d', d);
+  const hit = pathFromPoints(points);
+  if (conn.hitEl.getAttribute('d') !== hit) {
+    conn.hitEl.setAttribute('d', hit);
     routeEpoch++;
   }
   routes.set(conn.id, points);
@@ -291,12 +294,102 @@ export function redrawConnection(conn: Connection): void {
     conn.labelEl.setAttribute('x', String(mid.x));
     conn.labelEl.setAttribute('y', String(mid.y - 4));
   }
+}
 
+/** Puts the junctions tapping each of `conns` back on it (wires/taps.ts), and redraws the
+ * wires of any that moved. */
+function followTaps(conns: Connection[]): void {
+  for (const conn of conns) {
+    for (const junction of placeTapsOn(conn)) {
+      for (const c of appState.connections) {
+        if (c.from.id === junction.id || c.to.id === junction.id) drawRoute(c);
+      }
+    }
+  }
+}
+
+/** Radius, px, of a line jump's half-circle. */
+const JUMP_R = 5;
+
+/**
+ * The path for `points`, jumping (ISO style) over every other wire's vertical run it crosses on
+ * a horizontal run of its own - a small half-circle over it, so wires that merely cross read as
+ * not connected. A crossing too near a bend, or too near the last jump, is drawn plain.
+ */
+function pathWithJumps(
+  points: Point[],
+  verticals: Array<{ x: number; y1: number; y2: number }>,
+): string {
+  if (points.length === 0) return '';
+  const parts = [`M ${points[0]!.x} ${points[0]!.y}`];
+  for (let i = 1; i < points.length; i++) {
+    const a = points[i - 1]!;
+    const b = points[i]!;
+    if (a.y === b.y && a.x !== b.x) {
+      const dir = b.x > a.x ? 1 : -1;
+      const lo = Math.min(a.x, b.x) + JUMP_R + 1;
+      const hi = Math.max(a.x, b.x) - JUMP_R - 1;
+      const xs = verticals
+        .filter((v) => v.x > lo && v.x < hi && a.y > v.y1 + 0.5 && a.y < v.y2 - 0.5)
+        .map((v) => v.x)
+        .sort((p, q) => (p - q) * dir);
+      let last = -Infinity;
+      for (const x of xs) {
+        if (Math.abs(x - last) < JUMP_R * 2 + 2) continue;
+        last = x;
+        parts.push(`L ${x - dir * JUMP_R} ${a.y}`);
+        // Over the top whichever way the run goes.
+        parts.push(`A ${JUMP_R} ${JUMP_R} 0 0 ${dir > 0 ? 1 : 0} ${x + dir * JUMP_R} ${a.y}`);
+      }
+    }
+    parts.push(`L ${b.x} ${b.y}`);
+  }
+  return parts.join(' ');
+}
+
+/** Draws every wire's path, with line jumps where it crosses another (if the project has them
+ * on - see AppState.lineJumps). Only rewrites a path that changed. */
+function applyLineJumps(): void {
+  const verticalsOf = new Map<number, Array<{ x: number; y1: number; y2: number }>>();
+  for (const conn of appState.connections) {
+    const route = routes.get(conn.id) ?? [];
+    const runs: Array<{ x: number; y1: number; y2: number }> = [];
+    for (let i = 1; i < route.length; i++) {
+      const a = route[i - 1]!;
+      const b = route[i]!;
+      if (a.x === b.x && a.y !== b.y)
+        runs.push({ x: a.x, y1: Math.min(a.y, b.y), y2: Math.max(a.y, b.y) });
+    }
+    verticalsOf.set(conn.id, runs);
+  }
+  for (const conn of appState.connections) {
+    const route = routes.get(conn.id) ?? [];
+    let d: string;
+    if (appState.lineJumps) {
+      const others: Array<{ x: number; y1: number; y2: number }> = [];
+      for (const [id, runs] of verticalsOf) if (id !== conn.id) others.push(...runs);
+      d = pathWithJumps(route, others);
+    } else {
+      d = pathFromPoints(route);
+    }
+    if (conn.pathEl.getAttribute('d') !== d) conn.pathEl.setAttribute('d', d);
+  }
+}
+
+export function redrawConnection(conn: Connection): void {
+  if (!viewportRef || !workspaceRef) return;
+  drawRoute(conn);
+  followTaps([conn]);
+  applyLineJumps();
   geometryChangeListener?.();
 }
 
 export function redrawAllConnections(): void {
-  for (const c of appState.connections) redrawConnection(c);
+  if (!viewportRef || !workspaceRef) return;
+  for (const c of appState.connections) drawRoute(c);
+  followTaps(appState.connections);
+  applyLineJumps();
+  geometryChangeListener?.();
 }
 
 let lastLabelLayout = '';

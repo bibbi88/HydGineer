@@ -4,7 +4,7 @@ import { appState } from '../app/AppState';
 import { componentRotation, portGlobalPosition, rotateQuarter } from './coords';
 import { routeWithGuides, stubDirection, type Point, type PortAnchor } from './routing';
 import { autoRouteAStar } from './autoRoute';
-import { JUNCTION_TYPE } from '../components/junction';
+import { isHostWire, JUNCTION_TYPE, readJunctionHost } from '../components/junction';
 import { WIRE_STUB } from '../sim/constants';
 import { snap } from '../core/grid';
 
@@ -25,6 +25,11 @@ const cache = new Map<ComponentId, CacheEntry>();
  * auto-router steers new wires away from running along. Entries for deleted connections are
  * simply never looked up again (only ids still in appState.connections are read). */
 const lastRoute = new Map<ComponentId, Point[]>();
+
+/** A connection's most recently drawn route (see lastRoute), or undefined if not drawn yet. */
+export function routeOf(connId: ComponentId): Point[] | undefined {
+  return lastRoute.get(connId);
+}
 
 /**
  * A port's wire anchor in world space: its position, the axis its wire leaves along, and which
@@ -347,6 +352,18 @@ function midJogRoute(
   return isClear(points, ownIds, otherWires) ? points : null;
 }
 
+/** The junctions tapping `conn` (see wires/taps.ts) - they sit on it, so they're no obstacle
+ * to it. */
+function tapIdsOn(conn: Connection): ComponentId[] {
+  const ids: ComponentId[] = [];
+  for (const c of appState.components) {
+    if (c.type !== JUNCTION_TYPE) continue;
+    const host = readJunctionHost(c.snapshot());
+    if (host && isHostWire(host, conn)) ids.push(c.id);
+  }
+  return ids;
+}
+
 export function computeConnectionGeometry(
   viewport: ViewportAdapter,
   workspaceEl: HTMLElement,
@@ -421,7 +438,7 @@ export function computeConnectionGeometry(
 
   // A sideways port to an up/down one: a plain L when there's room for it. Two ports facing
   // each other: a straight run, or one jog halfway between them.
-  const ownIds = new Set([conn.from.id, conn.to.id]);
+  const ownIds = new Set([conn.from.id, conn.to.id, ...tapIdsOn(conn)]);
   const ell =
     lRoute(fromAnchor, toAnchor, ownIds, otherWires) ??
     midJogRoute(fromAnchor, toAnchor, ownIds, otherWires);
@@ -443,7 +460,8 @@ export function computeConnectionGeometry(
   // (see worldPortAnchor), so there's no need to let the route cut back through the very
   // component it starts or ends at - which is exactly what it used to do when the other end
   // was on the far side of it.
-  const excludeIds = new Set<ComponentId>();
+  // Nor are the junctions tapping this very wire (wires/taps.ts) obstacles to it - they sit on it.
+  const excludeIds = new Set<ComponentId>(tapIdsOn(conn));
   const points = autoRouteAStar(
     fromAnchor,
     toAnchor,

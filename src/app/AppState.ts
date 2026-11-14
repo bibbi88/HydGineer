@@ -33,6 +33,9 @@ class AppState {
    * real access control. */
   projectLastSavedDeviceId: string | null = null;
   /** Bumped whenever components/connections are added or removed, so cached graphs know to rebuild. */
+  /** Draw a small jump (half-circle) where a wire crosses another it isn't connected to - a
+   * per-project drawing choice, saved with it. */
+  lineJumps = true;
   topologyVersion = 0;
 
   private changeListeners: Array<() => void> = [];
