@@ -36,9 +36,41 @@ body {
   /* The toolbar spans all three columns as its own row above them, so it reads as belonging to
      the whole window rather than to any one panel. The document tabs sit in a row of their own
      above the canvas, which collapses to nothing while they're hidden. */
-  grid-template-columns: 244px 1fr 260px;
+  grid-template-columns: var(--library-w, 244px) 1fr var(--inspector-w, 260px);
   grid-template-rows: auto auto 1fr;
   height: 100vh;
+}
+
+/* The library's and the inspector's inner edges, dragged to resize them (ui/panelResize.ts):
+   strips laid over the edge in the panel's own grid cell. */
+.panelResizer {
+  grid-row: 2 / span 2;
+  width: 7px;
+  z-index: 5;
+  cursor: col-resize;
+}
+
+.panelResizer--library {
+  grid-column: 1;
+  justify-self: end;
+  margin-right: -3px;
+}
+
+.panelResizer--inspector {
+  grid-column: 3;
+  justify-self: start;
+  margin-left: -3px;
+}
+
+.panelResizer:hover,
+body.panelResizing .panelResizer:hover {
+  background: color-mix(in srgb, var(--port) 35%, transparent);
+}
+
+body.panelResizing,
+body.panelResizing * {
+  cursor: col-resize !important;
+  user-select: none;
 }
 
 .tabbar {
@@ -1810,6 +1842,10 @@ rect.wireHandle.wireStubHandle {
   .inspectorPanel {
     grid-column: 1;
     grid-row: 5;
+  }
+  /* Stacked, the panels are full width: nothing to resize. */
+  .panelResizer {
+    display: none;
   }
   .sidebar,
   .inspectorPanel {

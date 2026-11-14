@@ -29,6 +29,7 @@ import { initConfirmBeforeUnload } from './app/confirmClose';
 import { initDocuments, onDocumentsChange, storeDocumentsSoon } from './app/documents';
 import { onSettingsChange } from './app/settings';
 import { renderDocumentTabs } from './ui/documentTabs';
+import { initPanelResize } from './ui/panelResize';
 
 const workspaceQuery = document.querySelector<HTMLElement>('.workspace');
 const viewportQuery = document.getElementById('viewport');
@@ -70,6 +71,9 @@ const inspectorEl: HTMLElement = inspectorQuery;
 const tabbarEl: HTMLElement = tabbarQuery;
 
 const viewport = initViewport(viewportQuery, workspaceEl, gridLayerEl);
+// The library and inspector widths, dragged at their inner edges.
+const appEl = document.querySelector<HTMLElement>('.app');
+if (appEl) initPanelResize(appEl);
 initWires(connLayer, viewport, workspaceEl);
 initWireHandles(handleLayer, viewport, workspaceEl);
 initLinking(connLayer, viewport, workspaceEl);
