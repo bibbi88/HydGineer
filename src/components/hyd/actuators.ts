@@ -4,6 +4,7 @@ import { appState } from '../../app/AppState';
 import { Modes } from '../../app/modes';
 import { createPort, createPortLabel, createSvgEl } from '../shared/svgHelpers';
 import { nextCylinderLetter, isCylinderLetterInUse } from '../shared/letters';
+import { drawSensorMarks, showSensorMarkStates } from '../shared/sensorMarks';
 import {
   defaultSensors,
   isInSensorRange,
@@ -72,7 +73,12 @@ interface CylinderDrawing {
   update(pos: number): void;
 }
 
-function drawCylinder(shell: HydShell, withSpring: boolean, withPortB: boolean): CylinderDrawing {
+function drawCylinder(
+  shell: HydShell,
+  withSpring: boolean,
+  withPortB: boolean,
+  sensors: () => CylinderSensor[],
+): CylinderDrawing {
   const g = shell.g;
   g.appendChild(
     createSvgEl('rect', {
@@ -108,9 +114,27 @@ function drawCylinder(shell: HydShell, withSpring: boolean, withPortB: boolean):
   createPortLabel(g, 38, 72, 'A', { anchor: 'start', fontSize: 10 });
   if (withPortB) createPortLabel(g, 162, 72, 'B', { anchor: 'end', fontSize: 10 });
 
+  // With a spring, the piston stops short of the end wall by the spring's packed length.
+  const travel = spring ? TRAVEL - 4 * SPRING_MIN_PITCH : TRAVEL;
+  // The rod tip's centre x at stroke position p (0 in, 1 out).
+  const tipAt = (p: number): number => BODY_X + 2 + p * travel + PISTON_W + 184 + 3;
+
+  // The sensors something reads, marked along the rod tip's travel (a0 at its in position, a1
+  // out...); redrawn on any project change, since what reads them is other components'
+  // business. Each lights up while it's on during a run.
+  const marks = createSvgEl('g', { class: 'sensorMarks' }) as SVGGElement;
+  g.appendChild(marks);
+  let lastPos = 0;
+  const refreshMarks = (): void => {
+    drawSensorMarks(marks, sensors(), tipAt, BODY_Y + BODY_H / 2 - 9);
+    showSensorMarkStates(marks, sensors(), lastPos, appState.mode !== Modes.STOP);
+  };
+  appState.onChange(refreshMarks);
+  appState.onModeChange(refreshMarks);
+
   function update(pos: number): void {
-    // With a spring, the piston stops short of the end wall by the spring's packed length.
-    const travel = spring ? TRAVEL - 4 * SPRING_MIN_PITCH : TRAVEL;
+    lastPos = pos;
+    showSensorMarkStates(marks, sensors(), pos, appState.mode !== Modes.STOP);
     const px = BODY_X + 2 + pos * travel;
     piston.setAttribute('x', String(px));
     const rodStart = px + PISTON_W;
@@ -121,6 +145,7 @@ function drawCylinder(shell: HydShell, withSpring: boolean, withPortB: boolean):
     if (spring) spring.setAttribute('d', springPath(rodStart + 1, BODY_X + BODY_W - 1));
   }
   update(0);
+  refreshMarks();
   return { piston, rod, tip, spring, update };
 }
 
@@ -192,7 +217,7 @@ export function createHydCylinderDouble(compLayer: HTMLElement, x: number, y: nu
   );
   shell.setNameVisible(true);
   shell.setInfoSide('above');
-  const drawing = drawCylinder(shell, false, true);
+  const drawing = drawCylinder(shell, false, true, () => state.sensors);
   const ports = {
     A: createPort(shell.g, 'A', 30, 70, 'V'),
     B: createPort(shell.g, 'B', 170, 70, 'V'),
@@ -308,7 +333,7 @@ export function createHydCylinderSingle(compLayer: HTMLElement, x: number, y: nu
   );
   shell.setNameVisible(true);
   shell.setInfoSide('above');
-  const drawing = drawCylinder(shell, true, false);
+  const drawing = drawCylinder(shell, true, false, () => state.sensors);
   const ports = { A: createPort(shell.g, 'A', 30, 70, 'V') };
 
   let pos = 0;

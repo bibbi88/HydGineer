@@ -2326,3 +2326,18 @@ body.libraryDragging * {
 .settingsDialog .inspectorRow select {
   width: auto;
 }
+
+/* A mirrored cylinder's sensor names still read left to right (sensorMarks.ts). */
+.comp[data-mirror='1'] .sensorMarkLabel {
+  transform: scaleX(-1);
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+/* A cylinder sensor that is on during a run: its name gets a yellow box (sensorMarks.ts). Canvas
+   only - exports don't carry this style. */
+.sensorMarkActive .sensorMarkBg {
+  fill: #ffe14d;
+  stroke: #d4b000;
+  stroke-width: 1;
+}

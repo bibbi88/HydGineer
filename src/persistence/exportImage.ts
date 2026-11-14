@@ -168,6 +168,13 @@ export function buildExportSvg(
       clone.classList.remove('pressurized');
       g.appendChild(clone);
     }
+    // A mirrored cylinder's sensor names flipped back to read left to right, as on the canvas.
+    if (flip) {
+      for (const label of Array.from(g.querySelectorAll('.sensorMarkLabel'))) {
+        const lx = Number(label.getAttribute('x'));
+        label.setAttribute('transform', `translate(${2 * lx}, 0) scale(-1, 1)`);
+      }
+    }
     svg.appendChild(g);
 
     // The labels turn with the component, as on the canvas, but aren't mirrored with its
