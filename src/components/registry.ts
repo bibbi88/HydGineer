@@ -89,6 +89,7 @@ import {
 import { createPlc, PLC_TYPE } from './plc';
 import { createTextAnnotation, TEXT_ANNOTATION_TYPE } from './textAnnotation';
 import { createPicture, PICTURE_TYPE } from './picture';
+import { createHydSteeringUnit, HYD_STEERING_UNIT_TYPE } from './hyd/steering';
 
 export interface ComponentFactoryContext {
   compLayer: HTMLElement;
@@ -198,6 +199,15 @@ export const componentRegistry = new Map<string, RegistryEntry>([
     {
       factory: (ctx, x, y) => createHydValveLS(ctx.compLayer, x, y),
       label: 'Load-sensing valve (proportional)',
+      placeable: true,
+      category: ComponentCategory.DIRECTIONAL,
+    },
+  ],
+  [
+    HYD_STEERING_UNIT_TYPE,
+    {
+      factory: (ctx, x, y) => createHydSteeringUnit(ctx.compLayer, x, y),
+      label: 'Steering unit (Orbitrol)',
       placeable: true,
       category: ComponentCategory.DIRECTIONAL,
     },

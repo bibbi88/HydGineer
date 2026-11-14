@@ -131,6 +131,10 @@ const TIP_SECTIONS: TipSection[] = [
         'then holds its outlet at the highest load pressure plus its margin, so the flow follows ' +
         'the lever and not the load, and the pump only makes the pressure that’s needed. In ' +
         'neutral the LS line is vented and the pump idles at standby pressure.',
+      'Steering unit (Orbitrol): while simulating, hold the slider under its wheel to one side ' +
+        'to turn the wheel that way - let go and it stops. The gerotor lets through its ' +
+        'displacement per wheel turn, so the steering cylinder follows the wheel; in neutral ' +
+        'the pump oil goes straight to tank (open centre) and the cylinder holds.',
       'Load-sensing valve lever: drag the slider above the valve while simulating. It moves ' +
         'the way the valve does: right brings the left box over the ports (P→A), left the right ' +
         'box (P→B), middle = closed (double-click it to centre). With several sections, ' +

@@ -2481,3 +2481,18 @@ body.libraryDragging * {
   font-variant-numeric: tabular-nums;
   color: #d00;
 }
+
+/* A steering unit's wheel (components/hyd/steering.ts): a slider under the wheel symbol, shown
+   while simulating. Held to one side it turns the wheel that way; let go, it springs back. */
+.steerWheel {
+  position: absolute;
+  top: 98px;
+  left: -10px;
+  width: 84px;
+  accent-color: var(--accent);
+  cursor: ew-resize;
+}
+
+.workspace:not(.simulating) .steerWheel {
+  display: none;
+}

@@ -530,6 +530,44 @@ export const EXAMPLES: Array<{ title: string; file: () => ProjectFileV1 }> = [
       }),
   },
   {
+    title: 'Hydrostatic steering: steering unit (Orbitrol)',
+    file: () =>
+      circuit('Example - hydrostatic steering', (b) => {
+        // Hold the slider under the steering wheel to one side while simulating: the wheel
+        // turns, and the gerotor lets 100 cm³ per wheel turn into L or R - so the steering
+        // cylinder follows the wheel, faster as you turn faster. Let go and it holds. In
+        // neutral the pump's oil goes straight to tank through the open centre, at low pressure.
+        const pump = b.add('hydPump', 510, 600, { displacement: 8, speed: 1450, etaV: 95 });
+        const supply = b.add('junction', 500, 470, { orientation: 'H' });
+        const relief = b.add('hydRelief', 380, 520, { setting: 140 });
+        const reliefTank = b.add('hydTank', 380, 610);
+        const gauge = b.add('hydGauge', 430, 430, { range: 160 });
+        const unit = b.add('hydSteeringUnit', 510, 320, {
+          displacement: 100,
+          maxRpm: 90,
+          qNom: 40,
+        });
+        const tank = b.add('hydTank', 620, 450);
+        const cyl = b.add('hydCylinderDouble', 520, 100, {
+          bore: 50,
+          rodD: 28,
+          stroke: 200,
+          load: 0,
+          friction: 2000,
+          showName: true,
+          customName: 'Steering cylinder',
+        });
+        b.wire(pump, 'P', supply, 'P');
+        b.wire(supply, 'P', relief, 'P');
+        b.wire(relief, 'T', reliefTank, 'T');
+        b.wire(supply, 'P', gauge, 'P');
+        b.wire(supply, 'P', unit, 'P');
+        b.wire(unit, 'T', tank, 'T');
+        b.wire(unit, 'L', cyl, 'A');
+        b.wire(unit, 'R', cyl, 'B');
+      }),
+  },
+  {
     title: 'Hydrostatic transmission (closed loop)',
     // An over-centre pump drives the motor in a closed loop: the swash-plate slider beside the
     // pump sets the motor's speed and direction steplessly, through zero.

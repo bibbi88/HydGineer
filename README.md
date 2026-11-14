@@ -33,6 +33,8 @@ continuation, see `src/sim/hydraulics.ts`):
 - **Counterbalance valve**: free flow in, opens for flow out when p_load + ratio·p_pilot ≥ setting.
 - **3-way pressure compensator** (load sensing with a fixed pump): lets the surplus oil to tank
   at the LS pressure plus its Δp, so the fixed pump idles at that Δp in neutral.
+- **Steering unit (Orbitrol)**: open centre in neutral; turning the wheel at n rev/s, the
+  gerotor meters Q = D · n into L or R, the open centre closing as it turns faster.
 - **Sequence valve**: shut until its inlet reaches the setting, then opens and holds the inlet
   there while passing the oil on; drained spring chamber, optional bypass check for the return.
 - **Pressure-compensated pump**: displacement swivels back over the last few bar below the
@@ -60,7 +62,8 @@ Units: bar (gauge), L/min, N, Nm, mm, cm³/rev.
   over-centre pump for closed loops (motor can be
   switched by a relay or pressure switch), tank, gas-loaded accumulator, filter (with bypass check)
 - Directional valves: 4/3 (closed / tandem / float / open centre) and 4/2, solenoid or hand lever;
-  proportional load-sensing valve (lever slider or solenoids) with LS port; shuttle valve
+  proportional load-sensing valve (lever slider or solenoids) with LS port; shuttle valve; steering unit (Orbitrol)
+  with a steering wheel
 - Pressure control: relief valve, cross-port relief valves, pressure-reducing valve,
   counterbalance valve, sequence valve, 2-way pressure compensator (LS), 3-way pressure
   compensator (LS with a fixed pump)
@@ -77,7 +80,7 @@ The **Examples** menu in the toolbar loads ready-made circuits (meter-out speed 
 electro-hydraulic control, motor speed control, load holding, and synchronising two
 cylinders with each type of flow divider, accumulator charging, counterbalance valve,
 clamp-then-press with a sequence valve, pressure-compensated pump, inertia and pressure peaks, load sensing with one and two
-sections, with and without pressure compensators, load sensing with a fixed pump, hydrostatic transmission with fixed or
+sections, with and without pressure compensators, load sensing with a fixed pump, hydrostatic steering with an Orbitrol, hydrostatic transmission with fixed or
 variable motor). Flow dividers, pumps, motors, directional valves, check valves and throttles /
 flow controls can be swapped type in place from the inspector, or by dropping the other type onto
 them.

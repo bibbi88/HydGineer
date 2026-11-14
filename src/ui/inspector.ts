@@ -69,6 +69,7 @@ import {
 import { NOTE_STYLES, TEXT_ANNOTATION_TYPE } from '../components/textAnnotation';
 import { MAX_PICTURE_WIDTH, MIN_PICTURE_WIDTH, PICTURE_TYPE } from '../components/picture';
 import { choosePictureFor } from '../interaction/pictures';
+import { HYD_STEERING_UNIT_TYPE } from '../components/hyd/steering';
 import { renderDocumentListSection } from './documentTabs';
 import { onDocumentsChange } from '../app/documents';
 import { onSettingsChange } from '../app/settings';
@@ -330,6 +331,32 @@ const INSPECTOR_FIELDS: Record<string, InspectorField[]> = {
       kind: 'text',
       key: 'signal',
       label: 'Motor signal (empty = always on; K1 = runs while K1 is on; !S1 = while S1 is off)',
+    },
+  ],
+  [HYD_STEERING_UNIT_TYPE]: [
+    {
+      kind: 'number',
+      key: 'displacement',
+      label: 'Gerotor displacement (cm³ per wheel turn)',
+      min: 1,
+      max: 2000,
+      step: 5,
+    },
+    {
+      kind: 'number',
+      key: 'maxRpm',
+      label: 'Wheel speed, slider at the end (rpm)',
+      min: 1,
+      max: 600,
+      step: 5,
+    },
+    {
+      kind: 'number',
+      key: 'qNom',
+      label: 'Open centre, fully open (L/min at Δp 5 bar)',
+      min: 0.5,
+      max: 2000,
+      step: 1,
     },
   ],
   [HYD_VALVE_LS_TYPE]: [

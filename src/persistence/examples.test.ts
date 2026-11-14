@@ -260,6 +260,42 @@ describe('example circuits behave as described', () => {
     expect(p(f, pump, 'P')).toBeLessThan(pLoad);
   });
 
+  it('steering unit: the cylinder follows the wheel, D · n; holds in neutral', () => {
+    const comps = load('Hydrostatic steering');
+    const pump = byType(comps, 'hydPump');
+    const unit = byType(comps, 'hydSteeringUnit');
+    const cyl = byType(comps, 'hydCylinderDouble');
+    const turn = (pct: number): void => {
+      const input = unit.el.querySelector<HTMLInputElement>('input.steerWheel')!;
+      input.value = String(pct);
+      input.dispatchEvent(new Event('input'));
+    };
+    // Neutral: open centre, the pump's oil straight to tank at low pressure.
+    let f = run(1);
+    expect(p(f, pump, 'P')).toBeLessThan(10);
+    expect(snap(cyl).pos).toBe(0);
+
+    // Wheel to the left at 60 %: 0.9 rev/s x 100 cm³ = 5.4 L/min into L, the cylinder's A side.
+    turn(-60);
+    f = run(1.5);
+    expect(-flowOut(f, cyl, 'A')).toBeCloseTo(5.4, 1);
+    // The pump, not the driver, makes the pressure: a little above the cylinder's.
+    expect(p(f, pump, 'P')).toBeGreaterThan(p(f, cyl, 'A'));
+    expect(p(f, pump, 'P') - p(f, cyl, 'A')).toBeLessThan(10);
+    const out = snap(cyl).pos;
+    expect(out).toBeGreaterThan(0.1);
+
+    // Let go: it holds.
+    turn(0);
+    run(1);
+    expect(Math.abs(snap(cyl).pos - out)).toBeLessThan(0.005);
+
+    // Wheel to the right: back the other way.
+    turn(60);
+    run(1);
+    expect(snap(cyl).pos).toBeLessThan(out - 0.05);
+  });
+
   it('hydrostatic transmission: speed and direction from the swash plate, charge holds the low side', () => {
     const comps = load('Hydrostatic transmission');
     const pump = byType(comps, 'hydPumpLoop');
