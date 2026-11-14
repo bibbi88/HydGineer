@@ -79,9 +79,11 @@ function updateHover(clientX: number, clientY: number): void {
   const nearest = nearestPort(clientX, clientY, PORT_SNAP_RADIUS)?.el ?? null;
 
   if (hoveredPortEl && hoveredPortEl !== nearest) {
-    hoveredPortEl.classList.remove('portHover');
+    hoveredPortEl.classList.remove('portHover', 'portSnapTarget');
   }
   nearest?.classList.add('portHover');
+  // While a wire is being drawn, the port it would connect to if let go now shows red.
+  nearest?.classList.toggle('portSnapTarget', pendingPort !== null);
   hoveredPortEl = nearest;
 }
 
@@ -167,6 +169,7 @@ export function getPendingPort(): PendingPort | null {
 
 export function cancelLinking(): void {
   pendingPort = null;
+  hoveredPortEl?.classList.remove('portSnapTarget');
   previewPath?.setAttribute('d', '');
 }
 

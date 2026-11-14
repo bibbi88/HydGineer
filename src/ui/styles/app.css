@@ -897,6 +897,16 @@ rect.wireHandle.wireStubHandle {
   stroke-width: 3;
 }
 
+/* The port a wire being drawn would connect to if let go now (interaction/linking.ts) - red,
+   whether the port is wired already or not, and over the hover style above. */
+.port.portSnapTarget,
+.port.portConnected.portSnapTarget,
+.port.portElectrical.portSnapTarget {
+  fill: #ffd6d6;
+  stroke: var(--accent);
+  stroke-width: 3;
+}
+
 .wireHandle {
   fill: #fff;
   stroke: var(--port);

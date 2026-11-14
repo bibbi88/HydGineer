@@ -6,7 +6,7 @@ export const MAX_DT = 0.05;
 
 /** Screen-px radius within which a port lights up, and a wire being drawn snaps onto it when
  * let go - so the pointer doesn't have to land on the small port circle itself. */
-export const PORT_SNAP_RADIUS = 22;
+export const PORT_SNAP_RADIUS = 16;
 /** Screen-px radius within which pressing starts a wire from a port rather than grabbing the
  * component - smaller than the snap radius, so a press on a valve's body near a port still
  * moves the valve. */
