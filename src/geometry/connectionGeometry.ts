@@ -26,6 +26,18 @@ const cache = new Map<ComponentId, CacheEntry>();
  * simply never looked up again (only ids still in appState.connections are read). */
 const lastRoute = new Map<ComponentId, Point[]>();
 
+/** Drops what's cached for wire `connId` - or, with no id, for every wire (the project was
+ * cleared) - so routes of wires that are gone don't pile up. */
+export function forgetConnectionGeometry(connId?: ComponentId): void {
+  if (connId === undefined) {
+    cache.clear();
+    lastRoute.clear();
+  } else {
+    cache.delete(connId);
+    lastRoute.delete(connId);
+  }
+}
+
 /** A connection's most recently drawn route (see lastRoute), or undefined if not drawn yet. */
 export function routeOf(connId: ComponentId): Point[] | undefined {
   return lastRoute.get(connId);

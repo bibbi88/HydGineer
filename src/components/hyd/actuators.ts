@@ -129,8 +129,8 @@ function drawCylinder(
     drawSensorMarks(marks, sensors(), tipAt, BODY_Y + BODY_H / 2 - 9);
     showSensorMarkStates(marks, sensors(), lastPos, appState.mode !== Modes.STOP);
   };
-  appState.onChange(refreshMarks);
-  appState.onModeChange(refreshMarks);
+  appState.onChange(refreshMarks, shell.el);
+  appState.onModeChange(refreshMarks, shell.el);
 
   function update(pos: number): void {
     lastPos = pos;

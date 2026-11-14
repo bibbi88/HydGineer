@@ -12,6 +12,7 @@ import { createSvgEl } from '../components/shared/svgHelpers';
 import {
   computeConnectionAnchors,
   computeConnectionGeometry,
+  forgetConnectionGeometry,
 } from '../geometry/connectionGeometry';
 import {
   completeGuides,
@@ -81,6 +82,30 @@ export function initWires(
   connLayerEl = connLayer;
   viewportRef = viewport;
   workspaceRef = workspaceEl;
+  portMoves?.disconnect();
+  portMoves = new MutationObserver(notePortMoves);
+  portMoves.observe(workspaceEl, {
+    subtree: true,
+    attributes: true,
+    attributeFilter: ['transform', 'cx', 'cy'],
+  });
+  movedComponents.clear();
+}
+
+/** Watches for ports that move while the simulation runs - a valve's spool sliding its pilot
+ * ports with it - so only the wires on those get redrawn (redrawMovedConnections). */
+let portMoves: MutationObserver | null = null;
+const movedComponents = new Set<HTMLElement>();
+
+function notePortMoves(records: MutationRecord[]): void {
+  for (const r of records) {
+    const el = r.target as Element;
+    // Only a move that carries ports along: a cylinder's rod sliding moves no port.
+    const carriesPort = el.classList.contains('port') || el.querySelector('.port') !== null;
+    if (!carriesPort) continue;
+    const comp = el.closest<HTMLElement>('.comp');
+    if (comp) movedComponents.add(comp);
+  }
 }
 
 /** Shows/hides a port's dot depending on whether any wire currently ends there, so a connected
@@ -177,7 +202,15 @@ export function removeConnection(connId: number): void {
   updatePortConnectionVisual(conn.from.id, conn.from.port);
   updatePortConnectionVisual(conn.to.id, conn.to.port);
   // The jumps other wires made over it go with it.
+  forgetConnectionGeometry(connId);
   applyLineJumps();
+}
+
+/** Every wire's drawn route forgotten - the project was cleared. */
+export function forgetAllDrawnRoutes(): void {
+  routes.clear();
+  routeEpoch++;
+  forgetConnectionGeometry();
 }
 
 /**
@@ -382,6 +415,27 @@ export function redrawConnection(conn: Connection): void {
   followTaps([conn]);
   applyLineJumps();
   geometryChangeListener?.();
+}
+
+/**
+ * Redraws only the wires on components whose ports moved since the last call - what a running
+ * simulation needs each frame, instead of every wire. Returns how many wires were redrawn.
+ */
+export function redrawMovedConnections(): number {
+  if (!viewportRef || !workspaceRef) return 0;
+  if (portMoves) notePortMoves(portMoves.takeRecords());
+  if (movedComponents.size === 0) return 0;
+  const moved = new Set(
+    appState.components.filter((c) => movedComponents.has(c.el)).map((c) => c.id),
+  );
+  movedComponents.clear();
+  const conns = appState.connections.filter((c) => moved.has(c.from.id) || moved.has(c.to.id));
+  if (conns.length === 0) return 0;
+  for (const c of conns) drawRoute(c);
+  followTaps(conns);
+  applyLineJumps();
+  geometryChangeListener?.();
+  return conns.length;
 }
 
 export function redrawAllConnections(): void {

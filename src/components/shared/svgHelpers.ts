@@ -53,6 +53,12 @@ export function hitBoundsOf(el: HTMLElement): ComponentBounds | undefined {
   return hitBoundsByEl.get(el)?.();
 }
 
+/** Sets an attribute only if it differs - for drawing that runs every frame of a simulation
+ * (a piston at rest needn't be written again): an unchanged write still costs the browser work. */
+export function setAttrIfChanged(el: Element, name: string, value: string): void {
+  if (el.getAttribute(name) !== value) el.setAttribute(name, value);
+}
+
 export function buildComponentShell(
   compLayer: HTMLElement,
   type: string,

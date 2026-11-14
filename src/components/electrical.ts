@@ -1,4 +1,5 @@
 import type { Component, PortConnection } from '../core/types';
+import { listenWindow } from '../app/componentLifetime';
 import { uid } from '../core/ids';
 import { appState } from '../app/AppState';
 import { Modes } from '../app/modes';
@@ -170,6 +171,7 @@ function camMarker(g: SVGElement): { show(bladeX: number | null): void } {
  * contact operated or not, plain black, with the cam if `cam`.
  */
 function followRestState(
+  owner: object,
   getKey: () => string,
   draw: (operated: boolean, highlight: boolean, cam: boolean) => void,
 ): { refresh(): void; isSensorKey(): boolean } {
@@ -181,8 +183,8 @@ function followRestState(
     const atRest = sensorKey && isSensorTriggeredAtRest(key);
     draw(atRest, false, atRest);
   }
-  appState.onChange(refresh);
-  appState.onModeChange(refresh);
+  appState.onChange(refresh, owner);
+  appState.onModeChange(refresh, owner);
   return { refresh, isSensorKey: () => sensorKey };
 }
 
@@ -300,7 +302,7 @@ export function createElecContact(compLayer: HTMLElement, x: number, y: number):
     symbol.setOperated(operated, highlight);
     cam.show(withCam ? symbol.bladeXAt(CAM_Y) : null);
   }
-  const rest = followRestState(() => key, draw);
+  const rest = followRestState(shell.el, () => key, draw);
 
   const comp: Component = {
     id: uid(),
@@ -391,7 +393,7 @@ export function createElecChangeover(compLayer: HTMLElement, x: number, y: numbe
     blade.setAttribute('stroke', shown && highlight ? OPERATED_STROKE : STROKE);
     cam.show(withCam ? CX : null);
   }
-  const rest = followRestState(() => key, drawBlade);
+  const rest = followRestState(shell.el, () => key, drawBlade);
 
   function refresh(): void {
     label.textContent = key;
@@ -583,7 +585,7 @@ export function createElecPushButton(compLayer: HTMLElement, x: number, y: numbe
     if (detent || e.ctrlKey) latched = true;
     setPressed(true);
   });
-  window.addEventListener('mouseup', () => {
+  listenWindow(shell.el, 'mouseup', () => {
     if (!latched) setPressed(false);
   });
   shell.svg.addEventListener('mouseleave', () => {
