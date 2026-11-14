@@ -67,6 +67,8 @@ import {
   ELEC_CHANGEOVER_TYPE,
 } from '../components/electrical';
 import { NOTE_STYLES, TEXT_ANNOTATION_TYPE } from '../components/textAnnotation';
+import { MAX_PICTURE_WIDTH, MIN_PICTURE_WIDTH, PICTURE_TYPE } from '../components/picture';
+import { choosePictureFor } from '../interaction/pictures';
 import { renderDocumentListSection } from './documentTabs';
 import { onDocumentsChange } from '../app/documents';
 import { onSettingsChange } from '../app/settings';
@@ -182,6 +184,13 @@ interface CylinderDimsField {
   stroke: string;
 }
 
+/** A button that does something to the component, e.g. choose a picture's image. */
+interface ActionField {
+  kind: 'action';
+  label: FieldLabel;
+  run(comp: Component): void;
+}
+
 /** Free text over several lines, e.g. a note's own text. */
 interface MultilineTextField {
   kind: 'multilineText';
@@ -190,6 +199,7 @@ interface MultilineTextField {
 }
 
 type InspectorField =
+  | ActionField
   | CylinderDimsField
   | SelectField
   | MultilineTextField
@@ -691,6 +701,21 @@ const INSPECTOR_FIELDS: Record<string, InspectorField[]> = {
       step: 1,
     },
   ],
+  [PICTURE_TYPE]: [
+    {
+      kind: 'action',
+      label: (comp) => (comp.snapshot().src ? 'Replace picture…' : 'Choose picture…'),
+      run: (comp) => void choosePictureFor(comp),
+    },
+    {
+      kind: 'number',
+      key: 'width',
+      label: 'Width (px)',
+      min: MIN_PICTURE_WIDTH,
+      max: MAX_PICTURE_WIDTH,
+      step: 10,
+    },
+  ],
   [TEXT_ANNOTATION_TYPE]: [
     {
       kind: 'select',
@@ -822,6 +847,15 @@ function renderNumberOrTextField(
 
   row.append(span, input);
   container.appendChild(row);
+}
+
+function renderActionField(container: HTMLElement, comp: Component, field: ActionField): void {
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'btn inspectorActionBtn';
+  btn.textContent = resolveLabel(field.label, comp);
+  btn.addEventListener('click', () => field.run(comp));
+  container.appendChild(btn);
 }
 
 /** Ø bore / rod - stroke, in mm, as small boxes on one row under a line naming them. */
@@ -1609,6 +1643,7 @@ export function renderInspector(container: HTMLElement, projectBar: ProjectBarRe
       else if (field.kind === 'cylinderMode') renderCylinderModeField(container, comp, refresh);
       else if (field.kind === 'silencer') renderSilencerField(container, comp, field, snap);
       else if (field.kind === 'checkbox') renderCheckboxField(container, comp, field, snap);
+      else if (field.kind === 'action') renderActionField(container, comp, field);
       else if (field.kind === 'cylinderDims') renderCylinderDimsField(container, comp, field, snap);
       else if (field.kind === 'readonlyText') renderReadonlyTextField(container, comp, field, snap);
       else if (field.kind === 'select') renderSelectField(container, comp, field, snap);

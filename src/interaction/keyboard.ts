@@ -10,6 +10,7 @@ import { cancelLinking, isLinking } from './linking';
 import { copySelection, pasteClipboard } from './clipboard';
 import { undo, redo } from '../history/historyStore';
 import { GRID_SIZE } from '../core/grid';
+import { pastePictureFrom } from './pictures';
 import { rotateSelection } from './componentContextMenu';
 import { cancelLibraryDrag, isLibraryDragActive, rotateLibraryDrag } from './libraryDrag';
 
@@ -41,6 +42,34 @@ function nudgeSelection(dx: number, dy: number): void {
 }
 
 let activeListener: ((e: KeyboardEvent) => void) | null = null;
+let pendingPaste: ReturnType<typeof setTimeout> | undefined;
+
+/** Put on the system clipboard when components are copied, in place of whatever was there - so
+ * a picture copied earlier (a screenshot, say) isn't what Ctrl+V pastes next. */
+const COPIED_COMPONENTS_MARKER = 'PneuGineer components';
+
+function onCopy(e: ClipboardEvent): void {
+  if (isTypingTarget(document.activeElement) || document.querySelector('.modalBackdrop')) return;
+  if (getSelectedComponents().length === 0) return;
+  e.clipboardData?.setData('text/plain', COPIED_COMPONENTS_MARKER);
+  e.preventDefault();
+}
+
+/** The browser's paste decides what Ctrl+V pastes: a picture it carries, or else the copied
+ * components. Deciding here, rather than on the key, means a slow paste - a big screenshot can
+ * take a moment to arrive - can't end up pasting both. */
+function onPaste(e: ClipboardEvent): void {
+  if (isTypingTarget(document.activeElement) || document.querySelector('.modalBackdrop')) return;
+  clearTimeout(pendingPaste);
+  pendingPaste = undefined;
+  if (!canEdit(appState.mode)) return;
+  e.preventDefault();
+  if (!pastePictureFrom(e.clipboardData)) pasteClipboard();
+}
+
+/** How long Ctrl+V waits for the browser's paste before pasting the copied components itself -
+ * only for a browser that sends none. */
+const PASTE_FALLBACK_MS = 400;
 
 /** Idempotent: a second call (e.g. a test re-initializing between cases) replaces the previous
  * listener instead of stacking another one alongside it - two listeners both reacting to the
@@ -48,6 +77,10 @@ let activeListener: ((e: KeyboardEvent) => void) | null = null;
  * against the first one's own side effect. */
 export function initKeyboard(): void {
   if (activeListener) window.removeEventListener('keydown', activeListener);
+  window.removeEventListener('copy', onCopy);
+  window.removeEventListener('paste', onPaste);
+  window.addEventListener('copy', onCopy);
+  window.addEventListener('paste', onPaste);
 
   activeListener = (e) => {
     if (isTypingTarget(document.activeElement)) return;
@@ -75,15 +108,21 @@ export function initKeyboard(): void {
       return;
     }
 
+    // Copy and paste let the browser's own copy/paste happen too (see the listeners below):
+    // that's how a paste can bring in a picture from outside.
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'c') {
-      e.preventDefault();
       copySelection();
       return;
     }
 
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'v') {
-      e.preventDefault();
-      pasteClipboard();
+      // The browser's paste that follows this key does the pasting (see onPaste); only if it
+      // never comes are the copied components pasted from here.
+      clearTimeout(pendingPaste);
+      pendingPaste = setTimeout(() => {
+        pendingPaste = undefined;
+        pasteClipboard();
+      }, PASTE_FALLBACK_MS);
       return;
     }
 

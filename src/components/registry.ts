@@ -88,6 +88,7 @@ import {
 } from './electrical';
 import { createPlc, PLC_TYPE } from './plc';
 import { createTextAnnotation, TEXT_ANNOTATION_TYPE } from './textAnnotation';
+import { createPicture, PICTURE_TYPE } from './picture';
 
 export interface ComponentFactoryContext {
   compLayer: HTMLElement;
@@ -523,6 +524,15 @@ export const componentRegistry = new Map<string, RegistryEntry>([
     {
       factory: (ctx, x, y) => createTextAnnotation(ctx.compLayer, x, y),
       label: 'Text note',
+      placeable: true,
+      category: ComponentCategory.ANNOTATIONS,
+    },
+  ],
+  [
+    PICTURE_TYPE,
+    {
+      factory: (ctx, x, y) => createPicture(ctx.compLayer, x, y),
+      label: 'Picture',
       placeable: true,
       category: ComponentCategory.ANNOTATIONS,
     },

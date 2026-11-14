@@ -30,6 +30,7 @@ import { initDocuments, onDocumentsChange, storeDocumentsSoon } from './app/docu
 import { onSettingsChange } from './app/settings';
 import { renderDocumentTabs } from './ui/documentTabs';
 import { initPanelResize } from './ui/panelResize';
+import { initPictures } from './interaction/pictures';
 
 const workspaceQuery = document.querySelector<HTMLElement>('.workspace');
 const viewportQuery = document.getElementById('viewport');
@@ -87,6 +88,7 @@ const factoryCtx: ComponentFactoryContext = { compLayer };
 initHistory(factoryCtx, viewport);
 initValveActuatorSwap(factoryCtx, viewport);
 initClipboard(factoryCtx, viewport, workspaceEl);
+initPictures(factoryCtx, viewport, workspaceEl);
 
 function addComponentAtViewCenter(type: string): void {
   const rect = workspaceEl.getBoundingClientRect();

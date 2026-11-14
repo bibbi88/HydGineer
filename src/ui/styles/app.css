@@ -603,6 +603,29 @@ body.panelResizing * {
   pointer-events: none;
 }
 
+/* A selected picture's corner handles (components/picture.ts), on the selection outline's
+   corners. */
+.pictureHandle {
+  display: none;
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  margin: -5px 0 0 -5px;
+  box-sizing: border-box;
+  background: #fff;
+  border: 2px solid var(--accent);
+  border-radius: 2px;
+  z-index: 2;
+}
+
+.comp.compSelected .pictureHandle {
+  display: block;
+}
+
+.workspace.simulating .pictureHandle {
+  display: none;
+}
+
 /* The box is the drawing inset by 2px (see svgHelpers.ts), so the offset puts the outline a
    clear 3px outside the artwork - on top of its frame lines it would all but disappear. */
 .boundsBox.selected {
@@ -2371,4 +2394,16 @@ body.libraryDragging * {
   fill: #ffe14d;
   stroke: #d4b000;
   stroke-width: 1;
+}
+
+/* A button in the inspector that does something to the component (e.g. choose a picture). */
+.inspectorActionBtn {
+  margin: 8px 0;
+}
+
+/* Pictures (components/picture.ts) sit beneath every other component, so one placed or pasted
+   later never hides a valve or cylinder. They're still above the wires: keep them beside the
+   circuit rather than under it. */
+.comp[data-type='picture'] {
+  z-index: -1;
 }
