@@ -32,6 +32,11 @@ class AppState {
    * Comparing this to the origin id above is a weak trace for flagging a redistributed file, not
    * real access control. */
   projectLastSavedDeviceId: string | null = null;
+  /** Unix time, s, the project was created - null for a fresh one not yet stamped (see
+   * serializeProject), 'unknown' for one saved before the field existed. */
+  projectCreatedAt: number | null | 'unknown' = null;
+  /** Unix time, s, the project was last saved to a file - null until then. */
+  projectLastSavedAt: number | null = null;
   /** Bumped whenever components/connections are added or removed, so cached graphs know to rebuild. */
   /** Draw a small jump (half-circle) where a wire crosses another it isn't connected to - a
    * per-project drawing choice, saved with it. */

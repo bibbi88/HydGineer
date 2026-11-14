@@ -1,3 +1,4 @@
+import { appState } from '../app/AppState';
 import type { ComponentFactoryContext } from '../components/registry';
 import type { ViewportAdapter } from '../ui/viewport';
 import { serializeProject, loadProject } from '../persistence/project';
@@ -29,6 +30,25 @@ export function onHistoryChange(cb: () => void): void {
   listeners.push(cb);
 }
 
+/** Loads a history state, but keeps who created and last saved the project, and when: undo
+ * steps back through edits, not through saves - a step from before a save mustn't read as
+ * unsaved again. */
+function restoreKeepingStamps(
+  state: ProjectFileV1,
+  ctx: ComponentFactoryContext,
+  viewport: ViewportAdapter,
+): void {
+  const { projectOriginDeviceId, projectLastSavedDeviceId, projectCreatedAt, projectLastSavedAt } =
+    appState;
+  loadProject(state, ctx, viewport);
+  Object.assign(appState, {
+    projectOriginDeviceId,
+    projectLastSavedDeviceId,
+    projectCreatedAt,
+    projectLastSavedAt,
+  });
+}
+
 export function pushHistory(name: string): void {
   if (suppressPush) return;
   const state = serializeProject(name);
@@ -58,7 +78,7 @@ export function undo(): void {
   if (previous) {
     suppressPush = true;
     try {
-      loadProject(previous, ctxRef, viewportRef);
+      restoreKeepingStamps(previous, ctxRef, viewportRef);
     } finally {
       suppressPush = false;
     }
@@ -73,7 +93,7 @@ export function redo(): void {
   history.push(next);
   suppressPush = true;
   try {
-    loadProject(next, ctxRef, viewportRef);
+    restoreKeepingStamps(next, ctxRef, viewportRef);
   } finally {
     suppressPush = false;
   }

@@ -2,9 +2,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('./project', () => ({
   serializeProject: (name: string) => ({ schemaVersion: 1, name, comps: [], conns: [] }),
+  unixNow: () => 1_800_000_000,
 }));
 
 import { saveProjectToFile } from './save';
+import { appState } from '../app/AppState';
+import { getDeviceId } from '../app/deviceId';
 
 interface WindowWithPicker {
   showSaveFilePicker?: (...args: unknown[]) => Promise<unknown>;
@@ -110,5 +113,32 @@ describe('saveProjectToFile', () => {
     expect(requestPermission).not.toHaveBeenCalled();
     expect(write).toHaveBeenCalledTimes(1);
     expect(alertSpy).not.toHaveBeenCalled();
+  });
+
+  it('stamps LS and lst into the written file, and keeps them once saved', async () => {
+    appState.projectLastSavedAt = null;
+    const write = vi.fn().mockResolvedValue(undefined);
+    const close = vi.fn().mockResolvedValue(undefined);
+    (window as WindowWithPicker).showSaveFilePicker = vi
+      .fn()
+      .mockResolvedValue({ createWritable: () => Promise.resolve({ write, close }) });
+
+    await saveProjectToFile('test');
+
+    const written = JSON.parse(write.mock.calls[0]![0] as string) as Record<string, unknown>;
+    expect(written.LS).toBe(getDeviceId());
+    expect(written.lst).toBe(1_800_000_000);
+    expect(appState.projectLastSavedAt).toBe(1_800_000_000);
+  });
+
+  it('leaves lst alone when the save is cancelled', async () => {
+    appState.projectLastSavedAt = 123;
+    (window as WindowWithPicker).showSaveFilePicker = vi
+      .fn()
+      .mockRejectedValue(new DOMException('cancelled', 'AbortError'));
+
+    await saveProjectToFile('test');
+
+    expect(appState.projectLastSavedAt).toBe(123);
   });
 });

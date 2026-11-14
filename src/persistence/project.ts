@@ -17,21 +17,38 @@ import { CURRENT_SCHEMA_VERSION, type ProjectFileV1 } from './schema';
 import { upgradedCoilType } from '../components/electrical';
 import { SOLENOID_KEY_FIELDS, SOLENOID_VALVE_TYPES } from '../components/hyd/valves';
 
+/** Now, as a Unix timestamp in seconds - the unit of a project file's `ct` and `lst`. */
+export function unixNow(): number {
+  return Math.floor(Date.now() / 1000);
+}
+
+/** The project's `ct` and `lst` from `file`. A file with no `ct` is new if it's empty and has
+ * never been saved (a new tab), or else from before creation times were kept. */
+function applyTimestamps(file: ProjectFileV1): void {
+  const savedBefore = Boolean(file.os ?? file.origin);
+  appState.projectCreatedAt =
+    typeof file.ct === 'number' ? file.ct : savedBefore || file.comps.length > 0 ? 'unknown' : null;
+  appState.projectLastSavedAt = typeof file.lst === 'number' ? file.lst : null;
+}
+
 export function serializeProject(name: string): ProjectFileV1 {
-  // origin is only ever set once per project - a fresh one (never loaded from/saved to a file
-  // before) gets stamped with *this* browser's id here, on its first save; a project that
-  // already has one (loaded from an existing file) keeps that value no matter which browser
-  // saves it from here on, so it stays a trace of the original. lastSaved, in contrast, is
-  // overwritten on every single save - comparing the two is what actually flags a redistributed
-  // file (a different id in lastSaved than in origin).
+  // os (origin) is only ever set once per project - a fresh one gets stamped with *this*
+  // browser's id here, on its first serialization; a project that already has one (loaded from
+  // an existing file) keeps that value no matter which browser saves it from here on, so it
+  // stays a trace of the original. LS (last saved) and lst, in contrast, are set by every save
+  // to a file (persistence/save.ts) - comparing LS with os is what flags a redistributed file.
+  // ct is stamped the same once-only way as os, unless the project predates it ('unknown').
   if (!appState.projectOriginDeviceId) appState.projectOriginDeviceId = getDeviceId();
-  appState.projectLastSavedDeviceId = getDeviceId();
+  if (appState.projectCreatedAt === null) appState.projectCreatedAt = unixNow();
+  const created = appState.projectCreatedAt;
 
   return {
     schemaVersion: CURRENT_SCHEMA_VERSION,
     name,
-    origin: appState.projectOriginDeviceId,
-    lastSaved: appState.projectLastSavedDeviceId,
+    os: appState.projectOriginDeviceId,
+    ...(appState.projectLastSavedDeviceId ? { LS: appState.projectLastSavedDeviceId } : {}),
+    ...(typeof created === 'number' ? { ct: created } : {}),
+    ...(appState.projectLastSavedAt !== null ? { lst: appState.projectLastSavedAt } : {}),
     meta: {
       author: appState.projectAuthor,
       checkedBy: appState.projectCheckedBy,
@@ -104,8 +121,9 @@ export function loadProject(
     appState.pageFrameX = file.pageFrame?.x ?? 0;
     appState.pageFrameY = file.pageFrame?.y ?? 0;
     appState.lineJumps = file.lineJumps !== false;
-    appState.projectOriginDeviceId = file.origin ?? null;
-    appState.projectLastSavedDeviceId = file.lastSaved ?? null;
+    appState.projectOriginDeviceId = file.os ?? file.origin ?? null;
+    appState.projectLastSavedDeviceId = file.LS ?? file.lastSaved ?? null;
+    applyTimestamps(file);
 
     const solenoidKeys = new Set<string>();
     for (const snap of file.comps) {

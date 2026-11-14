@@ -1,3 +1,4 @@
+import { unixNow } from './project';
 import type { ProjectFileV1, ComponentSnapshot, ConnectionSnapshot } from './schema';
 
 /** Small builder so the example circuits below read as a parts list plus a wiring list. */
@@ -23,7 +24,8 @@ function circuit(name: string, build: (b: Builder) => void): ProjectFileV1 {
     },
   };
   build(b);
-  return { schemaVersion: 1, name, comps, conns };
+  // Opening an example starts a new project: created now.
+  return { schemaVersion: 1, name, ct: unixNow(), comps, conns };
 }
 
 interface Builder {

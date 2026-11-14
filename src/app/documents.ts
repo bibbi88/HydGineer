@@ -9,7 +9,7 @@
 import type { ComponentFactoryContext } from '../components/registry';
 import type { ViewportAdapter } from '../ui/viewport';
 import { CURRENT_SCHEMA_VERSION, type ProjectFileV1 } from '../persistence/schema';
-import { loadProject, serializeProject } from '../persistence/project';
+import { loadProject, serializeProject, unixNow } from '../persistence/project';
 import {
   getHistoryState,
   setHistoryState,
@@ -269,7 +269,11 @@ export function duplicateDocument(id: string): void {
   if (id === activeId) captureActive();
   const copy = JSON.parse(JSON.stringify(doc.file)) as ProjectFileV1;
   const name = `${doc.name} (copy)`;
-  newDocument(name, { ...copy, name });
+  // A copy is a new project: created now, not saved yet.
+  delete copy.lst;
+  delete copy.LS;
+  delete copy.lastSaved;
+  newDocument(name, { ...copy, name, ct: unixNow() });
 }
 
 /** Moves a document one place left (-1) or right (+1). */
