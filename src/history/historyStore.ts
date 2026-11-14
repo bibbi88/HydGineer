@@ -31,7 +31,12 @@ export function onHistoryChange(cb: () => void): void {
 
 export function pushHistory(name: string): void {
   if (suppressPush) return;
-  history.push(serializeProject(name));
+  const state = serializeProject(name);
+  // A notification that changed nothing (an empty batch, a drag let go where it started) is no
+  // step to undo.
+  const last = history[history.length - 1];
+  if (last && JSON.stringify(last) === JSON.stringify(state)) return;
+  history.push(state);
   if (history.length > HISTORY_LIMIT) history.shift();
   future = [];
   notify();

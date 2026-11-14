@@ -9,6 +9,12 @@ import { computePortSnapCorrection } from './portSnap';
 import { rotateSelection } from './componentContextMenu';
 import { startLinkingNear } from './linking';
 import { hitBoundsOf } from '../components/shared/svgHelpers';
+import {
+  findNearestWireHit,
+  setWireInsertHighlight,
+  splicableExisting,
+  trySpliceExisting,
+} from './wireInsertion';
 
 export function makeDraggable(comp: Component, viewport: ViewportAdapter): void {
   comp.el.classList.add('draggable');
@@ -78,6 +84,9 @@ export function makeDraggable(comp: Component, viewport: ViewportAdapter): void 
     if (!canEdit(appState.mode)) return;
 
     const dragging = getSelectedComponents();
+    // Only a single component with no wires of its own can be spliced into a wire it's dropped on.
+    const workspaceEl = comp.el.closest<HTMLElement>('.workspace');
+    const spliceable = dragging.length === 1 && splicableExisting(comp);
     const startWorld = viewport.clientToWorld(e.clientX, e.clientY);
     const origins = new Map(dragging.map((c) => [c.id, { x: c.x, y: c.y }]));
 
@@ -105,6 +114,13 @@ export function makeDraggable(comp: Component, viewport: ViewportAdapter): void 
       }
 
       redrawAllConnections();
+
+      // An unwired valve (check, throttle, 3/2...) dragged over a wire: the wire it would be
+      // spliced into lights up, as when dropping one from the library.
+      if (spliceable && workspaceEl) {
+        const hit = findNearestWireHit(viewport, workspaceEl, { x: comp.x, y: comp.y });
+        setWireInsertHighlight(hit?.conn ?? null);
+      }
     }
 
     // A right-click while dragging turns the dragged components a quarter (Shift: the other
@@ -130,6 +146,14 @@ export function makeDraggable(comp: Component, viewport: ViewportAdapter): void 
       window.removeEventListener('mousemove', onMove);
       window.removeEventListener('mouseup', onUp);
       window.removeEventListener('mousedown', onRightDown, true);
+      // Let go on a wire: spliced into it, like a valve dropped there from the library - rather
+      // than left lying on top of it, looking connected while the wire runs straight past.
+      if (spliceable && workspaceEl) {
+        appState.runSuppressed(() => {
+          if (trySpliceExisting(comp, viewport, workspaceEl)) redrawAllConnections();
+        });
+      }
+      setWireInsertHighlight(null);
     }
 
     window.addEventListener('mousemove', onMove);

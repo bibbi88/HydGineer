@@ -13,7 +13,7 @@ import { initKeyboard } from './keyboard';
 import { initHistory, pushHistory, resetHistory, canRedo, canUndo } from '../history/historyStore';
 import { appState } from '../app/AppState';
 import { createHydPump as createSource } from '../components/hyd/supply';
-import { selectOnly, clearSelection } from './selection';
+import { selectOnly, addToSelection, clearSelection } from './selection';
 import { initLinking, isLinking, wireUpPortLinking } from './linking';
 
 function dispatchKeydown(key: string, opts: { ctrlKey?: boolean } = {}): KeyboardEvent {
@@ -189,5 +189,29 @@ describe('while a dialog is open', () => {
     dispatchKeydown('ArrowRight');
 
     expect(comp.x).toBeGreaterThan(0);
+  });
+});
+
+describe('Delete with several components selected', () => {
+  beforeEach(() => {
+    appState.components = [];
+    appState.connections = [];
+    clearSelection();
+    initKeyboard();
+  });
+
+  it('removes them all as one change - one undo step brings them all back', () => {
+    const comps = [0, 1, 2].map((i) => createSource(document.createElement('div'), i * 100, 0));
+    for (const c of comps) appState.addComponent(c);
+    selectOnly(comps[0]!.id);
+    addToSelection(comps[1]!.id);
+    addToSelection(comps[2]!.id);
+    let changes = 0;
+    appState.onChange(() => changes++);
+
+    dispatchKeydown('Delete');
+
+    expect(appState.components).toHaveLength(0);
+    expect(changes).toBe(1);
   });
 });

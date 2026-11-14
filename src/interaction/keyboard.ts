@@ -23,14 +23,17 @@ function isTypingTarget(el: Element | null): boolean {
 function deleteSelection(): void {
   if (!canEdit(appState.mode)) return;
 
-  for (const c of getSelectedComponents()) {
-    removeComponentAndConnections(c.id);
-  }
-  if (appState.selectedConnectionId !== null) {
-    removeConnection(appState.selectedConnectionId);
-  }
-  clearSelection();
-  redrawAllConnections();
+  // All of it at once: one undo step brings back everything deleted together.
+  appState.runSuppressed(() => {
+    for (const c of getSelectedComponents()) {
+      removeComponentAndConnections(c.id);
+    }
+    if (appState.selectedConnectionId !== null) {
+      removeConnection(appState.selectedConnectionId);
+    }
+    clearSelection();
+    redrawAllConnections();
+  });
 }
 
 function nudgeSelection(dx: number, dy: number): void {

@@ -97,8 +97,10 @@ export function wireUpComponentContextMenu(comp: Component): void {
       {
         label: selectionSize > 1 ? `Delete (${selectionSize})` : 'Delete',
         onClick: () => {
-          for (const c of getSelectedComponents()) removeComponentAndConnections(c.id);
-          redrawAllConnections();
+          appState.runSuppressed(() => {
+            for (const c of getSelectedComponents()) removeComponentAndConnections(c.id);
+            redrawAllConnections();
+          });
         },
       },
     ]);
