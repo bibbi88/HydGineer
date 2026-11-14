@@ -983,6 +983,51 @@ rect.wireHandle.wireStubHandle {
   margin: 10px 0 4px;
 }
 
+/* A section heading with a checkbox on its right, e.g. Name ... [x] Show. */
+.inspectorHeadingWithToggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.inspectorHeadingToggle {
+  font-weight: 400;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+
+.inspectorNameInput {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 4px 6px;
+  border: 1px solid #bbb;
+  border-radius: 4px;
+  font: inherit;
+  font-size: 13px;
+}
+
+/* A short line naming the boxes on the row under it (e.g. a cylinder's dimensions). */
+.inspectorCaption {
+  margin: 10px 0 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.inspectorRow.inspectorDimsRow {
+  justify-content: flex-start;
+  gap: 4px;
+  margin-top: 2px;
+}
+
+.inspectorRow.inspectorDimsRow input {
+  width: 52px;
+  min-width: 0;
+}
+
+.inspectorDimsSep {
+  color: var(--muted);
+}
+
 /* One sensor per block: its label/bounds/remove on one line, a slider below - separated by a
    hairline so a growing list of sensors still reads as distinct entries. */
 .inspectorSensorRow {

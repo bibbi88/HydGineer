@@ -173,6 +173,15 @@ interface SelectField {
   options: Array<{ value: string; label: string }>;
 }
 
+/** A cylinder's size on one row - Ø bore / rod - stroke, in mm - under a line saying so. The
+ * snapshot keys to edit; no `rod` for a cylinder without one in the inspector. */
+interface CylinderDimsField {
+  kind: 'cylinderDims';
+  bore: string;
+  rod?: string;
+  stroke: string;
+}
+
 /** Free text over several lines, e.g. a note's own text. */
 interface MultilineTextField {
   kind: 'multilineText';
@@ -181,6 +190,7 @@ interface MultilineTextField {
 }
 
 type InspectorField =
+  | CylinderDimsField
   | SelectField
   | MultilineTextField
   | NumberField
@@ -597,9 +607,7 @@ const INSPECTOR_FIELDS: Record<string, InspectorField[]> = {
   ],
   [HYD_CYLINDER_DOUBLE_TYPE]: [
     { kind: 'relabel', label: 'Cylinder letter' },
-    { kind: 'number', key: 'bore', label: 'Piston diameter (mm)', min: 5, max: 1000, step: 1 },
-    { kind: 'number', key: 'rodD', label: 'Rod diameter (mm)', min: 1, max: 999, step: 1 },
-    { kind: 'number', key: 'stroke', label: 'Stroke (mm)', min: 1, max: 10000, step: 10 },
+    { kind: 'cylinderDims', bore: 'bore', rod: 'rodD', stroke: 'stroke' },
     { kind: 'number', key: 'load', label: 'Load force (N, + opposes extension)', step: 100 },
     { kind: 'number', key: 'friction', label: 'Seal friction (N)', min: 0, step: 10 },
     {
@@ -613,8 +621,7 @@ const INSPECTOR_FIELDS: Record<string, InspectorField[]> = {
   ],
   [HYD_CYLINDER_SINGLE_TYPE]: [
     { kind: 'relabel', label: 'Cylinder letter' },
-    { kind: 'number', key: 'bore', label: 'Piston diameter (mm)', min: 5, max: 1000, step: 1 },
-    { kind: 'number', key: 'stroke', label: 'Stroke (mm)', min: 1, max: 10000, step: 10 },
+    { kind: 'cylinderDims', bore: 'bore', stroke: 'stroke' },
     { kind: 'number', key: 'load', label: 'Load force (N, + opposes extension)', step: 100 },
     { kind: 'number', key: 'springPreload', label: 'Spring preload (N)', min: 0, step: 10 },
     { kind: 'number', key: 'springRate', label: 'Spring rate (N/mm)', min: 0, step: 0.5 },
@@ -815,6 +822,42 @@ function renderNumberOrTextField(
 
   row.append(span, input);
   container.appendChild(row);
+}
+
+/** Ø bore / rod - stroke, in mm, as small boxes on one row under a line naming them. */
+function renderCylinderDimsField(
+  container: HTMLElement,
+  comp: Component,
+  field: CylinderDimsField,
+  snap: Record<string, unknown>,
+): void {
+  const caption = document.createElement('div');
+  caption.className = 'inspectorCaption';
+  caption.textContent = field.rod ? 'Bore / rod Ø - stroke (mm)' : 'Bore Ø - stroke (mm)';
+  const row = document.createElement('div');
+  row.className = 'inspectorRow inspectorDimsRow';
+  const box = (key: string, label: string, max: number, step: number): HTMLInputElement => {
+    const input = document.createElement('input');
+    input.type = 'number';
+    input.min = '1';
+    input.max = String(max);
+    input.step = String(step);
+    input.value = String(snap[key] ?? '');
+    input.title = label;
+    input.setAttribute('aria-label', label);
+    input.addEventListener('change', () => updateComponentField(comp, key, Number(input.value)));
+    return input;
+  };
+  const text = (t: string): HTMLSpanElement => {
+    const span = document.createElement('span');
+    span.className = 'inspectorDimsSep';
+    span.textContent = t;
+    return span;
+  };
+  row.append(text('Ø'), box(field.bore, 'Bore diameter (mm)', 1000, 1));
+  if (field.rod) row.append(text('/'), box(field.rod, 'Rod diameter (mm)', 999, 1));
+  row.append(text('–'), box(field.stroke, 'Stroke (mm)', 10000, 10));
+  container.append(caption, row);
 }
 
 function renderReadonlyTextField(
@@ -1152,9 +1195,8 @@ function renderSensorListField(
   const hint = document.createElement('p');
   hint.className = 'inspectorHint';
   hint.textContent =
-    'Each sensor turns on while the piston is within its range of the stroke (0% = fully ' +
-    'retracted, 100% = fully extended). Give an electrical contact (or a PLC) the same label ' +
-    'as its Signal to read it - labels are case-insensitive, so "a0" and "A0" are the same sensor.';
+    'On while the piston is in its range: 0% in, 100% out. A contact or PLC input with the ' +
+    'same name switches with it.';
   container.appendChild(hint);
 
   function writeSensors(next: CylinderSensor[]): void {
@@ -1313,38 +1355,35 @@ function renderNameSection(
   comp: Component,
   snap: Record<string, unknown>,
 ): void {
-  const heading = document.createElement('div');
-  heading.className = 'inspectorSectionHeading';
-  heading.textContent = 'Name';
-  container.appendChild(heading);
-
-  const showRow = document.createElement('label');
-  showRow.className = 'inspectorRow';
-  const showSpan = document.createElement('span');
-  showSpan.textContent = 'Show name in diagram';
+  // The heading carries the show/hide checkbox on its right; the name itself below (empty: the
+  // default name, shown as the placeholder).
+  const heading = document.createElement('label');
+  heading.className = 'inspectorSectionHeading inspectorHeadingWithToggle';
+  const title = document.createElement('span');
+  title.textContent = 'Name';
+  const show = document.createElement('span');
+  show.className = 'inspectorHeadingToggle';
   const showCheckbox = document.createElement('input');
   showCheckbox.type = 'checkbox';
   showCheckbox.checked = Boolean(snap.showName);
+  showCheckbox.title = 'Show the name in the diagram';
   showCheckbox.addEventListener('change', () => {
     updateComponentField(comp, 'showName', showCheckbox.checked);
   });
-  showRow.append(showSpan, showCheckbox);
-  container.appendChild(showRow);
+  show.append(showCheckbox, document.createTextNode(' Show'));
+  heading.append(title, show);
+  container.appendChild(heading);
 
-  const nameRow = document.createElement('label');
-  nameRow.className = 'inspectorRow';
-  const nameSpan = document.createElement('span');
-  nameSpan.textContent = 'Custom name';
   const nameInput = document.createElement('input');
   nameInput.type = 'text';
-  nameInput.className = 'inspectorCustomNameInput';
-  nameInput.placeholder = '(default)';
+  nameInput.className = 'inspectorNameInput';
+  nameInput.placeholder = comp.el.querySelector('.compNameText')?.textContent ?? '';
   nameInput.value = (snap.customName as string | null) ?? '';
+  nameInput.setAttribute('aria-label', 'Name');
   nameInput.addEventListener('change', () => {
     updateComponentField(comp, 'customName', nameInput.value.trim() || null);
   });
-  nameRow.append(nameSpan, nameInput);
-  container.appendChild(nameRow);
+  container.appendChild(nameInput);
 }
 
 const PAGE_FRAME_OPTIONS: Array<{ value: PageFrameSize; label: string }> = [
@@ -1548,6 +1587,7 @@ export function renderInspector(container: HTMLElement, projectBar: ProjectBarRe
       else if (field.kind === 'cylinderMode') renderCylinderModeField(container, comp, refresh);
       else if (field.kind === 'silencer') renderSilencerField(container, comp, field, snap);
       else if (field.kind === 'checkbox') renderCheckboxField(container, comp, field, snap);
+      else if (field.kind === 'cylinderDims') renderCylinderDimsField(container, comp, field, snap);
       else if (field.kind === 'readonlyText') renderReadonlyTextField(container, comp, field, snap);
       else if (field.kind === 'select') renderSelectField(container, comp, field, snap);
       else if (field.kind === 'multilineText')
