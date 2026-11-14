@@ -10,6 +10,22 @@ function closeMenu(): void {
   menuEl = null;
 }
 
+/** Room, px, kept between the menu and the window's edge. */
+const EDGE = 4;
+
+/** Moves `menu`, opened at (x, y), back inside the window: it opens to the left of the click
+ * if there's no room on its right (a click in the inspector, at the window's right edge), and
+ * upward if there's none below. */
+function keepOnScreen(menu: HTMLElement, x: number, y: number): void {
+  const { width, height } = menu.getBoundingClientRect();
+  const maxX = window.innerWidth - EDGE;
+  const maxY = window.innerHeight - EDGE;
+  const left = x + width > maxX ? Math.max(EDGE, Math.min(x, maxX) - width) : x;
+  const top = y + height > maxY ? Math.max(EDGE, Math.min(y, maxY) - height) : y;
+  menu.style.left = `${left}px`;
+  menu.style.top = `${top}px`;
+}
+
 export function showContextMenu(clientX: number, clientY: number, items: ContextMenuItem[]): void {
   closeMenu();
 
@@ -30,6 +46,7 @@ export function showContextMenu(clientX: number, clientY: number, items: Context
 
   document.body.appendChild(menu);
   menuEl = menu;
+  keepOnScreen(menu, clientX, clientY);
 
   setTimeout(() => {
     window.addEventListener(
