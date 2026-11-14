@@ -20,9 +20,9 @@ export interface ProjectBarRefs {
   setName(name: string): void;
 }
 
-/** The toolbar's project section: the project name, then new, save, load and export. The name field
- * is the canonical copy - the inspector's own "Project name" row and the page frame's title
- * block both read and write it through the refs returned here, rather than keeping their own. */
+/** The toolbar's project section: new, save, load, export and the examples. The project's name
+ * (its tab's name) is kept here - the tabs, the inspector's own "Project name" row and the page
+ * frame's title block all read and write it through the refs returned here. */
 export function renderProjectBar(
   container: HTMLElement,
   ctx: ComponentFactoryContext,
@@ -31,12 +31,10 @@ export function renderProjectBar(
   frameLayer: SVGSVGElement,
   workspaceEl: HTMLElement,
 ): ProjectBarRefs {
-  const nameInput = document.createElement('input');
-  nameInput.type = 'text';
-  nameInput.value = 'project';
-  nameInput.className = 'projectName';
-  nameInput.title = 'Project name';
-  nameInput.setAttribute('aria-label', 'Project name');
+  // The project's name is its tab's name (double-click the tab to rename it, or use the
+  // inspector's Project name): what Save proposes as the file name, the title block shows and
+  // an export is called. No field of its own in the toolbar.
+  let projectName = 'project';
 
   // A new, empty circuit in a tab of its own - the same as the tab bar's +.
   const newBtn = iconButton('newDocument', 'New circuit', () => newDocument());
@@ -44,10 +42,8 @@ export function renderProjectBar(
   const saveBtn = iconButton(
     'save',
     'Save project',
-    () => void saveProjectToFile(nameInput.value || 'project'),
+    () => void saveProjectToFile(projectName || 'project'),
   );
-
-  nameInput.addEventListener('input', () => activeNameChanged());
 
   const loadBtn = iconButton('folderOpen', 'Load project', () => {
     // Only once a file was actually picked - loadProjectFromPicker itself does the
@@ -58,14 +54,14 @@ export function renderProjectBar(
       if (prepareToOpen() === 'current') resetHistory();
     }).then((loadedName) => {
       if (loadedName) {
-        nameInput.value = loadedName;
+        projectName = loadedName;
         activeNameChanged();
       }
     });
   });
 
   const exportBtn = iconButton('download', 'Export image…', () => {
-    openExportDialog(nameInput.value || 'project', connLayer, frameLayer, viewport, workspaceEl);
+    openExportDialog(projectName || 'project', connLayer, frameLayer, viewport, workspaceEl);
   });
 
   // Ready-made circuits to start from - opened in a new document (or, if the setting is off,
@@ -91,19 +87,19 @@ export function renderProjectBar(
     const file = ex.file();
     prepareToOpen();
     loadProject(file, ctx, viewport);
-    nameInput.value = file.name;
+    projectName = file.name;
     activeNameChanged();
     appState.markDirty();
     // Room on the right for the simulation readouts beside the right-most components.
     requestAnimationFrame(() => zoomToFit(viewport, workspaceEl, EXAMPLE_READOUT_ROOM));
   });
 
-  container.append(nameInput, newBtn, saveBtn, loadBtn, exportBtn, examples);
+  container.append(newBtn, saveBtn, loadBtn, exportBtn, examples);
 
   return {
-    getName: () => nameInput.value || 'project',
+    getName: () => projectName || 'project',
     setName: (name: string) => {
-      nameInput.value = name;
+      projectName = name;
       activeNameChanged();
     },
   };

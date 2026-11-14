@@ -117,12 +117,6 @@ body.panelResizing * {
   padding-left: 0;
 }
 
-/* The project section (after the brand) gives way first on a narrow window: its name field
-   shrinks before any button is pushed off the end of the toolbar. */
-.brand + .topbarSection {
-  flex: 0 1 auto;
-}
-
 /* App name and version at the far left of the toolbar. */
 .brand {
   display: flex;
@@ -1224,22 +1218,6 @@ rect.wireHandle.wireStubHandle {
   cursor: grab;
 }
 
-.projectName {
-  /* Sized for the toolbar rather than stretched to a panel width: wide enough for a typical
-     project name, and allowed to shrink before the icon buttons beside it do. */
-  flex: 0 1 140px;
-  /* A zero width, so its basis and the bounds decide - a field's own default width would stop
-     the section from shrinking at all. */
-  width: 0;
-  min-width: 60px;
-  padding: 6px 8px;
-  border: 1px solid #bbb;
-  border-radius: 6px;
-  background: #fff;
-  font: inherit;
-  font-size: 13px;
-}
-
 .restoreBanner {
   position: absolute;
   top: 12px;
@@ -2205,10 +2183,7 @@ body.libraryDragging * {
 /* The toolbar's Examples menu (ui/projectBar.ts). */
 .exampleSelect {
   margin-left: 4px;
-  flex: 0 1 108px;
-  width: 0;
-  min-width: 56px;
-  max-width: 108px;
+  max-width: 124px;
   font: inherit;
   font-size: 12px;
 }
