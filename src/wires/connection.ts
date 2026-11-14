@@ -27,8 +27,24 @@ import { snap } from '../core/grid';
 import { WIRE_STUB } from '../sim/constants';
 import { selectConnection } from '../interaction/selection';
 import { showContextMenu } from '../interaction/contextMenu';
+import { placeLabels, type LabelRequest, type Rect } from './labelPlacement';
 
 let connLayerEl: SVGSVGElement | null = null;
+/** The wires' live labels, in a layer of their own drawn over every wire, so a wire drawn later
+ * can't paint over a label. */
+let labelLayerEl: SVGGElement | null = null;
+/** Each wire's route as last drawn, and a counter bumped whenever any route changes - what
+ * layoutWireLabels() places the labels by. */
+const routes = new Map<number, Point[]>();
+let routeEpoch = 0;
+
+function labelLayer(): SVGGElement {
+  if (!labelLayerEl || labelLayerEl.parentNode !== connLayerEl) {
+    labelLayerEl = createSvgEl('g', { class: 'wireLabels' }) as SVGGElement;
+    connLayerEl?.appendChild(labelLayerEl);
+  }
+  return labelLayerEl;
+}
 let viewportRef: ViewportAdapter | null = null;
 let workspaceRef: HTMLElement | null = null;
 
@@ -91,7 +107,11 @@ export function createConnection(from: ConnectionEndpoint, to: ConnectionEndpoin
   });
   const hitEl = createSvgEl('path', { class: 'wireHit', fill: 'none' });
   const labelEl = createSvgEl('text', { class: 'wireLabel', 'font-size': 10 });
-  connLayerEl.append(pathEl, hitEl, labelEl);
+  // Wires go under the label layer, labels into it.
+  const labels = labelLayer();
+  connLayerEl.insertBefore(pathEl, labels);
+  connLayerEl.insertBefore(hitEl, labels);
+  labels.appendChild(labelEl);
 
   const conn: Connection = {
     id: uid(),
@@ -150,6 +170,8 @@ export function removeConnection(connId: number): void {
   conn.pathEl.remove();
   conn.hitEl.remove();
   conn.labelEl.remove();
+  routes.delete(connId);
+  routeEpoch++;
   appState.removeConnection(connId);
   updatePortConnectionVisual(conn.from.id, conn.from.port);
   updatePortConnectionVisual(conn.to.id, conn.to.port);
@@ -255,17 +277,89 @@ export function redrawConnection(conn: Connection): void {
   if (!viewportRef || !workspaceRef) return;
   const points = computeConnectionGeometry(viewportRef, workspaceRef, conn);
   const d = pathFromPoints(points);
-  conn.pathEl.setAttribute('d', d);
-  conn.hitEl.setAttribute('d', d);
+  if (conn.pathEl.getAttribute('d') !== d) {
+    conn.pathEl.setAttribute('d', d);
+    conn.hitEl.setAttribute('d', d);
+    routeEpoch++;
+  }
+  routes.set(conn.id, points);
   conn.pathEl.classList.toggle('dashed', !!conn.dashed);
 
-  const mid = polylineMidpoint(points);
-  conn.labelEl.setAttribute('x', String(mid.x));
-  conn.labelEl.setAttribute('y', String(mid.y - 4));
+  // Until layoutWireLabels() finds it a clear spot: the middle of the wire, just above it.
+  if (!conn.labelEl.hasAttribute('x')) {
+    const mid = polylineMidpoint(points);
+    conn.labelEl.setAttribute('x', String(mid.x));
+    conn.labelEl.setAttribute('y', String(mid.y - 4));
+  }
 
   geometryChangeListener?.();
 }
 
 export function redrawAllConnections(): void {
   for (const c of appState.connections) redrawConnection(c);
+}
+
+let lastLabelLayout = '';
+let framesSinceLayout = 0;
+
+/** The world box of every non-empty live readout beside a symbol (they sit over the wires). */
+function readoutRects(): Rect[] {
+  if (!viewportRef) return [];
+  const rects: Rect[] = [];
+  for (const el of document.querySelectorAll<HTMLElement>('.hydInfo')) {
+    if (!el.textContent) continue;
+    const r = el.getBoundingClientRect();
+    if (r.width === 0 || r.height === 0) continue;
+    const a = viewportRef.clientToWorld(r.left, r.top);
+    const b = viewportRef.clientToWorld(r.right, r.bottom);
+    rects.push({ x0: a.x, y0: a.y, x1: b.x, y1: b.y });
+  }
+  return rects;
+}
+
+/**
+ * Moves every wire label with text to the clearest spot along its wire - off other wires,
+ * symbols, readouts and the other labels (see labelPlacement.ts). Cheap to call every frame:
+ * it only works again when the routes, the labels or their lengths changed, or about twice a
+ * second for readouts that grew or shrank.
+ */
+export function layoutWireLabels(): void {
+  const requests: LabelRequest[] = [];
+  let key = `${routeEpoch}|`;
+  for (const conn of appState.connections) {
+    const text = conn.labelEl.textContent ?? '';
+    if (!text) continue;
+    const points = routes.get(conn.id);
+    if (!points || points.length < 2) continue;
+    let width: number;
+    try {
+      width = conn.labelEl.getComputedTextLength();
+    } catch {
+      width = 0;
+    }
+    if (!width) width = text.length * 5.6;
+    width = Math.ceil(width);
+    requests.push({ conn, points, width });
+    key += `${conn.id}:${width},`;
+  }
+  framesSinceLayout++;
+  if (key === lastLabelLayout && framesSinceLayout < 30) return;
+  lastLabelLayout = key;
+  framesSinceLayout = 0;
+  if (requests.length === 0) return;
+
+  const obstacles: Rect[] = appState.components.map((c) => {
+    const b = c.getBounds();
+    return { x0: b.x, y0: b.y, x1: b.x + b.w, y1: b.y + b.h };
+  });
+  obstacles.push(...readoutRects());
+  const placement = placeLabels(requests, [...routes.values()], obstacles);
+  for (const { conn } of requests) {
+    const at = placement.get(conn.id);
+    if (!at) continue;
+    conn.labelEl.setAttribute('x', String(at.x));
+    conn.labelEl.setAttribute('y', String(at.y));
+    // A style, not the attribute: .wireLabel's own text-anchor in the stylesheet would win.
+    conn.labelEl.style.textAnchor = at.anchor;
+  }
 }

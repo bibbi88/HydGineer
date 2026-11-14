@@ -1704,6 +1704,12 @@ rect.wireHandle.wireStubHandle {
 
 .wireLabel {
   font-variant-numeric: tabular-nums;
+  /* A thin outline in the canvas colour, so a line passing under the text can't hide it. */
+  stroke: var(--bg);
+  stroke-width: 3px;
+  stroke-linejoin: round;
+  paint-order: stroke;
+  pointer-events: none;
 }
 
 .exampleSelect {
