@@ -210,4 +210,24 @@ describe('open documents', () => {
     switchDocument('b');
     expect(appState.components.map((c) => c.type)).toEqual(['hydTank']);
   });
+
+  it('says once, not at every change, when the circuits cannot be kept in the browser', async () => {
+    const alert = vi.spyOn(window, 'alert').mockImplementation(() => {});
+    const setItem = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new Error('QuotaExceededError');
+    });
+    try {
+      start();
+      for (let i = 0; i < 3; i++) {
+        addTank();
+        newDocument(); // stores at once
+      }
+      await Promise.resolve();
+      expect(alert).toHaveBeenCalledTimes(1);
+      expect(String(alert.mock.calls[0]![0])).toMatch(/couldn't keep your circuits/);
+    } finally {
+      setItem.mockRestore();
+      alert.mockRestore();
+    }
+  });
 });

@@ -20,6 +20,7 @@ import {
 import { appState } from './AppState';
 import { stopSimulation } from '../sim/stopSimulation';
 import { getSettings } from './settings';
+import { readDocuments, writeDocuments } from '../persistence/docStore';
 import { migrate } from '../persistence/migrations';
 
 export interface DocumentView {
@@ -169,6 +170,9 @@ function store(): void {
     clearTimeout(saveTimer);
     saveTimer = null;
   }
+  // Not before the documents are set up: an early change mustn't overwrite the ones being read
+  // back from the browser with an empty list.
+  if (!deps) return;
   const doc = active();
   if (doc && deps) {
     doc.name = deps.getName();
@@ -179,11 +183,33 @@ function store(): void {
     active: activeId,
     list: docs.map(({ id, name, file, view }) => ({ id, name, file, ...(view ? { view } : {}) })),
   };
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(stored));
-  } catch {
-    // Best effort only (storage full or unavailable, e.g. private browsing).
-  }
+  writeDocuments(stored, STORAGE_KEY).catch((err: unknown) => warnNotKept(err));
+}
+
+let warnedNotKept = false;
+
+/** Keeping the documents in the browser failed (storage full, or not allowed - private
+ * browsing): said once, so work isn't lost unnoticed at the next visit. */
+function warnNotKept(err: unknown): void {
+  if (warnedNotKept) return;
+  warnedNotKept = true;
+  const reason = err instanceof Error ? err.message : String(err);
+  window.alert(
+    `PneuGineer couldn't keep your circuits in this browser (${reason}). ` +
+      'Save them to a file (Save, or Save all) so nothing is lost when this page is closed.',
+  );
+}
+
+/** Keeps the documents now, not after the usual short wait - the page is being hidden or
+ * closed. */
+export function storeDocumentsNow(): void {
+  if (saveTimer) store();
+}
+
+/** The documents kept in this browser, read back for initDocuments (null if none). */
+export async function readStoredDocuments(): Promise<StoredDocuments | null> {
+  const value = await readDocuments(STORAGE_KEY);
+  return (value as StoredDocuments | null) ?? null;
 }
 
 /** Keeps the documents in the browser shortly after the last change. */
@@ -206,15 +232,19 @@ export function activeNameChanged(): void {
  * the active one on the canvas - and true is returned; otherwise whatever is on the canvas
  * becomes the one open document.
  */
-export function initDocuments(d: DocumentsDeps, opts: { fresh?: boolean } = {}): boolean {
+export function initDocuments(
+  d: DocumentsDeps,
+  opts: { fresh?: boolean; stored?: StoredDocuments | null } = {},
+): boolean {
   deps = d;
   let stored: StoredDocuments | null = null;
   try {
     // The desktop app starts with one empty circuit, as desktop programs do: its circuits are
-    // files, opened when wanted.
-    stored = opts.fresh
-      ? null
-      : (JSON.parse(localStorage.getItem(STORAGE_KEY) ?? 'null') as StoredDocuments | null);
+    // files, opened when wanted. Otherwise what readStoredDocuments() read back - or, if none
+    // was passed, what localStorage holds.
+    if (opts.fresh) stored = null;
+    else if (opts.stored !== undefined) stored = opts.stored;
+    else stored = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? 'null') as StoredDocuments | null;
   } catch {
     stored = null;
   }
