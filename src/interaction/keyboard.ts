@@ -42,7 +42,13 @@ function nudgeSelection(dx: number, dy: number): void {
   if (selected.length === 0) return;
   for (const c of selected) c.setPos(c.x + dx, c.y + dy);
   redrawAllConnections();
+  // Recorded once the arrow keys rest, so a run of nudges is one undo step.
+  clearTimeout(nudgeTimer);
+  nudgeTimer = setTimeout(() => appState.markDirty(), NUDGE_SETTLE_MS);
 }
+
+const NUDGE_SETTLE_MS = 400;
+let nudgeTimer: ReturnType<typeof setTimeout> | undefined;
 
 let activeListener: ((e: KeyboardEvent) => void) | null = null;
 let pendingPaste: ReturnType<typeof setTimeout> | undefined;

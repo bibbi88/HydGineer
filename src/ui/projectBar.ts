@@ -7,7 +7,13 @@ import { loadProject } from '../persistence/project';
 import { zoomToFit } from '../interaction/zoomToFit';
 import { appState } from '../app/AppState';
 import { canEdit } from '../app/modes';
-import { activeNameChanged, listDocuments, newDocument, prepareToOpen } from '../app/documents';
+import {
+  activeNameChanged,
+  listDocuments,
+  newDocument,
+  prepareToOpen,
+  setActiveDocumentPath,
+} from '../app/documents';
 import { createFileActions } from './fileActions';
 import { showContextMenu, type ContextMenuItem } from '../interaction/contextMenu';
 
@@ -117,6 +123,9 @@ export function renderProjectBar(
     if (!ex || !canEdit(appState.mode)) return;
     const file = ex.file();
     prepareToOpen();
+    // An example is a new circuit: it doesn't belong to the file this tab may have come from, so
+    // Save asks where to put it instead of writing over that file (desktop app).
+    setActiveDocumentPath(undefined);
     loadProject(file, ctx, viewport);
     projectName = file.name;
     activeNameChanged();

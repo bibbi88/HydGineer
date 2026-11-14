@@ -154,6 +154,12 @@ export function makeDraggable(comp: Component, viewport: ViewportAdapter): void 
         });
       }
       setWireInsertHighlight(null);
+      // A move is an edit like any other: one undo step, and kept in the browser.
+      const moved = dragging.some((c) => {
+        const o = origins.get(c.id);
+        return o !== undefined && (o.x !== c.x || o.y !== c.y);
+      });
+      if (moved) appState.markDirty();
     }
 
     window.addEventListener('mousemove', onMove);

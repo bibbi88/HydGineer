@@ -73,7 +73,8 @@ export function serializeProject(name: string): ProjectFileV1 {
     conns: appState.connections.map((c) => ({
       from: c.from,
       to: c.to,
-      guides: c.guides,
+      // Copies, never the live wire's own: a bend dragged later mustn't rewrite this snapshot.
+      guides: c.guides.map((g) => ({ ...g })),
       stubStartLen: c.stubStartLen,
       stubEndLen: c.stubEndLen,
       dashed: c.dashed,
@@ -106,7 +107,26 @@ export function retargetTaps(idMap: Map<number, number>): void {
   }
 }
 
+/**
+ * Puts `file` on the canvas, replacing what's there. Should it fail partway - a part that won't
+ * take its saved settings - what was on the canvas before is put back, and the error passed on:
+ * a file that can't be opened never costs the circuit that was open.
+ */
 export function loadProject(
+  file: ProjectFileV1,
+  ctx: ComponentFactoryContext,
+  viewport: ViewportAdapter,
+): void {
+  const before = serializeProject(file.name);
+  try {
+    loadProjectUnchecked(file, ctx, viewport);
+  } catch (err) {
+    loadProjectUnchecked(before, ctx, viewport);
+    throw err;
+  }
+}
+
+function loadProjectUnchecked(
   file: ProjectFileV1,
   ctx: ComponentFactoryContext,
   viewport: ViewportAdapter,
@@ -155,7 +175,7 @@ export function loadProject(
         { id: fromId, port: snap.from.port },
         { id: toId, port: snap.to.port },
       );
-      conn.guides = snap.guides;
+      conn.guides = snap.guides.map((g) => ({ ...g }));
       conn.stubStartLen = snap.stubStartLen;
       conn.stubEndLen = snap.stubEndLen;
       conn.dashed = snap.dashed;
@@ -169,4 +189,30 @@ export function loadProject(
   // notification - without this second one, it would keep showing whatever author/checked
   // by/company were on screen before this load instead of the values just restored above.
   clearSelection();
+}
+
+/**
+ * What a project's content amounts to, for telling whether it has changed since it was opened or
+ * saved: its parts, wires, sheet and title block - not its name, nor the save stamps, nor the
+ * part ids, which a project gets anew each time it's put on the canvas (so parts are referred to
+ * by their place in the file instead).
+ */
+export function projectSignature(file: ProjectFileV1): string {
+  const index = new Map(file.comps.map((c, i) => [c.id, i]));
+  return JSON.stringify({
+    comps: file.comps.map((c) => [c.type, c.x, c.y, c.rot ?? 0, c.mirror ?? false, c.data]),
+    conns: file.conns.map((w) => [
+      index.get(w.from.id),
+      w.from.port,
+      index.get(w.to.id),
+      w.to.port,
+      w.guides,
+      w.stubStartLen,
+      w.stubEndLen,
+      w.dashed ?? false,
+    ]),
+    meta: file.meta ?? null,
+    pageFrame: file.pageFrame ?? null,
+    lineJumps: file.lineJumps ?? true,
+  });
 }

@@ -45,12 +45,21 @@ function loadViaFileInput(
         resolve(undefined);
         return;
       }
-      void file.text().then((text) => {
-        const name = applyLoadedText(text, ctx, viewport, onBeforeApply);
-        // A plain file input gives no handle to reopen its folder with.
-        setLastProjectFile(null);
-        resolve(name);
-      });
+      void file
+        .text()
+        .then((text) => {
+          const name = applyLoadedText(text, ctx, viewport, onBeforeApply);
+          // A plain file input gives no handle to reopen its folder with.
+          setLastProjectFile(null);
+          resolve(name);
+        })
+        .catch((err: unknown) => {
+          // Not JSON, or not a project this version can open: say so (Firefox and Safari take
+          // this path), and leave the circuit that's open alone.
+          const detail = err instanceof Error ? err.message : String(err);
+          window.alert(`Couldn't open that file (${detail}).`);
+          resolve(undefined);
+        });
     });
     input.click();
   });

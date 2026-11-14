@@ -9,16 +9,18 @@
 import type { ComponentFactoryContext } from '../components/registry';
 import type { ViewportAdapter } from '../ui/viewport';
 import { CURRENT_SCHEMA_VERSION, type ProjectFileV1 } from '../persistence/schema';
-import { loadProject, serializeProject, unixNow } from '../persistence/project';
+import { loadProject, projectSignature, serializeProject, unixNow } from '../persistence/project';
 import {
   getHistoryState,
+  seedHistory,
   setHistoryState,
   withoutHistory,
   type HistoryState,
 } from '../history/historyStore';
 import { appState } from './AppState';
-import { Modes } from './modes';
+import { stopSimulation } from '../sim/stopSimulation';
 import { getSettings } from './settings';
+import { migrate } from '../persistence/migrations';
 
 export interface DocumentView {
   scale: number;
@@ -38,6 +40,9 @@ export interface ProjectDocument {
   /** The desktop app: the file on disk this document was opened from or last saved to, which
    * Save writes back to. Never set in the browser, which has no file paths. */
   path?: string;
+  /** How it looked when last opened from or saved to a file (projectSignature) - for telling
+   * whether closing the desktop app would lose anything. */
+  savedSignature?: string;
 }
 
 interface StoredDocuments {
@@ -117,10 +122,46 @@ function captureActive(): void {
 function showDocument(doc: ProjectDocument): void {
   if (!deps) return;
   const { ctx, viewport } = deps;
-  withoutHistory(() => loadProject(doc.file, ctx, viewport));
+  try {
+    const file = migrate(doc.file);
+    withoutHistory(() => loadProject(file, ctx, viewport));
+  } catch (err) {
+    // Kept from an earlier visit but no longer readable - say, a part this version doesn't
+    // have. It mustn't stop the app from starting: its contents are saved as a file so nothing
+    // is lost, and the tab starts empty.
+    rescueUnreadable(doc, err);
+    doc.file = emptyFile(doc.name);
+    doc.history = undefined;
+    withoutHistory(() => loadProject(doc.file, ctx, viewport));
+  }
   deps.setName(doc.name);
   setHistoryState(doc.history ?? { history: [], future: [] });
+  seedHistory(doc.name);
   if (doc.view) viewport.setTransform(doc.view.scale, doc.view.tx, doc.view.ty);
+}
+
+/** Downloads an unreadable document's contents as they are, and says so. */
+function rescueUnreadable(doc: ProjectDocument, err: unknown): void {
+  const name = `${doc.name || 'circuit'} (unreadable).hgcl`;
+  try {
+    const url = URL.createObjectURL(
+      new Blob([JSON.stringify(doc.file, null, 2)], { type: 'application/json' }),
+    );
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = name;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 10_000);
+  } catch {
+    // Nowhere to put it (a test, say): the message still goes out.
+  }
+  const reason = err instanceof Error ? err.message : String(err);
+  setTimeout(() =>
+    window.alert(
+      `The circuit "${doc.name}" kept in this browser couldn't be opened (${reason}). ` +
+        `It has been saved as "${name}" so nothing is lost, and its tab starts empty.`,
+    ),
+  );
 }
 
 function store(): void {
@@ -186,6 +227,7 @@ export function initDocuments(d: DocumentsDeps, opts: { fresh?: boolean } = {}):
   }
   docs = [{ id: newId(), name: d.getName(), file: serializeProject(d.getName()) }];
   activeId = docs[0]!.id;
+  seedHistory(d.getName());
   notify();
   return false;
 }
@@ -193,7 +235,7 @@ export function initDocuments(d: DocumentsDeps, opts: { fresh?: boolean } = {}):
 export function switchDocument(id: string): void {
   if (id === activeId || !docs.some((d) => d.id === id)) return;
   // Each document's simulation starts from rest; it doesn't carry over to another circuit.
-  if (appState.mode !== Modes.STOP) appState.setMode(Modes.STOP);
+  stopSimulation();
   captureActive();
   activeId = id;
   showDocument(active()!);
@@ -222,7 +264,7 @@ export function prepareToOpen(): 'new' | 'current' {
     newDocument();
     return 'new';
   }
-  if (appState.mode !== Modes.STOP) appState.setMode(Modes.STOP);
+  stopSimulation();
   return 'current';
 }
 
@@ -232,7 +274,7 @@ export function closeDocument(id: string): void {
   if (docs.length === 1) {
     // The last one: it's emptied rather than removed - there's always a document open.
     const only = docs[0]!;
-    if (appState.mode !== Modes.STOP) appState.setMode(Modes.STOP);
+    stopSimulation();
     only.name = 'Circuit 1';
     only.file = emptyFile(only.name);
     only.view = undefined;
@@ -312,6 +354,25 @@ export function updateDocumentFile(id: string, file: ProjectFileV1): void {
   const doc = docs.find((d) => d.id === id);
   if (doc && id !== activeId) doc.file = file;
   storeDocumentsSoon();
+}
+
+/** Document `id` now matches what's in its file - just opened from it, or saved to it. */
+export function markDocumentSaved(id: string, file: ProjectFileV1): void {
+  const doc = docs.find((d) => d.id === id);
+  if (doc) doc.savedSignature = projectSignature(file);
+}
+
+/** The open documents with changes no file has: anything on them that differs from when they
+ * were last opened or saved (an untouched empty one doesn't count). */
+export function unsavedDocuments(): Array<{ id: string; name: string }> {
+  captureActive();
+  return docs
+    .filter((d) => {
+      const empty = d.file.comps.length === 0;
+      if (d.savedSignature === undefined) return !empty;
+      return projectSignature(d.file) !== d.savedSignature;
+    })
+    .map(({ id, name }) => ({ id, name }));
 }
 
 /** The desktop app: document `id` now belongs to `path`. */

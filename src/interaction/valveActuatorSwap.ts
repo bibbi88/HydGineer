@@ -165,7 +165,7 @@ export function swapComponentType(
     .map((c) => ({
       from: c.from,
       to: c.to,
-      guides: c.guides,
+      guides: c.guides.map((g) => ({ ...g })),
       stubStartLen: c.stubStartLen,
       stubEndLen: c.stubEndLen,
     }));
@@ -209,7 +209,7 @@ export function swapComponentType(
       const from = fromMoved ? { id: next.id, port: onNext(saved.from.port) } : saved.from;
       const to = toMoved ? { id: next.id, port: onNext(saved.to.port) } : saved.to;
       const conn = createConnection(from, to);
-      conn.guides = saved.guides;
+      conn.guides = saved.guides.map((g) => ({ ...g }));
       conn.stubStartLen = saved.stubStartLen;
       conn.stubEndLen = saved.stubEndLen;
       redrawConnection(conn);

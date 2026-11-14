@@ -83,7 +83,9 @@ initMarquee(workspaceEl, connLayer);
 initKeyboard();
 initPlcMonitor();
 initWireSplitting(compLayer, viewport, workspaceEl);
-initConfirmBeforeUnload();
+// The browser's own "leave this page?" warning. Not in the desktop app, which asks about unsaved
+// circuits itself when its window is closed (and where this would silently block closing).
+if (!desktopBridge()) initConfirmBeforeUnload();
 
 const factoryCtx: ComponentFactoryContext = { compLayer };
 initHistory(factoryCtx, viewport);
