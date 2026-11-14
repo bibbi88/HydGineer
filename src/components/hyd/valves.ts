@@ -1385,7 +1385,9 @@ export function createHydValveLS(compLayer: HTMLElement, x: number, y: number): 
   lever.step = '5';
   lever.value = '0';
   lever.className = 'lsLever';
-  lever.title = 'Lever: left = P→A, right = P→B, middle = closed (double-click to centre)';
+  lever.title =
+    'Lever, moves with the valve: right = P→A (the left box over the ports), left = P→B, ' +
+    'middle = closed (double-click to centre)';
   for (const ev of ['mousedown', 'pointerdown', 'click', 'dblclick'] as const) {
     lever.addEventListener(ev, (e) => e.stopPropagation());
   }
@@ -1422,13 +1424,16 @@ export function createHydValveLS(compLayer: HTMLElement, x: number, y: number): 
     applyState();
   }
   function applyState(): void {
-    // Proportional: the boxes slide as far as the spool actually strokes.
-    slide.setAttribute('transform', `translate(${(stroke * LS_CELL).toFixed(1)},0)`);
+    // Proportional: the boxes slide as far as the spool actually strokes - towards the side
+    // away from the box that comes into play, as ISO 1219 draws it: the left actuator pushes
+    // the spool right, bringing the left box (P→A) over the ports.
+    slide.setAttribute('transform', `translate(${(-stroke * LS_CELL).toFixed(1)},0)`);
   }
   draw();
 
+  // The slider moves the way the boxes do: right brings the left box (P→A) over the ports.
   lever.addEventListener('input', () => {
-    stroke = Number(lever.value) / 100;
+    stroke = -Number(lever.value) / 100;
     applyState();
   });
   lever.addEventListener('dblclick', () => {

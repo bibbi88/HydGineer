@@ -138,7 +138,7 @@ describe('example circuits behave as described', () => {
     expect(peakB).toBeLessThan(250);
   });
 
-  /** Sets an LS valve's lever slider (−100 … 100) as the viewer would. */
+  /** Sets an LS valve's lever slider (−100 … 100; positive = P→A) as the viewer would. */
   function setLever(valve: Component, pct: number): void {
     const input = valve.el.querySelector<HTMLInputElement>('input.lsLever')!;
     input.value = String(pct);
@@ -157,7 +157,7 @@ describe('example circuits behave as described', () => {
     expect(p(idle, pump, 'P')).toBeLessThan(21);
     expect(flowOut(idle, pump, 'P')).toBeLessThan(1);
 
-    setLever(valve, -50);
+    setLever(valve, 50);
     const working = run(0.5);
     // The LS passage inside the open box (A → LS) carries the load pressure, lit like a path.
     expect(valve.el.querySelectorAll('.lsPassage.hydPathP').length).toBeGreaterThanOrEqual(2);
@@ -173,7 +173,7 @@ describe('example circuits behave as described', () => {
     const light = run(0.3);
     expect(Math.abs(flowOut(light, pump, 'P') - q50) / q50).toBeLessThan(0.05);
     // Lever further: more flow.
-    setLever(valve, -100);
+    setLever(valve, 100);
     const full = run(0.3);
     expect(flowOut(full, pump, 'P')).toBeGreaterThan(q50 * 1.6);
   });
@@ -184,7 +184,7 @@ describe('example circuits behave as described', () => {
     const cyls = comps.filter((c) => c.type === 'hydCylinderDouble');
     for (const v of valves) {
       expect((v.snapshot() as { compensated: boolean }).compensated).toBe(false);
-      setLever(v, -60);
+      setLever(v, 60);
     }
     const f = run(0.4);
     expect(-flowOut(f, cyls[0]!, 'A')).toBeGreaterThan(-flowOut(f, cyls[1]!, 'A') * 2);
@@ -196,7 +196,7 @@ describe('example circuits behave as described', () => {
     const cyls = comps.filter((c) => c.type === 'hydCylinderDouble');
     for (const v of valves) {
       v.restore({ ...v.snapshot(), compensated: true });
-      setLever(v, -60);
+      setLever(v, 60);
     }
     const f = run(0.4);
     const qa = -flowOut(f, cyls[0]!, 'A');
@@ -209,7 +209,7 @@ describe('example circuits behave as described', () => {
     const comps = load('Load sensing: two sections with separate');
     const valves = comps.filter((c) => c.type === 'hydValveLS');
     const cyls = comps.filter((c) => c.type === 'hydCylinderDouble');
-    for (const v of valves) setLever(v, -60);
+    for (const v of valves) setLever(v, 60);
     let f = run(0.4);
     const qa = -flowOut(f, cyls[0]!, 'A');
     const qb = -flowOut(f, cyls[1]!, 'A');
@@ -217,10 +217,10 @@ describe('example circuits behave as described', () => {
     expect(Math.abs(qa - qb) / qa).toBeLessThan(0.1);
     // Slow the light one down, run the heavy one into its end stop: the pump goes to its
     // cut-off, but the light one keeps exactly its speed.
-    setLever(valves[0]!, -20);
+    setLever(valves[0]!, 20);
     f = run(0.3);
     const qSlow = -flowOut(f, cyls[0]!, 'A');
-    setLever(valves[1]!, -100);
+    setLever(valves[1]!, 100);
     f = run(3);
     expect(snap(cyls[1]!).pos).toBe(1);
     expect(snap(cyls[0]!).pos).toBeLessThan(1);
@@ -241,7 +241,7 @@ describe('example circuits behave as described', () => {
     expect(p(f, pump, 'P')).toBeLessThan(20);
     expect(-flowOut(f, comp, 'P')).toBeGreaterThan(25);
 
-    setLever(valve, -50);
+    setLever(valve, 50);
     f = run(0.5);
     const pLoad = p(f, cyl, 'A');
     expect(pLoad).toBeGreaterThan(15000 / (31.17 * 10)); // carrying the 15 kN
