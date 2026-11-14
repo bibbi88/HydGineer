@@ -550,12 +550,13 @@ export function createComponent(
   return entry.factory(ctx, x, y);
 }
 
+// Actuators right under the supply, as in PneuGineer: what the circuit drives, then the valves.
 const CATEGORY_ORDER: ComponentCategoryName[] = [
   ComponentCategory.SUPPLY,
+  ComponentCategory.ACTUATORS,
   ComponentCategory.DIRECTIONAL,
   ComponentCategory.PRESSURE,
   ComponentCategory.FLOW,
-  ComponentCategory.ACTUATORS,
   ComponentCategory.MEASURING,
   ComponentCategory.ELECTRICAL,
   ComponentCategory.ANNOTATIONS,
