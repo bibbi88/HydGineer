@@ -11,7 +11,7 @@ import { openSettingsDialog } from './settingsDialog';
 import { getSettings, onSettingsChange, updateSettings } from '../app/settings';
 
 /** The app's mark and name, with the build version (yymmdd, see vite.config.ts) under it. The
- * mark is the hydraulic pump symbol (see brandMark.ts). */
+ * mark is a hydraulic cylinder (see brandMark.ts). */
 function renderBrand(container: HTMLElement): void {
   const brand = document.createElement('div');
   brand.className = 'brand';
