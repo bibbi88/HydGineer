@@ -58,6 +58,7 @@ import {
   createHydCylinderSingle,
   createHydMotor,
   HYD_CYLINDER_DOUBLE_TYPE,
+  HYD_CYLINDER_DOUBLE_ROD_TYPE,
   HYD_CYLINDER_SINGLE_TYPE,
   HYD_MOTOR_TYPE,
   HYD_MOTOR_VAR_TYPE,
@@ -352,6 +353,15 @@ export const componentRegistry = new Map<string, RegistryEntry>([
     {
       factory: (ctx, x, y) => createHydCylinderDouble(ctx.compLayer, x, y),
       label: 'Cylinder, double-acting',
+      placeable: true,
+      category: ComponentCategory.ACTUATORS,
+    },
+  ],
+  [
+    HYD_CYLINDER_DOUBLE_ROD_TYPE,
+    {
+      factory: (ctx, x, y) => createHydCylinderDouble(ctx.compLayer, x, y, true),
+      label: 'Cylinder, double rod (steering)',
       placeable: true,
       category: ComponentCategory.ACTUATORS,
     },

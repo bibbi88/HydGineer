@@ -44,6 +44,7 @@ import {
 } from '../components/hyd/valves';
 import {
   HYD_CYLINDER_DOUBLE_TYPE,
+  HYD_CYLINDER_DOUBLE_ROD_TYPE,
   HYD_CYLINDER_SINGLE_TYPE,
   HYD_MOTOR_TYPE,
   HYD_MOTOR_VAR_TYPE,
@@ -644,9 +645,33 @@ const INSPECTOR_FIELDS: Record<string, InspectorField[]> = {
   ],
   [HYD_CYLINDER_DOUBLE_TYPE]: [
     { kind: 'relabel', label: 'Cylinder letter' },
+    {
+      kind: 'actuatorMode',
+      label: 'Cylinder type',
+      options: swapFamilyOf(HYD_CYLINDER_DOUBLE_TYPE),
+    },
     { kind: 'cylinderDims', bore: 'bore', rod: 'rodD', stroke: 'stroke' },
     { kind: 'number', key: 'load', label: 'Load force (N, + opposes extension)', step: 100 },
     { kind: 'number', key: 'friction', label: 'Seal friction (N)', min: 0, step: 10 },
+    {
+      kind: 'number',
+      key: 'mass',
+      label: 'Moving mass (kg) - 0 = inertia ignored',
+      min: 0,
+      step: 10,
+    },
+    { kind: 'sensorList', arrayKey: 'sensors', min: 0, max: 100, step: 1 },
+  ],
+  [HYD_CYLINDER_DOUBLE_ROD_TYPE]: [
+    { kind: 'relabel', label: 'Cylinder letter' },
+    {
+      kind: 'actuatorMode',
+      label: 'Cylinder type',
+      options: swapFamilyOf(HYD_CYLINDER_DOUBLE_ROD_TYPE),
+    },
+    { kind: 'cylinderDims', bore: 'bore', rod: 'rodD', stroke: 'stroke' },
+    { kind: 'number', key: 'load', label: 'Load force (N, + opposes A → B)', step: 100 },
+    { kind: 'number', key: 'friction', label: 'Friction (N, e.g. tyre scrub)', min: 0, step: 10 },
     {
       kind: 'number',
       key: 'mass',

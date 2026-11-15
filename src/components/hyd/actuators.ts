@@ -30,6 +30,7 @@ import {
 
 export const HYD_CYLINDER_DOUBLE_TYPE = 'hydCylinderDouble';
 export const HYD_CYLINDER_SINGLE_TYPE = 'hydCylinderSingle';
+export const HYD_CYLINDER_DOUBLE_ROD_TYPE = 'hydCylinderDoubleRod';
 export const HYD_MOTOR_TYPE = 'hydMotor';
 export const HYD_MOTOR_VAR_TYPE = 'hydMotorVar';
 
@@ -78,6 +79,7 @@ function drawCylinder(
   withSpring: boolean,
   withPortB: boolean,
   sensors: () => CylinderSensor[],
+  rodBothEnds = false,
 ): CylinderDrawing {
   const g = shell.g;
   g.appendChild(
@@ -103,7 +105,15 @@ function drawCylinder(
   const spring = withSpring
     ? path(g, '', { 'stroke-width': 1.5, 'stroke-linejoin': 'round', 'stroke-linecap': 'round' })
     : null;
+  // A double-rod (balanced) cylinder's second rod, out through the cap end.
+  const rod2 = rodBothEnds
+    ? createSvgEl('rect', { y: BODY_Y + BODY_H / 2 - 4, height: 8, fill: '#999' })
+    : null;
+  const tip2 = rodBothEnds
+    ? createSvgEl('rect', { y: BODY_Y + BODY_H / 2 - 9, width: 6, height: 18, fill: '#666' })
+    : null;
   g.append(piston, rod, tip);
+  if (rod2 && tip2) g.append(rod2, tip2);
   line(g, 30, BODY_Y + BODY_H, 30, 70);
   if (withPortB) line(g, 170, BODY_Y + BODY_H, 170, 70);
   else {
@@ -142,6 +152,13 @@ function drawCylinder(
     rod.setAttribute('x', String(rodStart));
     rod.setAttribute('width', String(rodEnd - rodStart));
     tip.setAttribute('x', String(rodEnd));
+    if (rod2 && tip2) {
+      // As long as the other rod, so at full stroke it still clears the cap end.
+      const rod2End = px - 184;
+      rod2.setAttribute('x', String(rod2End));
+      rod2.setAttribute('width', String(px - rod2End));
+      tip2.setAttribute('x', String(rod2End - 6));
+    }
     if (spring) spring.setAttribute('d', springPath(rodStart + 1, BODY_X + BODY_W - 1));
   }
   update(0);
@@ -199,25 +216,31 @@ function cylinderLabelMethods(
  *
  * F_load (N) is an external force opposing extension (negative: pulling the rod out); seal
  * friction opposes motion either way and must be overcome before the piston moves at all.
+ *
+ * `doubleRod`: a double-rod (balanced) cylinder, the rod through both end caps - both chambers
+ * have the annulus area, so it moves at the same speed and force either way, as a steering
+ * cylinder does.
  */
-export function createHydCylinderDouble(compLayer: HTMLElement, x: number, y: number): Component {
+export function createHydCylinderDouble(
+  compLayer: HTMLElement,
+  x: number,
+  y: number,
+  doubleRod = false,
+): Component {
+  const type = doubleRod ? HYD_CYLINDER_DOUBLE_ROD_TYPE : HYD_CYLINDER_DOUBLE_TYPE;
   const svgW = 220;
   const svgH = 80;
   const state: CylinderCommon = { letter: nextCylinderLetter(), sensors: [] };
   state.sensors = defaultSensors(state.letter);
-  const shell = createHydShell(
-    compLayer,
-    HYD_CYLINDER_DOUBLE_TYPE,
-    x,
-    y,
-    svgW,
-    svgH,
-    `Cylinder ${state.letter}`,
-    { x: BODY_X, y: BODY_Y, w: BODY_W, h: BODY_H },
-  );
+  const shell = createHydShell(compLayer, type, x, y, svgW, svgH, `Cylinder ${state.letter}`, {
+    x: BODY_X,
+    y: BODY_Y,
+    w: BODY_W,
+    h: BODY_H,
+  });
   shell.setNameVisible(true);
   shell.setInfoSide('above');
-  const drawing = drawCylinder(shell, false, true, () => state.sensors);
+  const drawing = drawCylinder(shell, false, true, () => state.sensors, doubleRod);
   const ports = {
     A: createPort(shell.g, 'A', 30, 70, 'V'),
     B: createPort(shell.g, 'B', 170, 70, 'V'),
@@ -235,10 +258,13 @@ export function createHydCylinderDouble(compLayer: HTMLElement, x: number, y: nu
   let peakA = 0;
   let peakB = 0;
 
-  const comp = hydComponentBase(shell, HYD_CYLINDER_DOUBLE_TYPE, x, y, svgW, svgH, ports);
-  const areaA = (): number => circleAreaCm2(bore);
-  const areaB = (): number =>
+  const comp = hydComponentBase(shell, type, x, y, svgW, svgH, ports);
+  const annulus = (): number =>
     Math.max(0.01, circleAreaCm2(bore) - circleAreaCm2(Math.min(rodD, bore - 1)));
+  // Double rod: the same rod on both sides, so both chambers have the annulus area - the same
+  // speed and force either way (a steering cylinder).
+  const areaA = (): number => (doubleRod ? annulus() : circleAreaCm2(bore));
+  const areaB = annulus;
   return Object.assign(comp, {
     ...cylinderLabelMethods(shell, state, () => comp.id),
     hydElements: (): HydElement[] => [
