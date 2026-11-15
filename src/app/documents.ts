@@ -195,7 +195,7 @@ function warnNotKept(err: unknown): void {
   warnedNotKept = true;
   const reason = err instanceof Error ? err.message : String(err);
   window.alert(
-    `PneuGineer couldn't keep your circuits in this browser (${reason}). ` +
+    `HydGineer couldn't keep your circuits in this browser (${reason}). ` +
       'Save them to a file (Save, or Save all) so nothing is lost when this page is closed.',
   );
 }
