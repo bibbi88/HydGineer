@@ -1,8 +1,8 @@
 import { appState } from '../app/AppState';
-import { Modes } from '../app/modes';
+import { Modes, canEdit } from '../app/modes';
 import { requestSingleStep } from '../sim/loop';
+import { stopSimulation } from '../sim/stopSimulation';
 import { undo, redo, canUndo, canRedo, onHistoryChange } from '../history/historyStore';
-import { redrawAllConnections } from '../wires/connection';
 import { iconButton } from './iconButton';
 import { createIcon } from './icons';
 import { formatSimSpeed, getSimSpeed, setSimSpeed, SIM_SPEEDS } from '../app/simSpeed';
@@ -12,16 +12,8 @@ import { formatSimSpeed, getSimSpeed, setSimSpeed, SIM_SPEEDS } from '../app/sim
  * the current mode offers. */
 export function renderToolbar(container: HTMLElement): void {
   const playStopBtn = iconButton('play', 'Play', () => {
-    const nextMode = appState.mode === Modes.PLAY ? Modes.STOP : Modes.PLAY;
-    if (nextMode === Modes.STOP) {
-      for (const c of appState.components) c.reset();
-      // A component's own visual reset (e.g. the 5/2 valve's pilot ports sliding back to their
-      // default position) doesn't go through any of the normal edit-time triggers that redraw
-      // wires - without this, a wire attached to one of those ports stays stuck at wherever it
-      // was mid-simulation instead of snapping back with it.
-      redrawAllConnections();
-    }
-    appState.setMode(nextMode);
+    if (appState.mode === Modes.PLAY) stopSimulation();
+    else appState.setMode(Modes.PLAY);
   });
 
   const pauseBtn = iconButton('pause', 'Pause', () => {
@@ -45,11 +37,13 @@ export function renderToolbar(container: HTMLElement): void {
   updatePlayStopButton();
   appState.onModeChange(updatePlayStopButton);
 
+  // Undo and redo rebuild the circuit: only while it's stopped.
   function updateUndoRedoButtons(): void {
-    undoBtn.disabled = !canUndo();
-    redoBtn.disabled = !canRedo();
+    undoBtn.disabled = !canUndo() || !canEdit(appState.mode);
+    redoBtn.disabled = !canRedo() || !canEdit(appState.mode);
   }
   onHistoryChange(updateUndoRedoButtons);
+  appState.onModeChange(updateUndoRedoButtons);
   updateUndoRedoButtons();
 
   container.append(playStopBtn, pauseBtn, stepBtn, renderSimulationSpeed(), undoBtn, redoBtn);

@@ -2,6 +2,7 @@ import type { Component } from '../core/types';
 import type { ProjectBarRefs } from './projectBar';
 import { openTipsDialog } from './tipsDialog';
 import { openTermsDialog } from './termsDialog';
+import { desktopBridge } from '../app/desktopBridge';
 import { createIcon, type IconName } from './icons';
 import { iconButton } from './iconButton';
 import { canEdit } from '../app/modes';
@@ -44,6 +45,7 @@ import {
 } from '../components/hyd/valves';
 import {
   HYD_CYLINDER_DOUBLE_TYPE,
+  HYD_CYLINDER_DOUBLE_ROD_TYPE,
   HYD_CYLINDER_SINGLE_TYPE,
   HYD_MOTOR_TYPE,
   HYD_MOTOR_VAR_TYPE,
@@ -67,6 +69,9 @@ import {
   ELEC_CHANGEOVER_TYPE,
 } from '../components/electrical';
 import { NOTE_STYLES, TEXT_ANNOTATION_TYPE } from '../components/textAnnotation';
+import { MAX_PICTURE_WIDTH, MIN_PICTURE_WIDTH, PICTURE_TYPE } from '../components/picture';
+import { choosePictureFor } from '../interaction/pictures';
+import { HYD_STEERING_UNIT_TYPE } from '../components/hyd/steering';
 import { renderDocumentListSection } from './documentTabs';
 import { onDocumentsChange } from '../app/documents';
 import { onSettingsChange } from '../app/settings';
@@ -173,6 +178,22 @@ interface SelectField {
   options: Array<{ value: string; label: string }>;
 }
 
+/** A cylinder's size on one row - Ø bore / rod - stroke, in mm - under a line saying so. The
+ * snapshot keys to edit; no `rod` for a cylinder without one in the inspector. */
+interface CylinderDimsField {
+  kind: 'cylinderDims';
+  bore: string;
+  rod?: string;
+  stroke: string;
+}
+
+/** A button that does something to the component, e.g. choose a picture's image. */
+interface ActionField {
+  kind: 'action';
+  label: FieldLabel;
+  run(comp: Component): void;
+}
+
 /** Free text over several lines, e.g. a note's own text. */
 interface MultilineTextField {
   kind: 'multilineText';
@@ -181,6 +202,8 @@ interface MultilineTextField {
 }
 
 type InspectorField =
+  | ActionField
+  | CylinderDimsField
   | SelectField
   | MultilineTextField
   | NumberField
@@ -310,6 +333,40 @@ const INSPECTOR_FIELDS: Record<string, InspectorField[]> = {
       kind: 'text',
       key: 'signal',
       label: 'Motor signal (empty = always on; K1 = runs while K1 is on; !S1 = while S1 is off)',
+    },
+  ],
+  [HYD_STEERING_UNIT_TYPE]: [
+    {
+      kind: 'number',
+      key: 'displacement',
+      label: 'Gerotor displacement (cm³ per wheel turn)',
+      min: 1,
+      max: 2000,
+      step: 5,
+    },
+    {
+      kind: 'number',
+      key: 'maxRpm',
+      label: 'Wheel speed, slider at the end (rpm)',
+      min: 1,
+      max: 600,
+      step: 5,
+    },
+    {
+      kind: 'number',
+      key: 'qNom',
+      label: 'Open centre, fully open (L/min at Δp 5 bar)',
+      min: 0.5,
+      max: 2000,
+      step: 1,
+    },
+    {
+      kind: 'number',
+      key: 'reliefSetting',
+      label: 'Built-in relief valve (bar)',
+      min: 1,
+      max: 700,
+      step: 5,
     },
   ],
   [HYD_VALVE_LS_TYPE]: [
@@ -597,9 +654,12 @@ const INSPECTOR_FIELDS: Record<string, InspectorField[]> = {
   ],
   [HYD_CYLINDER_DOUBLE_TYPE]: [
     { kind: 'relabel', label: 'Cylinder letter' },
-    { kind: 'number', key: 'bore', label: 'Piston diameter (mm)', min: 5, max: 1000, step: 1 },
-    { kind: 'number', key: 'rodD', label: 'Rod diameter (mm)', min: 1, max: 999, step: 1 },
-    { kind: 'number', key: 'stroke', label: 'Stroke (mm)', min: 1, max: 10000, step: 10 },
+    {
+      kind: 'actuatorMode',
+      label: 'Cylinder type',
+      options: swapFamilyOf(HYD_CYLINDER_DOUBLE_TYPE),
+    },
+    { kind: 'cylinderDims', bore: 'bore', rod: 'rodD', stroke: 'stroke' },
     { kind: 'number', key: 'load', label: 'Load force (N, + opposes extension)', step: 100 },
     { kind: 'number', key: 'friction', label: 'Seal friction (N)', min: 0, step: 10 },
     {
@@ -611,10 +671,28 @@ const INSPECTOR_FIELDS: Record<string, InspectorField[]> = {
     },
     { kind: 'sensorList', arrayKey: 'sensors', min: 0, max: 100, step: 1 },
   ],
+  [HYD_CYLINDER_DOUBLE_ROD_TYPE]: [
+    { kind: 'relabel', label: 'Cylinder letter' },
+    {
+      kind: 'actuatorMode',
+      label: 'Cylinder type',
+      options: swapFamilyOf(HYD_CYLINDER_DOUBLE_ROD_TYPE),
+    },
+    { kind: 'cylinderDims', bore: 'bore', rod: 'rodD', stroke: 'stroke' },
+    { kind: 'number', key: 'load', label: 'Load force (N, + opposes A → B)', step: 100 },
+    { kind: 'number', key: 'friction', label: 'Friction (N, e.g. tyre scrub)', min: 0, step: 10 },
+    {
+      kind: 'number',
+      key: 'mass',
+      label: 'Moving mass (kg) - 0 = inertia ignored',
+      min: 0,
+      step: 10,
+    },
+    { kind: 'sensorList', arrayKey: 'sensors', min: 0, max: 100, step: 1 },
+  ],
   [HYD_CYLINDER_SINGLE_TYPE]: [
     { kind: 'relabel', label: 'Cylinder letter' },
-    { kind: 'number', key: 'bore', label: 'Piston diameter (mm)', min: 5, max: 1000, step: 1 },
-    { kind: 'number', key: 'stroke', label: 'Stroke (mm)', min: 1, max: 10000, step: 10 },
+    { kind: 'cylinderDims', bore: 'bore', stroke: 'stroke' },
     { kind: 'number', key: 'load', label: 'Load force (N, + opposes extension)', step: 100 },
     { kind: 'number', key: 'springPreload', label: 'Spring preload (N)', min: 0, step: 10 },
     { kind: 'number', key: 'springRate', label: 'Spring rate (N/mm)', min: 0, step: 0.5 },
@@ -682,6 +760,21 @@ const INSPECTOR_FIELDS: Record<string, InspectorField[]> = {
       min: 50,
       max: 100,
       step: 1,
+    },
+  ],
+  [PICTURE_TYPE]: [
+    {
+      kind: 'action',
+      label: (comp) => (comp.snapshot().src ? 'Replace picture…' : 'Choose picture…'),
+      run: (comp) => void choosePictureFor(comp),
+    },
+    {
+      kind: 'number',
+      key: 'width',
+      label: 'Width (px)',
+      min: MIN_PICTURE_WIDTH,
+      max: MAX_PICTURE_WIDTH,
+      step: 10,
     },
   ],
   [TEXT_ANNOTATION_TYPE]: [
@@ -815,6 +908,51 @@ function renderNumberOrTextField(
 
   row.append(span, input);
   container.appendChild(row);
+}
+
+function renderActionField(container: HTMLElement, comp: Component, field: ActionField): void {
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'btn inspectorActionBtn';
+  btn.textContent = resolveLabel(field.label, comp);
+  btn.addEventListener('click', () => field.run(comp));
+  container.appendChild(btn);
+}
+
+/** Ø bore / rod - stroke, in mm, as small boxes on one row under a line naming them. */
+function renderCylinderDimsField(
+  container: HTMLElement,
+  comp: Component,
+  field: CylinderDimsField,
+  snap: Record<string, unknown>,
+): void {
+  const caption = document.createElement('div');
+  caption.className = 'inspectorCaption';
+  caption.textContent = field.rod ? 'Bore / rod Ø - stroke (mm)' : 'Bore Ø - stroke (mm)';
+  const row = document.createElement('div');
+  row.className = 'inspectorRow inspectorDimsRow';
+  const box = (key: string, label: string, max: number, step: number): HTMLInputElement => {
+    const input = document.createElement('input');
+    input.type = 'number';
+    input.min = '1';
+    input.max = String(max);
+    input.step = String(step);
+    input.value = String(snap[key] ?? '');
+    input.title = label;
+    input.setAttribute('aria-label', label);
+    input.addEventListener('change', () => updateComponentField(comp, key, Number(input.value)));
+    return input;
+  };
+  const text = (t: string): HTMLSpanElement => {
+    const span = document.createElement('span');
+    span.className = 'inspectorDimsSep';
+    span.textContent = t;
+    return span;
+  };
+  row.append(text('Ø'), box(field.bore, 'Bore diameter (mm)', 1000, 1));
+  if (field.rod) row.append(text('/'), box(field.rod, 'Rod diameter (mm)', 999, 1));
+  row.append(text('–'), box(field.stroke, 'Stroke (mm)', 10000, 10));
+  container.append(caption, row);
 }
 
 function renderReadonlyTextField(
@@ -1150,11 +1288,10 @@ function renderSensorListField(
   container.appendChild(heading);
 
   const hint = document.createElement('p');
-  hint.className = 'inspectorHint';
+  hint.className = 'inspectorHint tipText';
   hint.textContent =
-    'Each sensor turns on while the piston is within its range of the stroke (0% = fully ' +
-    'retracted, 100% = fully extended). Give an electrical contact (or a PLC) the same label ' +
-    'as its Signal to read it - labels are case-insensitive, so "a0" and "A0" are the same sensor.';
+    'On while the piston is in its range: 0% in, 100% out. A contact or PLC input with the ' +
+    'same name switches with it.';
   container.appendChild(hint);
 
   function writeSensors(next: CylinderSensor[]): void {
@@ -1313,38 +1450,35 @@ function renderNameSection(
   comp: Component,
   snap: Record<string, unknown>,
 ): void {
-  const heading = document.createElement('div');
-  heading.className = 'inspectorSectionHeading';
-  heading.textContent = 'Name';
-  container.appendChild(heading);
-
-  const showRow = document.createElement('label');
-  showRow.className = 'inspectorRow';
-  const showSpan = document.createElement('span');
-  showSpan.textContent = 'Show name in diagram';
+  // The heading carries the show/hide checkbox on its right; the name itself below (empty: the
+  // default name, shown as the placeholder).
+  const heading = document.createElement('label');
+  heading.className = 'inspectorSectionHeading inspectorHeadingWithToggle';
+  const title = document.createElement('span');
+  title.textContent = 'Name';
+  const show = document.createElement('span');
+  show.className = 'inspectorHeadingToggle';
   const showCheckbox = document.createElement('input');
   showCheckbox.type = 'checkbox';
   showCheckbox.checked = Boolean(snap.showName);
+  showCheckbox.title = 'Show the name in the diagram';
   showCheckbox.addEventListener('change', () => {
     updateComponentField(comp, 'showName', showCheckbox.checked);
   });
-  showRow.append(showSpan, showCheckbox);
-  container.appendChild(showRow);
+  show.append(showCheckbox, document.createTextNode(' Show'));
+  heading.append(title, show);
+  container.appendChild(heading);
 
-  const nameRow = document.createElement('label');
-  nameRow.className = 'inspectorRow';
-  const nameSpan = document.createElement('span');
-  nameSpan.textContent = 'Custom name';
   const nameInput = document.createElement('input');
   nameInput.type = 'text';
-  nameInput.className = 'inspectorCustomNameInput';
-  nameInput.placeholder = '(default)';
+  nameInput.className = 'inspectorNameInput';
+  nameInput.placeholder = comp.el.querySelector('.compNameText')?.textContent ?? '';
   nameInput.value = (snap.customName as string | null) ?? '';
+  nameInput.setAttribute('aria-label', 'Name');
   nameInput.addEventListener('change', () => {
     updateComponentField(comp, 'customName', nameInput.value.trim() || null);
   });
-  nameRow.append(nameSpan, nameInput);
-  container.appendChild(nameRow);
+  container.appendChild(nameInput);
 }
 
 const PAGE_FRAME_OPTIONS: Array<{ value: PageFrameSize; label: string }> = [
@@ -1419,13 +1553,38 @@ function renderProjectInfoSection(container: HTMLElement, projectBar: ProjectBar
   frameRow.append(frameSpan, frameSelect);
   container.appendChild(frameRow);
 
+  // A drawing choice for the whole project: a small jump where a wire crosses another it isn't
+  // connected to (ISO style).
+  const jumpsRow = document.createElement('label');
+  jumpsRow.className = 'inspectorRow';
+  const jumpsSpan = document.createElement('span');
+  jumpsSpan.textContent = 'Line jumps at crossings';
+  const jumpsBox = document.createElement('input');
+  jumpsBox.type = 'checkbox';
+  jumpsBox.checked = appState.lineJumps;
+  jumpsBox.addEventListener('change', () => {
+    appState.lineJumps = jumpsBox.checked;
+    redrawAllConnections();
+    appState.markDirty();
+  });
+  jumpsRow.append(jumpsSpan, jumpsBox);
+  container.appendChild(jumpsRow);
+
   const frameHint = document.createElement('p');
-  frameHint.className = 'inspectorHint';
+  frameHint.className = 'inspectorHint tipText';
   frameHint.textContent =
-    'Draws a sheet outline with the fields above as a title block - a visual guide only, ' +
-    'centered on the current diagram when picked.';
+    'A sheet outline with the fields above as its title block, centered on the diagram.';
   container.appendChild(frameHint);
 }
+
+/** What the bar under the canvas used to say - now shown in the inspector while tips are on. */
+const CANVAS_TIPS: Array<[string, string]> = [
+  ['', 'Drag components from the library onto the canvas.'],
+  ['Pan:', 'middle-drag, or Alt + drag.'],
+  ['Zoom:', 'scroll.'],
+  ['Select:', 'drag on empty canvas.'],
+  ['Rotate:', 'R, also while dragging.'],
+];
 
 /** Pinned to the bottom of the panel, below whatever else is showing. It's help rather than a
  * setting, so it renders unconditionally - the one thing here that's always available no matter
@@ -1438,6 +1597,20 @@ function renderTipsSection(container: HTMLElement): void {
   heading.className = 'inspectorSectionHeading';
   heading.textContent = 'Help';
   section.appendChild(heading);
+
+  // The canvas shortcuts, while tips are on (the toolbar's lightbulb).
+  const tips = document.createElement('ul');
+  tips.className = 'inspectorTipList tipText';
+  for (const [key, text] of CANVAS_TIPS) {
+    const item = document.createElement('li');
+    if (key) {
+      const k = document.createElement('b');
+      k.textContent = key;
+      item.append(k, document.createTextNode(` ${text}`));
+    } else item.textContent = text;
+    tips.appendChild(item);
+  }
+  section.appendChild(tips);
 
   const btn = document.createElement('button');
   btn.className = 'btn inspectorTipsBtn';
@@ -1453,8 +1626,23 @@ function renderTipsSection(container: HTMLElement): void {
   termsBtn.addEventListener('click', () => openTermsDialog());
   section.appendChild(termsBtn);
 
+  // In the browser: where the desktop app is (the latest GitHub release).
+  if (!desktopBridge()) {
+    const desktop = document.createElement('a');
+    desktop.className = 'btn inspectorTipsBtn';
+    desktop.href = DESKTOP_DOWNLOAD_URL;
+    desktop.target = '_blank';
+    desktop.rel = 'noopener';
+    desktop.title = 'Windows installer, Linux Flatpak and a standalone HTML file, on GitHub';
+    desktop.append(createIcon('download'), document.createTextNode('Desktop app'));
+    section.appendChild(desktop);
+  }
+
   container.appendChild(section);
 }
+
+/** The desktop app's downloads: the latest release on GitHub (.github/workflows/desktop.yml). */
+const DESKTOP_DOWNLOAD_URL = 'https://github.com/bibbi88/HydGineer/releases/latest';
 
 const ALIGN_BUTTONS: Array<{ icon: IconName; label: string; mode: AlignMode }> = [
   { icon: 'alignLeft', label: 'Align left edges', mode: 'left' },
@@ -1513,7 +1701,7 @@ export function renderInspector(container: HTMLElement, projectBar: ProjectBarRe
       }
 
       const hint = document.createElement('p');
-      hint.className = 'inspectorHint';
+      hint.className = 'inspectorHint tipText';
       hint.textContent =
         selected.length === 0
           ? 'Select a component to edit its properties.'
@@ -1531,7 +1719,7 @@ export function renderInspector(container: HTMLElement, projectBar: ProjectBarRe
     if (!fields || fields.length === 0) {
       if (!showsNameSection) {
         const hint = document.createElement('p');
-        hint.className = 'inspectorHint';
+        hint.className = 'inspectorHint tipText';
         hint.textContent = 'This component has nothing to configure here.';
         container.appendChild(hint);
       }
@@ -1548,6 +1736,8 @@ export function renderInspector(container: HTMLElement, projectBar: ProjectBarRe
       else if (field.kind === 'cylinderMode') renderCylinderModeField(container, comp, refresh);
       else if (field.kind === 'silencer') renderSilencerField(container, comp, field, snap);
       else if (field.kind === 'checkbox') renderCheckboxField(container, comp, field, snap);
+      else if (field.kind === 'action') renderActionField(container, comp, field);
+      else if (field.kind === 'cylinderDims') renderCylinderDimsField(container, comp, field, snap);
       else if (field.kind === 'readonlyText') renderReadonlyTextField(container, comp, field, snap);
       else if (field.kind === 'select') renderSelectField(container, comp, field, snap);
       else if (field.kind === 'multilineText')

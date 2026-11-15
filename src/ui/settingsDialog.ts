@@ -89,6 +89,13 @@ export function openSettingsDialog(): void {
       (docsAlways) => updateSettings({ docsAlways }),
     ),
     checkboxOption(
+      'Show tips',
+      'The canvas shortcuts and short explanations in the inspector - also the lightbulb in ' +
+        'the toolbar.',
+      settings.showTips,
+      (showTips) => updateSettings({ showTips }),
+    ),
+    checkboxOption(
       'Open examples and files in a new document',
       'Otherwise they replace the circuit on the canvas (Undo brings it back). An empty ' +
         'document is used either way.',

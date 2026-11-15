@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { appState } from './AppState';
 import { Modes } from './modes';
 import {
@@ -8,13 +8,16 @@ import {
   initDocuments,
   isDocumentEmpty,
   listDocuments,
+  markDocumentSaved,
   moveDocument,
   newDocument,
   prepareToOpen,
   renameDocument,
   resetDocuments,
   switchDocument,
+  unsavedDocuments,
 } from './documents';
+import { serializeProject } from '../persistence/project';
 import { resetSettings, updateSettings } from './settings';
 import { canUndo, pushHistory, resetHistory } from '../history/historyStore';
 import { createHydTank } from '../components/hyd/supply';
@@ -156,5 +159,75 @@ describe('open documents', () => {
     expect(appState.components).toHaveLength(1);
     switchDocument(listDocuments()[1]!.id);
     expect(appState.components).toHaveLength(2);
+  });
+
+  it('knows which documents have unsaved changes, whatever ids their parts get', () => {
+    start();
+    // An untouched empty document has nothing to lose.
+    expect(unsavedDocuments()).toEqual([]);
+    addTank();
+    expect(unsavedDocuments().map((d) => d.name)).toEqual(['project']);
+
+    const first = activeDocumentId();
+    markDocumentSaved(first, serializeProject(name));
+    expect(unsavedDocuments()).toEqual([]);
+
+    // Away and back: the parts are loaded again with new ids - still saved.
+    newDocument();
+    switchDocument(first);
+    expect(unsavedDocuments()).toEqual([]);
+
+    appState.components[0]!.setPos(300, 300);
+    expect(unsavedDocuments().map((d) => d.id)).toEqual([first]);
+  });
+
+  it('starts even when a kept document can no longer be read, emptying just that one', () => {
+    vi.spyOn(window, 'alert').mockImplementation(() => {});
+    const bad = {
+      schemaVersion: 1,
+      name: 'Broken',
+      comps: [{ id: 1, type: 'hyperValve9000', x: 0, y: 0, data: {} }],
+      conns: [],
+    };
+    const good = {
+      schemaVersion: 1,
+      name: 'Fine',
+      comps: [{ id: 1, type: 'hydTank', x: 50, y: 50, data: {} }],
+      conns: [],
+    };
+    localStorage.setItem(
+      'hydgineer:docs:v1',
+      JSON.stringify({
+        active: 'a',
+        list: [
+          { id: 'a', name: 'Broken', file: bad },
+          { id: 'b', name: 'Fine', file: good },
+        ],
+      }),
+    );
+    expect(start()).toBe(true);
+    expect(appState.components).toHaveLength(0);
+    switchDocument('b');
+    expect(appState.components.map((c) => c.type)).toEqual(['hydTank']);
+  });
+
+  it('says once, not at every change, when the circuits cannot be kept in the browser', async () => {
+    const alert = vi.spyOn(window, 'alert').mockImplementation(() => {});
+    const setItem = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new Error('QuotaExceededError');
+    });
+    try {
+      start();
+      for (let i = 0; i < 3; i++) {
+        addTank();
+        newDocument(); // stores at once
+      }
+      await Promise.resolve();
+      expect(alert).toHaveBeenCalledTimes(1);
+      expect(String(alert.mock.calls[0]![0])).toMatch(/couldn't keep your circuits/);
+    } finally {
+      setItem.mockRestore();
+      alert.mockRestore();
+    }
   });
 });

@@ -1,0 +1,151 @@
+# Builds HydGineer as a desktop app (desktop/: Electron + electron-builder) - a Windows installer
+# and a Linux Flatpak - and publishes them as a GitHub Release:
+#
+# - every push to main updates the "latest" release (tag desktop-latest), so these always fetch
+#   the newest build:
+#     https://github.com/bibbi88/HydGineer/releases/latest/download/HydGineer-Setup.exe
+#     https://github.com/bibbi88/HydGineer/releases/latest/download/HydGineer.flatpak
+#     https://github.com/bibbi88/HydGineer/releases/latest/download/HydGineer.html
+# - pushing a version tag (git tag v1.2.3 && git push origin v1.2.3) makes a release of its own.
+#
+# Can also be started by hand on any branch (Actions > Desktop apps > Run workflow); such runs
+# keep both files as downloadable artifacts without publishing a release.
+name: Desktop apps
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: desktop-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  windows:
+    name: Windows installer
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            desktop/package-lock.json
+      - name: Build the web app
+        run: |
+          npm ci
+          npm run build
+      - name: Package
+        shell: bash
+        run: |
+          mkdir -p desktop/app
+          cp dist/index.html desktop/app/index.html
+          cd desktop
+          npm ci
+          npm pkg set version="$(../.github/desktop-version.sh)"
+          npm run dist:win
+      - uses: actions/upload-artifact@v4
+        with:
+          name: HydGineer-windows
+          path: desktop/release/*.exe
+          if-no-files-found: error
+
+  flatpak:
+    name: Linux Flatpak
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            desktop/package-lock.json
+      - name: Install Flatpak tools and runtimes
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y flatpak flatpak-builder elfutils
+          flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+          flatpak install --user -y --noninteractive flathub \
+            org.freedesktop.Platform//25.08 \
+            org.freedesktop.Sdk//25.08 \
+            org.electronjs.Electron2.BaseApp//25.08
+      - name: Build the web app
+        run: |
+          npm ci
+          npm run build
+      - name: Package
+        run: |
+          mkdir -p desktop/app
+          cp dist/index.html desktop/app/index.html
+          cd desktop
+          npm ci
+          npm pkg set version="$(../.github/desktop-version.sh)"
+          npm run dist:flatpak
+      - uses: actions/upload-artifact@v4
+        with:
+          name: HydGineer-flatpak
+          path: desktop/release/*.flatpak
+          if-no-files-found: error
+      # The web app as one standalone file too, published beside the installers: opens in any
+      # browser, nothing to install.
+      - name: Standalone HTML
+        run: cp dist/index.html HydGineer.html
+      - uses: actions/upload-artifact@v4
+        with:
+          name: HydGineer-html
+          path: HydGineer.html
+          if-no-files-found: error
+
+  release:
+    name: GitHub Release
+    if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main'
+    needs: [windows, flatpak]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+      - name: Point desktop-latest at this commit
+        if: github.ref == 'refs/heads/main'
+        run: |
+          git tag -f desktop-latest
+          git push -f origin desktop-latest
+      - name: Latest build (from main)
+        if: github.ref == 'refs/heads/main'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: desktop-latest
+          name: HydGineer desktop app (latest)
+          make_latest: true
+          files: artifacts/*
+          body: |
+            The newest HydGineer desktop app, built from `main` (${{ github.sha }}).
+
+            - **Windows:** download **HydGineer-Setup.exe** and run it. It isn't code-signed, so
+              Windows may warn about an unknown publisher: choose *More info → Run anyway*.
+            - **Linux:** download **HydGineer.flatpak**, then
+              `flatpak install --user HydGineer.flatpak` and start HydGineer from the app menu.
+            - **Any computer, no install:** download **HydGineer.html** and open it in a browser.
+              It's the whole app in one file, and works offline - from a USB stick, too.
+
+            Or use it online: https://bibbi88.github.io/HydGineer/
+      - name: Versioned release (from a tag)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          make_latest: true
+          files: artifacts/*
+          generate_release_notes: true

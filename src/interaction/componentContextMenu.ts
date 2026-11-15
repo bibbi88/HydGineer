@@ -5,7 +5,11 @@ import { showContextMenu } from './contextMenu';
 import { redrawAllConnections, removeComponentAndConnections } from '../wires/connection';
 import { selectOnly, getSelectedComponents } from './selection';
 import { copySelection } from './clipboard';
-import { HYD_CYLINDER_DOUBLE_TYPE, HYD_CYLINDER_SINGLE_TYPE } from '../components/hyd/actuators';
+import {
+  HYD_CYLINDER_DOUBLE_ROD_TYPE,
+  HYD_CYLINDER_DOUBLE_TYPE,
+  HYD_CYLINDER_SINGLE_TYPE,
+} from '../components/hyd/actuators';
 
 export function getComponentRotation(comp: Component): number {
   return Number(comp.el.dataset.rot ?? '0');
@@ -40,7 +44,11 @@ export function setComponentMirrored(comp: Component, mirrored: boolean): void {
  * that svg. On a valve it would leave every port number printed backwards, so the toolbar's
  * flip button (see ui/arrangeControls.ts) disables itself on the same basis this menu hides
  * the entry. */
-const MIRRORABLE_TYPES = new Set<string>([HYD_CYLINDER_SINGLE_TYPE, HYD_CYLINDER_DOUBLE_TYPE]);
+const MIRRORABLE_TYPES = new Set<string>([
+  HYD_CYLINDER_SINGLE_TYPE,
+  HYD_CYLINDER_DOUBLE_TYPE,
+  HYD_CYLINDER_DOUBLE_ROD_TYPE,
+]);
 
 export function isMirrorableType(type: string): boolean {
   return MIRRORABLE_TYPES.has(type);
@@ -97,8 +105,10 @@ export function wireUpComponentContextMenu(comp: Component): void {
       {
         label: selectionSize > 1 ? `Delete (${selectionSize})` : 'Delete',
         onClick: () => {
-          for (const c of getSelectedComponents()) removeComponentAndConnections(c.id);
-          redrawAllConnections();
+          appState.runSuppressed(() => {
+            for (const c of getSelectedComponents()) removeComponentAndConnections(c.id);
+            redrawAllConnections();
+          });
         },
       },
     ]);

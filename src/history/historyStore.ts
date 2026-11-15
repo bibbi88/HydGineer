@@ -1,3 +1,5 @@
+import { appState } from '../app/AppState';
+import { canEdit } from '../app/modes';
 import type { ComponentFactoryContext } from '../components/registry';
 import type { ViewportAdapter } from '../ui/viewport';
 import { serializeProject, loadProject } from '../persistence/project';
@@ -29,9 +31,35 @@ export function onHistoryChange(cb: () => void): void {
   listeners.push(cb);
 }
 
+/** Loads a history state, but keeps who created and last saved the project, and when: undo
+ * steps back through edits, not through saves - a step from before a save mustn't read as
+ * unsaved again. */
+function restoreKeepingStamps(
+  state: ProjectFileV1,
+  ctx: ComponentFactoryContext,
+  viewport: ViewportAdapter,
+): void {
+  const { projectOriginDeviceId, projectLastSavedDeviceId, projectCreatedAt, projectLastSavedAt } =
+    appState;
+  loadProject(state, ctx, viewport);
+  Object.assign(appState, {
+    projectOriginDeviceId,
+    projectLastSavedDeviceId,
+    projectCreatedAt,
+    projectLastSavedAt,
+  });
+}
+
 export function pushHistory(name: string): void {
-  if (suppressPush) return;
-  history.push(serializeProject(name));
+  // Not while the simulation runs: a step would hold the circuit mid-run. Stopping records what
+  // changed meanwhile, at rest (sim/stopSimulation.ts).
+  if (suppressPush || !canEdit(appState.mode)) return;
+  const state = serializeProject(name);
+  // A notification that changed nothing (an empty batch, a drag let go where it started) is no
+  // step to undo.
+  const last = history[history.length - 1];
+  if (last && JSON.stringify(last) === JSON.stringify(state)) return;
+  history.push(state);
   if (history.length > HISTORY_LIMIT) history.shift();
   future = [];
   notify();
@@ -46,14 +74,14 @@ export function canRedo(): boolean {
 }
 
 export function undo(): void {
-  if (!canUndo() || !ctxRef || !viewportRef) return;
+  if (!canUndo() || !ctxRef || !viewportRef || !canEdit(appState.mode)) return;
   const current = history.pop();
   if (current) future.push(current);
   const previous = history[history.length - 1];
   if (previous) {
     suppressPush = true;
     try {
-      loadProject(previous, ctxRef, viewportRef);
+      restoreKeepingStamps(previous, ctxRef, viewportRef);
     } finally {
       suppressPush = false;
     }
@@ -62,13 +90,13 @@ export function undo(): void {
 }
 
 export function redo(): void {
-  if (!canRedo() || !ctxRef || !viewportRef) return;
+  if (!canRedo() || !ctxRef || !viewportRef || !canEdit(appState.mode)) return;
   const next = future.pop();
   if (!next) return;
   history.push(next);
   suppressPush = true;
   try {
-    loadProject(next, ctxRef, viewportRef);
+    restoreKeepingStamps(next, ctxRef, viewportRef);
   } finally {
     suppressPush = false;
   }
@@ -86,6 +114,14 @@ export function resetHistory(): void {
 export interface HistoryState {
   history: ProjectFileV1[];
   future: ProjectFileV1[];
+}
+
+/** Makes what's on the canvas now the point undo goes back to, if nothing is recorded yet - a
+ * document just opened, restored or created: without it, its first edit couldn't be undone. */
+export function seedHistory(name: string): void {
+  if (history.length > 0) return;
+  history.push(serializeProject(name));
+  notify();
 }
 
 export function getHistoryState(): HistoryState {

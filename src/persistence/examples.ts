@@ -1,3 +1,4 @@
+import { unixNow } from './project';
 import type { ProjectFileV1, ComponentSnapshot, ConnectionSnapshot } from './schema';
 
 /** Small builder so the example circuits below read as a parts list plus a wiring list. */
@@ -23,7 +24,8 @@ function circuit(name: string, build: (b: Builder) => void): ProjectFileV1 {
     },
   };
   build(b);
-  return { schemaVersion: 1, name, comps, conns };
+  // Opening an example starts a new project: created now.
+  return { schemaVersion: 1, name, ct: unixNow(), comps, conns };
 }
 
 interface Builder {
@@ -525,6 +527,84 @@ export const EXAMPLES: Array<{ title: string; file: () => ProjectFileV1 }> = [
         b.wire(valve, 'T', filter, 'IN');
         b.wire(filter, 'OUT', filterTank, 'T');
         b.wire(valve, 'LS', comp, 'LS', true);
+      }),
+  },
+  {
+    title: 'Hydrostatic steering: steering unit (Orbitrol)',
+    file: () =>
+      circuit('Example - hydrostatic steering', (b) => {
+        // An open-centre hydrostatic steering, as on a tractor or wheel loader. Hold the slider
+        // under the steering wheel to one side while simulating: the wheel turns, and the
+        // steering unit's gerotor lets 100 cm³ per wheel turn into L or R - so the balanced
+        // steering cylinder follows the wheel, the same speed either way. Let go and it holds.
+        // In neutral the pump's oil goes straight to tank through the open centre.
+        // Built into the unit: the inlet check, the relief valve (100 bar) and the suction
+        // check. Between the unit and the cylinder: a shock valve on each line (160 bar), for
+        // a wheel hitting a stone, and a suction (anti-cavitation) valve on each, refilling a
+        // line from tank. Set the pump's speed to 0 and steer: manual steering - the readout
+        // shows the torque it takes at the wheel.
+        const pump = b.add('hydPump', 510, 680, {
+          displacement: 8,
+          speed: 1450,
+          etaV: 95,
+        });
+        const unit = b.add('hydSteeringUnit', 550, 450, {
+          displacement: 100,
+          maxRpm: 90,
+          qNom: 40,
+          reliefSetting: 100,
+        });
+        const gauge = b.add('hydGauge', 430, 560, { range: 160 });
+        const supply = b.add('junction', 500, 590, { orientation: 'H' });
+        const filter = b.add('hydFilter', 590, 600, { qNom: 40 });
+        const returnTank = b.add('hydTank', 580, 700);
+        const cyl = b.add('hydCylinderDoubleRod', 560, 80, {
+          bore: 50,
+          rodD: 28,
+          stroke: 200,
+          load: 0,
+          friction: 2000,
+          showName: true,
+          customName: 'Steering cylinder',
+        });
+        // L line: unit L → cylinder A, with its shock and suction valves.
+        const jL = b.add('junction', 520, 230, { orientation: 'H' });
+        const shockL = b.add('hydRelief', 330, 280, {
+          setting: 160,
+          showName: true,
+          customName: 'Shock L',
+        });
+        const shockLTank = b.add('hydTank', 330, 360);
+        const suctionL = b.add('hydCheck', 430, 290, { showName: true, customName: 'Suction L' });
+        const suctionLTank = b.add('hydTank', 430, 360);
+        // R line: unit R → cylinder B, likewise.
+        const jR = b.add('junction', 540, 190, { orientation: 'H' });
+        const shockR = b.add('hydRelief', 790, 280, {
+          setting: 160,
+          showName: true,
+          customName: 'Shock R',
+        });
+        const shockRTank = b.add('hydTank', 790, 360);
+        const suctionR = b.add('hydCheck', 680, 290, { showName: true, customName: 'Suction R' });
+        const suctionRTank = b.add('hydTank', 680, 360);
+
+        b.wire(pump, 'P', supply, 'P');
+        b.wire(supply, 'P', gauge, 'P');
+        b.wire(supply, 'P', unit, 'P');
+        b.wire(unit, 'T', filter, 'IN');
+        b.wire(filter, 'OUT', returnTank, 'T');
+        b.wire(unit, 'L', jL, 'P');
+        b.wire(jL, 'P', cyl, 'A');
+        b.wire(jL, 'P', shockL, 'P');
+        b.wire(shockL, 'T', shockLTank, 'T');
+        b.wire(jL, 'P', suctionL, 'OUT');
+        b.wire(suctionL, 'IN', suctionLTank, 'T');
+        b.wire(unit, 'R', jR, 'P');
+        b.wire(jR, 'P', cyl, 'B');
+        b.wire(jR, 'P', shockR, 'P');
+        b.wire(shockR, 'T', shockRTank, 'T');
+        b.wire(jR, 'P', suctionR, 'OUT');
+        b.wire(suctionR, 'IN', suctionRTank, 'T');
       }),
   },
   {

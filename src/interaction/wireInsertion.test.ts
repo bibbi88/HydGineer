@@ -5,12 +5,18 @@ import {
   isWireInsertableType,
   setWireInsertHighlight,
   trySpliceOntoWire,
+  trySpliceExisting,
 } from './wireInsertion';
 import { initWires, createConnection } from '../wires/connection';
 import { createJunction } from '../components/junction';
-import { HYD_CHECK_TYPE as CHECK_VALVE_TYPE, HYD_ONE_WAY_FC_TYPE } from '../components/hyd/valves';
+import {
+  HYD_CHECK_TYPE as CHECK_VALVE_TYPE,
+  HYD_ONE_WAY_FC_TYPE,
+  createHydCheck,
+} from '../components/hyd/valves';
 import { JUNCTION_TYPE } from '../components/junction';
 import { portGlobalPosition } from '../geometry/coords';
+import { computeConnectionGeometry } from '../geometry/connectionGeometry';
 import type { ComponentFactoryContext } from '../components/registry';
 import type { ViewportAdapter } from '../ui/viewport';
 
@@ -253,6 +259,62 @@ describe('trySpliceOntoWire', () => {
       180,
     );
     expect(comp?.el.dataset.rot).toBe('90');
+  });
+
+  it('slides a valve dropped near a bend back onto the segment, both ports on it', () => {
+    // Down from a to y=300, across to x=600, down to b: corners at (300,300) and (600,300).
+    const a = createJunction(compLayer(), 300, 100, 'V');
+    const b = createJunction(compLayer(), 600, 400, 'V');
+    appState.addComponent(a);
+    appState.addComponent(b);
+    const conn = createConnection({ id: a.id, port: 'P' }, { id: b.id, port: 'P' });
+    conn.guides = [{ type: 'H', pos: 300 }];
+
+    // Dropped on the horizontal run just short of the corner: one port would pass the bend.
+    const comp = trySpliceOntoWire(CHECK_VALVE_TYPE, ctx, viewport, workspaceEl, {
+      x: 595,
+      y: 300,
+    });
+
+    expect(comp).not.toBeNull();
+    for (const port of ['IN', 'OUT']) {
+      const p = portGlobalPosition(viewport, workspaceEl, comp!, port);
+      expect(p.y).toBe(300);
+      expect(p.x).toBeGreaterThanOrEqual(300);
+      expect(p.x).toBeLessThanOrEqual(600);
+    }
+    // Each half still turns the corner it had - none doubles back over the valve.
+    const toB = appState.connections.find((c) => c.to.id === b.id);
+    const route = computeConnectionGeometry(viewport, workspaceEl, toB!);
+    const xs = route.map((pt) => pt.x);
+    expect(Math.min(...xs)).toBeGreaterThanOrEqual(
+      Math.max(
+        portGlobalPosition(viewport, workspaceEl, comp!, 'IN').x,
+        portGlobalPosition(viewport, workspaceEl, comp!, 'OUT').x,
+      ),
+    );
+  });
+
+  it('splices a valve already on the canvas when it is dragged onto a wire', () => {
+    // Placed off to the side first, then dragged over the wire - as on the canvas.
+    const valve = createHydCheck(compLayer(), 900, 900);
+    appState.addComponent(valve);
+    const a = createJunction(compLayer(), 300, 100, 'V');
+    const b = createJunction(compLayer(), 300, 500, 'V');
+    appState.addComponent(a);
+    appState.addComponent(b);
+    const original = createConnection({ id: a.id, port: 'P' }, { id: b.id, port: 'P' });
+    valve.setPos(304, 283); // let go just off the line
+
+    expect(trySpliceExisting(valve, viewport, workspaceEl)).toBe(true);
+    expect(valve.x).toBe(300);
+    expect(appState.connections.some((c) => c.id === original.id)).toBe(false);
+    expect(appState.connections).toHaveLength(2);
+    expect(appState.connections.every((c) => c.from.id === valve.id || c.to.id === valve.id)).toBe(
+      true,
+    );
+    // Already wired: dragging it again doesn't splice it a second time.
+    expect(trySpliceExisting(valve, viewport, workspaceEl)).toBe(false);
   });
 
   it('leaves the wire alone for a component type that is not wire-insertable', () => {

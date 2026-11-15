@@ -4,12 +4,13 @@ import { stepSimulation, resetHydraulics } from './engine';
 import { applyToDom } from './render';
 import { clearElectrical } from './electrical';
 import { MAX_DT } from './constants';
-import { redrawAllConnections } from '../wires/connection';
+import { redrawMovedConnections } from '../wires/connection';
 import { getSimSpeed } from '../app/simSpeed';
 
 let lastTime = performance.now();
 let stepOnce = false;
-let cleared = false;
+/** Whether the stopped circuit has been drawn at rest since it last ran or changed. */
+let restShown = false;
 
 export function requestSingleStep(): void {
   stepOnce = true;
@@ -32,14 +33,18 @@ function tick(now: number): void {
   if ((appState.mode === Modes.PLAY || stepOnce) && dt > 0) {
     const frame = stepSimulation(dt);
     applyToDom(frame);
-    redrawAllConnections();
+    // A component can move its own ports in response to simulation state without any of the
+    // edit-time triggers that redraw wires - only the wires on ports that actually moved are
+    // redrawn (wires/connection.ts).
+    redrawMovedConnections();
     stepOnce = false;
-    cleared = false;
-  } else if (appState.mode === Modes.STOP && !cleared) {
+    restShown = false;
+  } else if (appState.mode === Modes.STOP && !restShown) {
+    // Stopped: the circuit shown at rest - once, when it stops or changes, not every frame.
     clearElectrical();
     resetHydraulics();
     applyToDom(null);
-    cleared = true;
+    restShown = true;
   }
 
   requestAnimationFrame(tick);
@@ -47,5 +52,12 @@ function tick(now: number): void {
 
 export function startSimLoop(): void {
   lastTime = performance.now();
+  // Shown at rest again after any change or mode switch.
+  appState.onChange(() => {
+    restShown = false;
+  });
+  appState.onModeChange(() => {
+    restShown = false;
+  });
   requestAnimationFrame(tick);
 }

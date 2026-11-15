@@ -12,6 +12,13 @@ import { addToSelection, clearSelection } from './selection';
  * connLayer alone (which is all that's ever hit near the origin, where connLayer's box still
  * covers the full visible viewport).
  */
+/** A component's drawn symbol on screen - its selection outline's box, which follows its
+ * rotation and a switching valve's sliding frame - or its whole element if it has none. */
+function drawnBox(el: HTMLElement): DOMRect {
+  const box = el.querySelector<HTMLElement>(':scope > .boundsBox')?.getBoundingClientRect();
+  return box && (box.width > 0 || box.height > 0) ? box : el.getBoundingClientRect();
+}
+
 export function initMarquee(workspaceEl: HTMLElement, connLayer: SVGSVGElement): void {
   workspaceEl.addEventListener('mousedown', (e) => {
     if (e.target !== connLayer && e.target !== workspaceEl) return;
@@ -43,6 +50,7 @@ export function initMarquee(workspaceEl: HTMLElement, connLayer: SVGSVGElement):
 
     function onMove(ev: MouseEvent): void {
       updateRect(ev.clientX, ev.clientY);
+      marqueeEl.classList.toggle('marqueeCrossing', ev.clientX < startX);
     }
 
     function onUp(ev: MouseEvent): void {
@@ -51,10 +59,17 @@ export function initMarquee(workspaceEl: HTMLElement, connLayer: SVGSVGElement):
       const y1 = Math.min(startY, ev.clientY);
       const y2 = Math.max(startY, ev.clientY);
 
+      // Dragged left to right: only what lies wholly inside the box. Right to left: whatever it
+      // touches - as in CAD programs. Either way measured on the drawn symbol, not the room
+      // round it for port labels and pilot lines, so a box round a junction next to a valve
+      // doesn't take the valve too.
+      const crossing = ev.clientX < startX;
       for (const c of appState.components) {
-        const r = c.el.getBoundingClientRect();
-        const intersects = r.left < x2 && r.right > x1 && r.top < y2 && r.bottom > y1;
-        if (intersects) addToSelection(c.id);
+        const r = drawnBox(c.el);
+        const hit = crossing
+          ? r.left < x2 && r.right > x1 && r.top < y2 && r.bottom > y1
+          : r.left >= x1 && r.right <= x2 && r.top >= y1 && r.bottom <= y2;
+        if (hit) addToSelection(c.id);
       }
 
       marqueeEl.remove();

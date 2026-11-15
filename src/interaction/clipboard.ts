@@ -1,3 +1,4 @@
+import { retargetTaps } from '../persistence/project';
 import type { ComponentFactoryContext } from '../components/registry';
 import type { ViewportAdapter } from '../ui/viewport';
 import type { ComponentId, ConnectionEndpoint, WireGuide } from '../core/types';
@@ -8,6 +9,12 @@ import { createConnection, redrawAllConnections } from '../wires/connection';
 import { getSelectedComponents, clearSelection, addToSelection } from './selection';
 import { showContextMenu, type ContextMenuItem } from './contextMenu';
 import { zoomToFit } from './zoomToFit';
+import {
+  getComponentRotation,
+  isComponentMirrored,
+  setComponentMirrored,
+  setComponentRotation,
+} from './componentContextMenu';
 
 interface ClipboardComp {
   origId: ComponentId;
@@ -15,6 +22,8 @@ interface ClipboardComp {
   x: number;
   y: number;
   data: Record<string, unknown>;
+  rot: number;
+  mirror: boolean;
 }
 
 interface ClipboardConn {
@@ -23,6 +32,7 @@ interface ClipboardConn {
   guides: WireGuide[];
   stubStartLen: number | null;
   stubEndLen: number | null;
+  dashed: boolean;
 }
 
 let clipboard: { comps: ClipboardComp[]; conns: ClipboardConn[] } | null = null;
@@ -85,6 +95,8 @@ export function copySelection(): void {
       x: c.x,
       y: c.y,
       data: c.snapshot(),
+      rot: getComponentRotation(c),
+      mirror: isComponentMirrored(c),
     })),
     // Only wires with both ends inside the copied group come along - a wire to something
     // outside the selection has nothing sensible to reattach to in the pasted copy.
@@ -93,9 +105,10 @@ export function copySelection(): void {
       .map((c) => ({
         from: c.from,
         to: c.to,
-        guides: c.guides,
+        guides: c.guides.map((g) => ({ ...g })),
         stubStartLen: c.stubStartLen,
         stubEndLen: c.stubEndLen,
+        dashed: Boolean(c.dashed),
       })),
   };
   pasteGeneration = 0;
@@ -116,12 +129,16 @@ function pasteWithOffset(offsetFor: (comps: ClipboardComp[]) => { dx: number; dy
     for (const c of clipboard!.comps) {
       const comp = spawnComponent(c.type, ctxRef!, viewportRef!, c.x + dx, c.y + dy);
       comp.restore(c.data);
+      if (c.rot) setComponentRotation(comp, c.rot);
+      if (c.mirror) setComponentMirrored(comp, true);
       // A pasted cylinder gets its own fresh letter (and so its own sensor signal names) rather
       // than colliding with the one it was copied from.
       comp.relabel?.();
       idMap.set(c.origId, comp.id);
       pastedIds.push(comp.id);
     }
+    // A pasted tap junction sits on the pasted copy of its wire, if that came along.
+    retargetTaps(idMap);
 
     for (const conn of clipboard!.conns) {
       const fromId = idMap.get(conn.from.id);
@@ -131,9 +148,11 @@ function pasteWithOffset(offsetFor: (comps: ClipboardComp[]) => { dx: number; dy
         { id: fromId, port: conn.from.port },
         { id: toId, port: conn.to.port },
       );
-      newConn.guides = conn.guides;
+      // Bends are where the wire runs, so they move with the pasted copy - each its own.
+      newConn.guides = conn.guides.map((g) => ({ ...g, pos: g.pos + (g.type === 'H' ? dy : dx) }));
       newConn.stubStartLen = conn.stubStartLen;
       newConn.stubEndLen = conn.stubEndLen;
+      newConn.dashed = conn.dashed;
     }
   });
 

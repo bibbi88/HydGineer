@@ -26,9 +26,18 @@ import { initPageFrame } from './ui/pageFrame';
 import { snap } from './core/grid';
 import { canEdit } from './app/modes';
 import { initConfirmBeforeUnload } from './app/confirmClose';
-import { initDocuments, onDocumentsChange, storeDocumentsSoon } from './app/documents';
+import { desktopBridge } from './app/desktopBridge';
+import {
+  initDocuments,
+  onDocumentsChange,
+  readStoredDocuments,
+  storeDocumentsNow,
+  storeDocumentsSoon,
+} from './app/documents';
 import { onSettingsChange } from './app/settings';
 import { renderDocumentTabs } from './ui/documentTabs';
+import { initPanelResize } from './ui/panelResize';
+import { initPictures } from './interaction/pictures';
 
 const workspaceQuery = document.querySelector<HTMLElement>('.workspace');
 const viewportQuery = document.getElementById('viewport');
@@ -70,6 +79,9 @@ const inspectorEl: HTMLElement = inspectorQuery;
 const tabbarEl: HTMLElement = tabbarQuery;
 
 const viewport = initViewport(viewportQuery, workspaceEl, gridLayerEl);
+// The library and inspector widths, dragged at their inner edges.
+const appEl = document.querySelector<HTMLElement>('.app');
+if (appEl) initPanelResize(appEl);
 initWires(connLayer, viewport, workspaceEl);
 initWireHandles(handleLayer, viewport, workspaceEl);
 initLinking(connLayer, viewport, workspaceEl);
@@ -77,12 +89,16 @@ initMarquee(workspaceEl, connLayer);
 initKeyboard();
 initPlcMonitor();
 initWireSplitting(compLayer, viewport, workspaceEl);
-initConfirmBeforeUnload();
+// The browser's own "leave this page?" warning. Not in the desktop app, which asks about unsaved
+// circuits itself when its window is closed (and where this would silently block closing).
+// The desktop app asks Save / Don't save itself on closing (desktop/main.cjs).
+if (!desktopBridge()) initConfirmBeforeUnload();
 
 const factoryCtx: ComponentFactoryContext = { compLayer };
 initHistory(factoryCtx, viewport);
 initValveActuatorSwap(factoryCtx, viewport);
 initClipboard(factoryCtx, viewport, workspaceEl);
+initPictures(factoryCtx, viewport, workspaceEl);
 
 function addComponentAtViewCenter(type: string): void {
   const rect = workspaceEl.getBoundingClientRect();
@@ -136,28 +152,49 @@ onDocumentsChange(refreshTabs);
 onSettingsChange(refreshTabs);
 
 // Documents kept in the browser come back as they were. Before there were documents, only the
-// one circuit was kept (autosave) - offered back once, into the first document.
-const restored = initDocuments({
-  ctx: factoryCtx,
-  viewport,
-  getName: () => projectBar.getName(),
-  setName: (name) => projectBar.setName(name),
-});
-const autosaved = readAutosave();
-if (restored) {
-  clearAutosave();
-} else if (autosaved) {
-  showRestoreBanner(
-    () => {
-      resetHistory();
-      loadProject(autosaved.file, factoryCtx, viewport);
-      projectBar.setName(autosaved.file.name);
-      clearAutosave();
+// one circuit was kept (autosave) - offered back once, into the first document. Kept documents
+// are read back from IndexedDB, which takes a moment: everything else is set up first, then they
+// come back (persistence/docStore.ts). The desktop app starts with one empty circuit and its
+// start screen, as desktop programs do - its circuits are files.
+const isDesktop = desktopBridge() !== null;
+async function restoreDocuments(): Promise<void> {
+  const stored = isDesktop ? null : await readStoredDocuments().catch(() => null);
+  const restored = initDocuments(
+    {
+      ctx: factoryCtx,
+      viewport,
+      getName: () => projectBar.getName(),
+      setName: (name) => projectBar.setName(name),
     },
-    () => clearAutosave(),
+    { fresh: isDesktop, stored },
   );
-}
-refreshTabs();
+  const autosaved = isDesktop ? null : readAutosave();
+  if (restored) {
+    clearAutosave();
+  } else if (autosaved) {
+    showRestoreBanner(
+      () => {
+        resetHistory();
+        loadProject(autosaved.file, factoryCtx, viewport);
+        projectBar.setName(autosaved.file.name);
+        clearAutosave();
+      },
+      () => clearAutosave(),
+    );
+  }
+  refreshTabs();
 
-// Last, so the terms sit on top of everything else that opens with the app.
-if (termsNeedAgreement()) openTermsDialog({ requireAgreement: true });
+  // The desktop app greets with its start screen: new, open, recent files, examples. A project
+  // file the app was started with closes it again as it opens (see ui/fileActions.ts).
+  if (isDesktop) projectBar.showStartScreen?.();
+
+  // Last, so the terms sit on top of everything else that opens with the app.
+  if (termsNeedAgreement()) openTermsDialog({ requireAgreement: true });
+}
+void restoreDocuments();
+
+// Hidden or closed: whatever changed in the last moment is kept now, not lost with the page.
+window.addEventListener('pagehide', storeDocumentsNow);
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden') storeDocumentsNow();
+});

@@ -4,8 +4,9 @@ import { appState } from '../app/AppState';
 import { componentRotation, portGlobalPosition, rotateQuarter } from './coords';
 import { routeWithGuides, stubDirection, type Point, type PortAnchor } from './routing';
 import { autoRouteAStar } from './autoRoute';
-import { JUNCTION_TYPE } from '../components/junction';
+import { isHostWire, JUNCTION_TYPE, readJunctionHost } from '../components/junction';
 import { WIRE_STUB } from '../sim/constants';
+import { snap } from '../core/grid';
 
 interface CacheEntry {
   topologyVersion: number;
@@ -24,6 +25,23 @@ const cache = new Map<ComponentId, CacheEntry>();
  * auto-router steers new wires away from running along. Entries for deleted connections are
  * simply never looked up again (only ids still in appState.connections are read). */
 const lastRoute = new Map<ComponentId, Point[]>();
+
+/** Drops what's cached for wire `connId` - or, with no id, for every wire (the project was
+ * cleared) - so routes of wires that are gone don't pile up. */
+export function forgetConnectionGeometry(connId?: ComponentId): void {
+  if (connId === undefined) {
+    cache.clear();
+    lastRoute.clear();
+  } else {
+    cache.delete(connId);
+    lastRoute.delete(connId);
+  }
+}
+
+/** A connection's most recently drawn route (see lastRoute), or undefined if not drawn yet. */
+export function routeOf(connId: ComponentId): Point[] | undefined {
+  return lastRoute.get(connId);
+}
 
 /**
  * A port's wire anchor in world space: its position, the axis its wire leaves along, and which
@@ -284,10 +302,15 @@ function lRoute(
   };
   if (!leavesTowardCorner(from) || !leavesTowardCorner(to)) return null;
 
-  const runs: Array<[Point, Point]> = [
-    [from.pos, corner],
-    [corner, to.pos],
-  ];
+  const points = [from.pos, corner, to.pos];
+  return isClear(points, ownIds, otherWires) ? points : null;
+}
+
+/** Whether the orthogonal polyline `points` keeps clear of every component but the wire's own
+ * (`ownIds`) and doesn't run on top of another wire. */
+function isClear(points: Point[], ownIds: Set<ComponentId>, otherWires: Point[][]): boolean {
+  const runs: Array<[Point, Point]> = [];
+  for (let i = 0; i < points.length - 1; i++) runs.push([points[i]!, points[i + 1]!]);
   for (const c of appState.components) {
     if (ownIds.has(c.id)) continue;
     const b = c.getBounds();
@@ -298,14 +321,59 @@ function lRoute(
         Math.max(p.y, q.y) >= b.y - L_CLEARANCE &&
         Math.min(p.y, q.y) <= b.y + b.h + L_CLEARANCE
       ) {
-        return null;
+        return false;
       }
     }
   }
   for (const route of otherWires) {
-    for (const [p, q] of runs) if (runsAlong(p, q, route)) return null;
+    for (const [p, q] of runs) if (runsAlong(p, q, route)) return false;
   }
-  return [from.pos, corner, to.pos];
+  return true;
+}
+
+/**
+ * Two ports facing each other along the same axis (one's wire leaving right toward the other's
+ * leaving left, or down toward up) but not in line: the wire runs out of each, with its one
+ * jog halfway between them - as a drawing would have it - rather than wherever the grid router
+ * happens to turn. Lined up, it's a straight run. null when the ports don't face each other,
+ * are too close for a stub each, or the path isn't clear (the grid router finds a way round).
+ */
+function midJogRoute(
+  from: PortAnchor,
+  to: PortAnchor,
+  ownIds: Set<ComponentId>,
+  otherWires: Point[][],
+): Point[] | null {
+  if (from.entryOrientation !== to.entryOrientation) return null;
+  const horizontal = from.entryOrientation === 'H';
+  const along = (p: Point): number => (horizontal ? p.x : p.y);
+  const span = along(to.pos) - along(from.pos);
+  // Each leaves toward the other: from's wire heads along +span, to's along -span.
+  if (Math.abs(span) < 2 * WIRE_STUB) return null;
+  if (stubDirection(from, to.pos) !== Math.sign(span)) return null;
+  if (stubDirection(to, from.pos) !== -Math.sign(span)) return null;
+
+  const points = (horizontal ? from.pos.y === to.pos.y : from.pos.x === to.pos.x)
+    ? [from.pos, to.pos]
+    : (() => {
+        const mid = snap((along(from.pos) + along(to.pos)) / 2);
+        return horizontal
+          ? [from.pos, { x: mid, y: from.pos.y }, { x: mid, y: to.pos.y }, to.pos]
+          : [from.pos, { x: from.pos.x, y: mid }, { x: to.pos.x, y: mid }, to.pos];
+      })();
+  return isClear(points, ownIds, otherWires) ? points : null;
+}
+
+/** The junctions tapping `conn` (see wires/taps.ts) - they sit on it, so they're no obstacle
+ * to it. */
+function tapIdsOn(conn: Connection): ComponentId[] {
+  const ids: ComponentId[] = [];
+  for (const c of appState.components) {
+    if (c.type !== JUNCTION_TYPE) continue;
+    const host = readJunctionHost(c.snapshot());
+    if (host && isHostWire(host, conn)) ids.push(c.id);
+  }
+  return ids;
 }
 
 export function computeConnectionGeometry(
@@ -380,8 +448,12 @@ export function computeConnectionGeometry(
     if (route) otherWires.push(route);
   }
 
-  // A sideways port to an up/down one: a plain L when there's room for it.
-  const ell = lRoute(fromAnchor, toAnchor, new Set([conn.from.id, conn.to.id]), otherWires);
+  // A sideways port to an up/down one: a plain L when there's room for it. Two ports facing
+  // each other: a straight run, or one jog halfway between them.
+  const ownIds = new Set([conn.from.id, conn.to.id, ...tapIdsOn(conn)]);
+  const ell =
+    lRoute(fromAnchor, toAnchor, ownIds, otherWires) ??
+    midJogRoute(fromAnchor, toAnchor, ownIds, otherWires);
   if (ell) {
     lastRoute.set(conn.id, ell);
     cache.set(conn.id, {
@@ -400,7 +472,8 @@ export function computeConnectionGeometry(
   // (see worldPortAnchor), so there's no need to let the route cut back through the very
   // component it starts or ends at - which is exactly what it used to do when the other end
   // was on the far side of it.
-  const excludeIds = new Set<ComponentId>();
+  // Nor are the junctions tapping this very wire (wires/taps.ts) obstacles to it - they sit on it.
+  const excludeIds = new Set<ComponentId>(tapIdsOn(conn));
   const points = autoRouteAStar(
     fromAnchor,
     toAnchor,

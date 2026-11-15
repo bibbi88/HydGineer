@@ -27,7 +27,12 @@ import {
   HYD_VALVE_LS_TYPE,
 } from '../components/hyd/valves';
 import { HYD_PUMP_LS_TYPE, HYD_PUMP_TYPE } from '../components/hyd/supply';
-import { HYD_MOTOR_TYPE, HYD_MOTOR_VAR_TYPE } from '../components/hyd/actuators';
+import {
+  HYD_CYLINDER_DOUBLE_ROD_TYPE,
+  HYD_CYLINDER_DOUBLE_TYPE,
+  HYD_MOTOR_TYPE,
+  HYD_MOTOR_VAR_TYPE,
+} from '../components/hyd/actuators';
 
 /**
  * Groups of interchangeable component types: same job, same port names, so one can replace the
@@ -51,6 +56,10 @@ export const SWAP_FAMILIES: Array<Array<{ type: string; label: string }>> = [
   [
     { type: HYD_MOTOR_TYPE, label: 'Fixed displacement' },
     { type: HYD_MOTOR_VAR_TYPE, label: 'Variable displacement' },
+  ],
+  [
+    { type: HYD_CYLINDER_DOUBLE_TYPE, label: 'Double-acting (single rod)' },
+    { type: HYD_CYLINDER_DOUBLE_ROD_TYPE, label: 'Double rod (balanced, steering)' },
   ],
   [
     { type: HYD_CHECK_TYPE, label: 'Check valve' },
@@ -165,7 +174,7 @@ export function swapComponentType(
     .map((c) => ({
       from: c.from,
       to: c.to,
-      guides: c.guides,
+      guides: c.guides.map((g) => ({ ...g })),
       stubStartLen: c.stubStartLen,
       stubEndLen: c.stubEndLen,
     }));
@@ -209,7 +218,7 @@ export function swapComponentType(
       const from = fromMoved ? { id: next.id, port: onNext(saved.from.port) } : saved.from;
       const to = toMoved ? { id: next.id, port: onNext(saved.to.port) } : saved.to;
       const conn = createConnection(from, to);
-      conn.guides = saved.guides;
+      conn.guides = saved.guides.map((g) => ({ ...g }));
       conn.stubStartLen = saved.stubStartLen;
       conn.stubEndLen = saved.stubEndLen;
       redrawConnection(conn);

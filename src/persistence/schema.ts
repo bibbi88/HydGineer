@@ -50,12 +50,21 @@ export interface ProjectFileV1 {
   name: string;
   meta?: ProjectMeta;
   pageFrame?: PageFrame;
+  /** Line jumps where unconnected wires cross (AppState.lineJumps). Omitted: on. */
+  lineJumps?: boolean;
   /** A random per-browser ID (see app/deviceId.ts) - not shown anywhere in the app's own UI, just
-   * carried in the saved file itself. `origin` is stamped on this project's very first save and
-   * frozen from then on; `lastSaved` is overwritten on every save. Comparing the two is a weak
-   * trace for flagging a redistributed file (a different id in `lastSaved` than in `origin`
-   * means some other browser has since resaved it), not real access control - and since this is
-   * plain JSON, anyone who opens the file can read it. */
+   * carried in the saved file itself. `os` (origin) is stamped on this project's very first save
+   * and frozen from then on; `LS` (last saved) is overwritten each time it's saved to a file.
+   * Comparing the two is a weak trace for flagging a redistributed file (a different id in `LS`
+   * than in `os` means some other browser has since resaved it), not real access control - and
+   * since this is plain JSON, anyone who opens the file can read it. */
+  os?: string;
+  LS?: string;
+  /** Unix timestamps, in seconds: when the project was created, and when it was last saved to a
+   * file. A project from before these existed has no `ct`, and doesn't get one. */
+  ct?: number;
+  lst?: number;
+  /** Older names of `os` and `LS`, still read from files saved before the rename. */
   origin?: string;
   lastSaved?: string;
   comps: ComponentSnapshot[];

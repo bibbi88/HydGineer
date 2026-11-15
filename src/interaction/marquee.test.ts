@@ -68,6 +68,33 @@ describe('marquee selection on empty canvas', () => {
     expect(marqueeEl()).toBeNull();
   });
 
+  it('dragged left to right, leaves out what the box only partly covers', () => {
+    const inside = placeAt(120, 120);
+    placeAt(280, 120); // reaches past the box's right edge, 300
+
+    press(workspace, { clientX: 100, clientY: 100 });
+    move(300, 300);
+    release(300, 300);
+
+    expect(getSelectedComponents().map((c) => c.id)).toEqual([inside.id]);
+  });
+
+  it('dragged right to left, takes whatever the box touches', () => {
+    const inside = placeAt(120, 120);
+    const partly = placeAt(280, 120);
+
+    press(workspace, { clientX: 300, clientY: 100 });
+    move(100, 300);
+    expect(marqueeEl()?.classList.contains('marqueeCrossing')).toBe(true);
+    release(100, 300);
+
+    expect(
+      getSelectedComponents()
+        .map((c) => c.id)
+        .sort(),
+    ).toEqual([inside.id, partly.id].sort());
+  });
+
   it('replaces the selection, unless Shift says to add to it', () => {
     const first = placeAt(120, 120);
     const second = placeAt(400, 400);

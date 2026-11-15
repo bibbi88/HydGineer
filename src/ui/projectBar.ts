@@ -1,8 +1,5 @@
-import { saveProjectToFile } from '../persistence/save';
-import { loadProjectFromPicker } from '../persistence/load';
 import type { ComponentFactoryContext } from '../components/registry';
 import type { ViewportAdapter } from './viewport';
-import { resetHistory } from '../history/historyStore';
 import { openExportDialog } from './exportDialog';
 import { iconButton } from './iconButton';
 import { EXAMPLES } from '../persistence/examples';
@@ -10,7 +7,35 @@ import { loadProject } from '../persistence/project';
 import { zoomToFit } from '../interaction/zoomToFit';
 import { appState } from '../app/AppState';
 import { canEdit } from '../app/modes';
-import { activeNameChanged, newDocument, prepareToOpen } from '../app/documents';
+import {
+  activeDocumentId,
+  activeNameChanged,
+  isDocumentEmpty,
+  listDocuments,
+  newDocument,
+  prepareToOpen,
+  setActiveDocumentPath,
+} from '../app/documents';
+import { openStartScreen } from './startScreen';
+import { createFileActions } from './fileActions';
+import { showContextMenu, type ContextMenuItem } from '../interaction/contextMenu';
+
+/** A narrow ▾ button beside a toolbar button, opening a menu of related actions under it. */
+function menuArrow(label: string, items: () => ContextMenuItem[]): HTMLButtonElement {
+  const btn = iconButton('chevronDown', label, () => {
+    const r = btn.getBoundingClientRect();
+    showContextMenu(r.left, r.bottom + 2, items());
+  });
+  btn.classList.add('iconBtn--menuArrow');
+  return btn;
+}
+
+function splitButton(main: HTMLButtonElement, arrow: HTMLButtonElement): HTMLElement {
+  const wrap = document.createElement('span');
+  wrap.className = 'splitButton';
+  wrap.append(main, arrow);
+  return wrap;
+}
 
 /** World px kept free right of an example's drawing for its readouts (see zoomToFit). */
 const EXAMPLE_READOUT_ROOM = 130;
@@ -18,11 +43,13 @@ const EXAMPLE_READOUT_ROOM = 130;
 export interface ProjectBarRefs {
   getName(): string;
   setName(name: string): void;
+  /** The desktop app's start screen (ui/startScreen.ts). */
+  showStartScreen?(): void;
 }
 
-/** The toolbar's project section: the project name, then new, save, load and export. The name field
- * is the canonical copy - the inspector's own "Project name" row and the page frame's title
- * block both read and write it through the refs returned here, rather than keeping their own. */
+/** The toolbar's project section: new, save, load, export and the examples. The project's name
+ * (its tab's name) is kept here - the tabs, the inspector's own "Project name" row and the page
+ * frame's title block all read and write it through the refs returned here. */
 export function renderProjectBar(
   container: HTMLElement,
   ctx: ComponentFactoryContext,
@@ -31,42 +58,53 @@ export function renderProjectBar(
   frameLayer: SVGSVGElement,
   workspaceEl: HTMLElement,
 ): ProjectBarRefs {
-  const nameInput = document.createElement('input');
-  nameInput.type = 'text';
-  nameInput.value = 'project';
-  nameInput.className = 'projectName';
-  nameInput.title = 'Project name';
-  nameInput.setAttribute('aria-label', 'Project name');
+  // The project's name is its tab's name (double-click the tab to rename it, or use the
+  // inspector's Project name): what Save proposes as the file name, the title block shows and
+  // an export is called. No field of its own in the toolbar.
+  let projectName = 'project';
 
   // A new, empty circuit in a tab of its own - the same as the tab bar's +.
   const newBtn = iconButton('newDocument', 'New circuit', () => newDocument());
 
-  const saveBtn = iconButton(
-    'save',
-    'Save project',
-    () => void saveProjectToFile(nameInput.value || 'project'),
-  );
-
-  nameInput.addEventListener('input', () => activeNameChanged());
-
-  const loadBtn = iconButton('folderOpen', 'Load project', () => {
-    // Only once a file was actually picked - loadProjectFromPicker itself does the
-    // clear+rebuild, so this must run right before that, not before the picker even opens (a
-    // cancelled picker shouldn't open a document or wipe undo history for nothing). In a new
-    // document it starts its own history; loaded over the current one, the history is reset.
-    void loadProjectFromPicker(ctx, viewport, () => {
-      if (prepareToOpen() === 'current') resetHistory();
-    }).then((loadedName) => {
-      if (loadedName) {
-        nameInput.value = loadedName;
-        activeNameChanged();
-      }
-    });
+  // Save, Open and Export, and their ▾ menus - files on disk in the desktop app, downloads and
+  // the browser's pickers in a browser (see fileActions.ts).
+  const files = createFileActions({
+    ctx,
+    viewport,
+    connLayer,
+    frameLayer,
+    getName: () => projectName || 'project',
+    setName: (name) => {
+      projectName = name;
+      activeNameChanged();
+    },
   });
 
-  const exportBtn = iconButton('download', 'Export image…', () => {
-    openExportDialog(nameInput.value || 'project', connLayer, frameLayer, viewport, workspaceEl);
-  });
+  const saveBtn = iconButton('save', 'Save project', () => void files.save());
+  const saveMenu = menuArrow('More ways to save', () => [
+    { label: 'Save', onClick: () => void files.save() },
+    ...(files.isDesktop ? [{ label: 'Save as…', onClick: () => void files.saveAs() }] : []),
+    {
+      label: listDocuments().length > 1 ? `Save all (${listDocuments().length})` : 'Save all',
+      onClick: () => void files.saveAll(),
+    },
+  ]);
+
+  const loadBtn = iconButton('folderOpen', 'Open project', () => void files.open());
+
+  const openExport = (): void =>
+    openExportDialog(projectName || 'project', connLayer, frameLayer, viewport, workspaceEl);
+  const exportBtn = iconButton('download', 'Export image…', openExport);
+  const exportMenu = menuArrow('More ways to export', () => [
+    { label: 'Export…', onClick: openExport },
+    {
+      label:
+        listDocuments().length > 1
+          ? `Export all sheets (${listDocuments().length}) as PDF`
+          : 'Export all sheets as PDF',
+      onClick: () => void files.exportAllSheets(),
+    },
+  ]);
 
   // Ready-made circuits to start from - opened in a new document (or, if the setting is off,
   // replacing whatever is on the canvas: Undo brings it back; no confirm() dialog, which
@@ -84,26 +122,53 @@ export function renderProjectBar(
     o.textContent = ex.title;
     examples.appendChild(o);
   });
-  examples.addEventListener('change', () => {
-    const ex = EXAMPLES[Number(examples.value)];
-    examples.value = '';
+  /** Opens example `index` (from the menu or the start screen). */
+  function openExample(index: number): void {
+    const ex = EXAMPLES[index];
     if (!ex || !canEdit(appState.mode)) return;
     const file = ex.file();
     prepareToOpen();
+    // An example is a new circuit: it doesn't belong to the file this tab may have come from, so
+    // Save asks where to put it instead of writing over that file (desktop app).
+    setActiveDocumentPath(undefined);
     loadProject(file, ctx, viewport);
-    nameInput.value = file.name;
+    projectName = file.name;
     activeNameChanged();
     appState.markDirty();
     // Room on the right for the simulation readouts beside the right-most components.
     requestAnimationFrame(() => zoomToFit(viewport, workspaceEl, EXAMPLE_READOUT_ROOM));
+  }
+  examples.addEventListener('change', () => {
+    const value = examples.value;
+    examples.value = '';
+    if (value !== '') openExample(Number(value));
   });
 
-  container.append(nameInput, newBtn, saveBtn, loadBtn, exportBtn, examples);
+  container.append(
+    newBtn,
+    splitButton(saveBtn, saveMenu),
+    loadBtn,
+    splitButton(exportBtn, exportMenu),
+    examples,
+  );
 
   return {
-    getName: () => nameInput.value || 'project',
+    showStartScreen: () =>
+      openStartScreen(
+        {
+          newCircuit: () => {
+            // The app opens with one empty circuit: that's the new one.
+            if (!isDocumentEmpty(activeDocumentId())) newDocument();
+          },
+          open: () => files.open(),
+          openRecent: (path) => files.openRecent(path),
+          examples: EXAMPLES.map((ex, i) => ({ title: ex.title, open: () => openExample(i) })),
+        },
+        __APP_VERSION__,
+      ),
+    getName: () => projectName || 'project',
     setName: (name: string) => {
-      nameInput.value = name;
+      projectName = name;
       activeNameChanged();
     },
   };

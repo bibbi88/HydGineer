@@ -58,6 +58,7 @@ import {
   createHydCylinderSingle,
   createHydMotor,
   HYD_CYLINDER_DOUBLE_TYPE,
+  HYD_CYLINDER_DOUBLE_ROD_TYPE,
   HYD_CYLINDER_SINGLE_TYPE,
   HYD_MOTOR_TYPE,
   HYD_MOTOR_VAR_TYPE,
@@ -88,6 +89,8 @@ import {
 } from './electrical';
 import { createPlc, PLC_TYPE } from './plc';
 import { createTextAnnotation, TEXT_ANNOTATION_TYPE } from './textAnnotation';
+import { createPicture, PICTURE_TYPE } from './picture';
+import { createHydSteeringUnit, HYD_STEERING_UNIT_TYPE } from './hyd/steering';
 
 export interface ComponentFactoryContext {
   compLayer: HTMLElement;
@@ -197,6 +200,15 @@ export const componentRegistry = new Map<string, RegistryEntry>([
     {
       factory: (ctx, x, y) => createHydValveLS(ctx.compLayer, x, y),
       label: 'Load-sensing valve (proportional)',
+      placeable: true,
+      category: ComponentCategory.DIRECTIONAL,
+    },
+  ],
+  [
+    HYD_STEERING_UNIT_TYPE,
+    {
+      factory: (ctx, x, y) => createHydSteeringUnit(ctx.compLayer, x, y),
+      label: 'Steering unit (Orbitrol)',
       placeable: true,
       category: ComponentCategory.DIRECTIONAL,
     },
@@ -341,6 +353,15 @@ export const componentRegistry = new Map<string, RegistryEntry>([
     {
       factory: (ctx, x, y) => createHydCylinderDouble(ctx.compLayer, x, y),
       label: 'Cylinder, double-acting',
+      placeable: true,
+      category: ComponentCategory.ACTUATORS,
+    },
+  ],
+  [
+    HYD_CYLINDER_DOUBLE_ROD_TYPE,
+    {
+      factory: (ctx, x, y) => createHydCylinderDouble(ctx.compLayer, x, y, true),
+      label: 'Cylinder, double rod (steering)',
       placeable: true,
       category: ComponentCategory.ACTUATORS,
     },
@@ -527,6 +548,15 @@ export const componentRegistry = new Map<string, RegistryEntry>([
       category: ComponentCategory.ANNOTATIONS,
     },
   ],
+  [
+    PICTURE_TYPE,
+    {
+      factory: (ctx, x, y) => createPicture(ctx.compLayer, x, y),
+      label: 'Picture',
+      placeable: true,
+      category: ComponentCategory.ANNOTATIONS,
+    },
+  ],
 ]);
 
 export function createComponent(
@@ -540,12 +570,13 @@ export function createComponent(
   return entry.factory(ctx, x, y);
 }
 
+// Actuators right under the supply, as in PneuGineer: what the circuit drives, then the valves.
 const CATEGORY_ORDER: ComponentCategoryName[] = [
   ComponentCategory.SUPPLY,
+  ComponentCategory.ACTUATORS,
   ComponentCategory.DIRECTIONAL,
   ComponentCategory.PRESSURE,
   ComponentCategory.FLOW,
-  ComponentCategory.ACTUATORS,
   ComponentCategory.MEASURING,
   ComponentCategory.ELECTRICAL,
   ComponentCategory.ANNOTATIONS,

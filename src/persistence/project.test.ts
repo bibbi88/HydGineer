@@ -206,23 +206,58 @@ describe('project origin/last-saved device id (not shown in the UI, only carried
     localStorage.clear();
   });
 
-  it('stamps this browser’s id into both origin and lastSaved on the first save', () => {
+  it('stamps this browser’s id as os on the first serialization; LS waits for a save', () => {
+    appState.projectLastSavedDeviceId = null;
+    appState.projectLastSavedAt = null;
     const file = serializeProject('test');
 
-    expect(file.origin).toBe(appState.projectOriginDeviceId);
-    expect(file.lastSaved).toBe(appState.projectLastSavedDeviceId);
-    expect(file.origin).toBe(file.lastSaved);
+    expect(file.os).toBe(appState.projectOriginDeviceId);
+    expect(file).not.toHaveProperty('LS');
+    expect(file).not.toHaveProperty('lst');
+    expect(file).not.toHaveProperty('origin');
+    expect(file).not.toHaveProperty('lastSaved');
   });
 
-  it('keeps origin frozen but updates lastSaved on a later save', () => {
+  it('keeps os and ct frozen across serializations', () => {
     const first = serializeProject('test');
     const second = serializeProject('test');
 
-    expect(second.origin).toBe(first.origin);
-    expect(second.lastSaved).toBe(first.lastSaved);
+    expect(second.os).toBe(first.os);
+    expect(second.ct).toBe(first.ct);
   });
 
-  it('loading a file from "another browser" keeps its origin, but this browser becomes lastSaved on resave', () => {
+  it('stamps ct on a new project as a Unix time in seconds', () => {
+    loadProject({ schemaVersion: 1 as const, name: 'new', comps: [], conns: [] }, ctx, viewport);
+    const before = Math.floor(Date.now() / 1000);
+    const file = serializeProject('new');
+
+    expect(file.ct).toBeGreaterThanOrEqual(before);
+    expect(file.ct).toBeLessThanOrEqual(before + 1);
+  });
+
+  it('round-trips os, LS, ct and lst', () => {
+    const file = {
+      schemaVersion: 1 as const,
+      name: 'test',
+      os: 'device-a',
+      LS: 'device-b',
+      ct: 1_700_000_000,
+      lst: 1_700_000_500,
+      comps: [],
+      conns: [],
+    };
+    loadProject(file, ctx, viewport);
+    const again = serializeProject('test');
+
+    expect(again).toMatchObject({
+      os: 'device-a',
+      LS: 'device-b',
+      ct: 1_700_000_000,
+      lst: 1_700_000_500,
+    });
+  });
+
+  it('reads the older origin/lastSaved names, and writes them as os/LS', () => {
     const file = {
       schemaVersion: 1 as const,
       name: 'test',
@@ -235,8 +270,10 @@ describe('project origin/last-saved device id (not shown in the UI, only carried
 
     const resaved = serializeProject('test');
 
-    expect(resaved.origin).toBe('device-from-a-different-browser');
-    expect(resaved.lastSaved).not.toBe('device-from-a-different-browser');
+    expect(resaved.os).toBe('device-from-a-different-browser');
+    expect(resaved.LS).toBe('device-from-a-different-browser');
+    // Saved before creation times were kept: no made-up ct.
+    expect(resaved).not.toHaveProperty('ct');
   });
 
   it('loadProject treats missing origin/lastSaved as unset, for files saved before this field existed', () => {

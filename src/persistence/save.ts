@@ -1,4 +1,6 @@
-import { serializeProject } from './project';
+import { serializeProject, unixNow } from './project';
+import { appState } from '../app/AppState';
+import { getDeviceId } from '../app/deviceId';
 import { getLastProjectFile, setLastProjectFile } from './fileHandle';
 
 interface FileSystemWritableFileStreamLike {
@@ -31,7 +33,15 @@ function downloadJson(json: string, filename: string): void {
 }
 
 export async function saveProjectToFile(name: string): Promise<void> {
-  const json = JSON.stringify(serializeProject(name), null, 2);
+  // Stamped as saved by this browser, now - kept once it's written (not if the save is
+  // cancelled).
+  const savedBy = getDeviceId();
+  const savedAt = unixNow();
+  const json = JSON.stringify({ ...serializeProject(name), LS: savedBy, lst: savedAt }, null, 2);
+  const commit = (): void => {
+    appState.projectLastSavedDeviceId = savedBy;
+    appState.projectLastSavedAt = savedAt;
+  };
   const filename = `${name}.hgcl`;
 
   const showSaveFilePicker = getShowSaveFilePicker();
@@ -47,6 +57,7 @@ export async function saveProjectToFile(name: string): Promise<void> {
       });
     } catch (err) {
       if (err instanceof DOMException && err.name === 'AbortError') return;
+      commit();
       // The picker itself never handed back a file handle here, so nothing's been touched yet -
       // a silent fallback to a plain download is safe (this is the "API present but blocked"
       // case the old comment referred to).
@@ -66,6 +77,7 @@ export async function saveProjectToFile(name: string): Promise<void> {
       const writable = await handle.createWritable();
       await writable.write(json);
       await writable.close();
+      commit();
       setLastProjectFile(handle);
       return;
     } catch (err) {
@@ -81,10 +93,12 @@ export async function saveProjectToFile(name: string): Promise<void> {
         `Couldn't finish saving to the file you picked (${detail}) - it may now be empty, ` +
           `safe to delete. Downloading "${filename}" instead.`,
       );
+      commit();
       downloadJson(json, filename);
       return;
     }
   }
 
+  commit();
   downloadJson(json, filename);
 }

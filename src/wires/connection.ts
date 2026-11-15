@@ -12,6 +12,7 @@ import { createSvgEl } from '../components/shared/svgHelpers';
 import {
   computeConnectionAnchors,
   computeConnectionGeometry,
+  forgetConnectionGeometry,
 } from '../geometry/connectionGeometry';
 import {
   completeGuides,
@@ -27,8 +28,25 @@ import { snap } from '../core/grid';
 import { WIRE_STUB } from '../sim/constants';
 import { selectConnection } from '../interaction/selection';
 import { showContextMenu } from '../interaction/contextMenu';
+import { placeLabels, type LabelRequest, type Rect } from './labelPlacement';
+import { placeTapsOn } from './taps';
 
 let connLayerEl: SVGSVGElement | null = null;
+/** The wires' live labels, in a layer of their own drawn over every wire, so a wire drawn later
+ * can't paint over a label. */
+let labelLayerEl: SVGGElement | null = null;
+/** Each wire's route as last drawn, and a counter bumped whenever any route changes - what
+ * layoutWireLabels() places the labels by. */
+const routes = new Map<number, Point[]>();
+let routeEpoch = 0;
+
+function labelLayer(): SVGGElement {
+  if (!labelLayerEl || labelLayerEl.parentNode !== connLayerEl) {
+    labelLayerEl = createSvgEl('g', { class: 'wireLabels' }) as SVGGElement;
+    connLayerEl?.appendChild(labelLayerEl);
+  }
+  return labelLayerEl;
+}
 let viewportRef: ViewportAdapter | null = null;
 let workspaceRef: HTMLElement | null = null;
 
@@ -64,6 +82,30 @@ export function initWires(
   connLayerEl = connLayer;
   viewportRef = viewport;
   workspaceRef = workspaceEl;
+  portMoves?.disconnect();
+  portMoves = new MutationObserver(notePortMoves);
+  portMoves.observe(workspaceEl, {
+    subtree: true,
+    attributes: true,
+    attributeFilter: ['transform', 'cx', 'cy'],
+  });
+  movedComponents.clear();
+}
+
+/** Watches for ports that move while the simulation runs - a valve's spool sliding its pilot
+ * ports with it - so only the wires on those get redrawn (redrawMovedConnections). */
+let portMoves: MutationObserver | null = null;
+const movedComponents = new Set<HTMLElement>();
+
+function notePortMoves(records: MutationRecord[]): void {
+  for (const r of records) {
+    const el = r.target as Element;
+    // Only a move that carries ports along: a cylinder's rod sliding moves no port.
+    const carriesPort = el.classList.contains('port') || el.querySelector('.port') !== null;
+    if (!carriesPort) continue;
+    const comp = el.closest<HTMLElement>('.comp');
+    if (comp) movedComponents.add(comp);
+  }
 }
 
 /** Shows/hides a port's dot depending on whether any wire currently ends there, so a connected
@@ -91,7 +133,11 @@ export function createConnection(from: ConnectionEndpoint, to: ConnectionEndpoin
   });
   const hitEl = createSvgEl('path', { class: 'wireHit', fill: 'none' });
   const labelEl = createSvgEl('text', { class: 'wireLabel', 'font-size': 10 });
-  connLayerEl.append(pathEl, hitEl, labelEl);
+  // Wires go under the label layer, labels into it.
+  const labels = labelLayer();
+  connLayerEl.insertBefore(pathEl, labels);
+  connLayerEl.insertBefore(hitEl, labels);
+  labels.appendChild(labelEl);
 
   const conn: Connection = {
     id: uid(),
@@ -150,9 +196,21 @@ export function removeConnection(connId: number): void {
   conn.pathEl.remove();
   conn.hitEl.remove();
   conn.labelEl.remove();
+  routes.delete(connId);
+  routeEpoch++;
   appState.removeConnection(connId);
   updatePortConnectionVisual(conn.from.id, conn.from.port);
   updatePortConnectionVisual(conn.to.id, conn.to.port);
+  // The jumps other wires made over it go with it.
+  forgetConnectionGeometry(connId);
+  applyLineJumps();
+}
+
+/** Every wire's drawn route forgotten - the project was cleared. */
+export function forgetAllDrawnRoutes(): void {
+  routes.clear();
+  routeEpoch++;
+  forgetConnectionGeometry();
 }
 
 /**
@@ -251,21 +309,204 @@ function addBendAtWorldPoint(conn: Connection, worldPoint: Point): void {
   appState.markDirty();
 }
 
-export function redrawConnection(conn: Connection): void {
+/** Works out one wire's route and draws everything but its line jumps (see applyLineJumps). */
+function drawRoute(conn: Connection): void {
   if (!viewportRef || !workspaceRef) return;
   const points = computeConnectionGeometry(viewportRef, workspaceRef, conn);
-  const d = pathFromPoints(points);
-  conn.pathEl.setAttribute('d', d);
-  conn.hitEl.setAttribute('d', d);
+  const hit = pathFromPoints(points);
+  if (conn.hitEl.getAttribute('d') !== hit) {
+    conn.hitEl.setAttribute('d', hit);
+    routeEpoch++;
+  }
+  routes.set(conn.id, points);
   conn.pathEl.classList.toggle('dashed', !!conn.dashed);
 
-  const mid = polylineMidpoint(points);
-  conn.labelEl.setAttribute('x', String(mid.x));
-  conn.labelEl.setAttribute('y', String(mid.y - 4));
+  // Until layoutWireLabels() finds it a clear spot: the middle of the wire, just above it.
+  if (!conn.labelEl.hasAttribute('x')) {
+    const mid = polylineMidpoint(points);
+    conn.labelEl.setAttribute('x', String(mid.x));
+    conn.labelEl.setAttribute('y', String(mid.y - 4));
+  }
+}
 
+/** Puts the junctions tapping each of `conns` back on it (wires/taps.ts), and redraws the
+ * wires of any that moved. */
+function followTaps(conns: Connection[]): void {
+  for (const conn of conns) {
+    for (const junction of placeTapsOn(conn)) {
+      for (const c of appState.connections) {
+        if (c.from.id === junction.id || c.to.id === junction.id) drawRoute(c);
+      }
+    }
+  }
+}
+
+/** Radius, px, of a line jump's half-circle. */
+const JUMP_R = 5;
+
+/**
+ * The path for `points`, jumping (ISO style) over every other wire's vertical run it crosses on
+ * a horizontal run of its own - a small half-circle over it, so wires that merely cross read as
+ * not connected. A crossing too near a bend, or too near the last jump, is drawn plain.
+ */
+function pathWithJumps(
+  points: Point[],
+  verticals: Array<{ x: number; y1: number; y2: number }>,
+): string {
+  if (points.length === 0) return '';
+  const parts = [`M ${points[0]!.x} ${points[0]!.y}`];
+  for (let i = 1; i < points.length; i++) {
+    const a = points[i - 1]!;
+    const b = points[i]!;
+    if (a.y === b.y && a.x !== b.x) {
+      const dir = b.x > a.x ? 1 : -1;
+      const lo = Math.min(a.x, b.x) + JUMP_R + 1;
+      const hi = Math.max(a.x, b.x) - JUMP_R - 1;
+      const xs = verticals
+        .filter((v) => v.x > lo && v.x < hi && a.y > v.y1 + 0.5 && a.y < v.y2 - 0.5)
+        .map((v) => v.x)
+        .sort((p, q) => (p - q) * dir);
+      let last = -Infinity;
+      for (const x of xs) {
+        if (Math.abs(x - last) < JUMP_R * 2 + 2) continue;
+        last = x;
+        parts.push(`L ${x - dir * JUMP_R} ${a.y}`);
+        // Over the top whichever way the run goes.
+        parts.push(`A ${JUMP_R} ${JUMP_R} 0 0 ${dir > 0 ? 1 : 0} ${x + dir * JUMP_R} ${a.y}`);
+      }
+    }
+    parts.push(`L ${b.x} ${b.y}`);
+  }
+  return parts.join(' ');
+}
+
+/** Draws every wire's path, with line jumps where it crosses another (if the project has them
+ * on - see AppState.lineJumps). Only rewrites a path that changed. */
+function applyLineJumps(): void {
+  const verticalsOf = new Map<number, Array<{ x: number; y1: number; y2: number }>>();
+  for (const conn of appState.connections) {
+    const route = routes.get(conn.id) ?? [];
+    const runs: Array<{ x: number; y1: number; y2: number }> = [];
+    for (let i = 1; i < route.length; i++) {
+      const a = route[i - 1]!;
+      const b = route[i]!;
+      if (a.x === b.x && a.y !== b.y)
+        runs.push({ x: a.x, y1: Math.min(a.y, b.y), y2: Math.max(a.y, b.y) });
+    }
+    verticalsOf.set(conn.id, runs);
+  }
+  for (const conn of appState.connections) {
+    const route = routes.get(conn.id) ?? [];
+    let d: string;
+    if (appState.lineJumps) {
+      const others: Array<{ x: number; y1: number; y2: number }> = [];
+      for (const [id, runs] of verticalsOf) if (id !== conn.id) others.push(...runs);
+      d = pathWithJumps(route, others);
+    } else {
+      d = pathFromPoints(route);
+    }
+    if (conn.pathEl.getAttribute('d') !== d) conn.pathEl.setAttribute('d', d);
+  }
+}
+
+export function redrawConnection(conn: Connection): void {
+  if (!viewportRef || !workspaceRef) return;
+  drawRoute(conn);
+  followTaps([conn]);
+  applyLineJumps();
   geometryChangeListener?.();
 }
 
+/**
+ * Redraws only the wires on components whose ports moved since the last call - what a running
+ * simulation needs each frame, instead of every wire. Returns how many wires were redrawn.
+ */
+export function redrawMovedConnections(): number {
+  if (!viewportRef || !workspaceRef) return 0;
+  if (portMoves) notePortMoves(portMoves.takeRecords());
+  if (movedComponents.size === 0) return 0;
+  const moved = new Set(
+    appState.components.filter((c) => movedComponents.has(c.el)).map((c) => c.id),
+  );
+  movedComponents.clear();
+  const conns = appState.connections.filter((c) => moved.has(c.from.id) || moved.has(c.to.id));
+  if (conns.length === 0) return 0;
+  for (const c of conns) drawRoute(c);
+  followTaps(conns);
+  applyLineJumps();
+  geometryChangeListener?.();
+  return conns.length;
+}
+
 export function redrawAllConnections(): void {
-  for (const c of appState.connections) redrawConnection(c);
+  if (!viewportRef || !workspaceRef) return;
+  for (const c of appState.connections) drawRoute(c);
+  followTaps(appState.connections);
+  applyLineJumps();
+  geometryChangeListener?.();
+}
+
+let lastLabelLayout = '';
+let framesSinceLayout = 0;
+
+/** The world box of every non-empty live readout beside a symbol (they sit over the wires). */
+function readoutRects(): Rect[] {
+  if (!viewportRef) return [];
+  const rects: Rect[] = [];
+  for (const el of document.querySelectorAll<HTMLElement>('.hydInfo')) {
+    if (!el.textContent) continue;
+    const r = el.getBoundingClientRect();
+    if (r.width === 0 || r.height === 0) continue;
+    const a = viewportRef.clientToWorld(r.left, r.top);
+    const b = viewportRef.clientToWorld(r.right, r.bottom);
+    rects.push({ x0: a.x, y0: a.y, x1: b.x, y1: b.y });
+  }
+  return rects;
+}
+
+/**
+ * Moves every wire label with text to the clearest spot along its wire - off other wires,
+ * symbols, readouts and the other labels (see labelPlacement.ts). Cheap to call every frame:
+ * it only works again when the routes, the labels or their lengths changed, or about twice a
+ * second for readouts that grew or shrank.
+ */
+export function layoutWireLabels(): void {
+  const requests: LabelRequest[] = [];
+  let key = `${routeEpoch}|`;
+  for (const conn of appState.connections) {
+    const text = conn.labelEl.textContent ?? '';
+    if (!text) continue;
+    const points = routes.get(conn.id);
+    if (!points || points.length < 2) continue;
+    let width: number;
+    try {
+      width = conn.labelEl.getComputedTextLength();
+    } catch {
+      width = 0;
+    }
+    if (!width) width = text.length * 5.6;
+    width = Math.ceil(width);
+    requests.push({ conn, points, width });
+    key += `${conn.id}:${width},`;
+  }
+  framesSinceLayout++;
+  if (key === lastLabelLayout && framesSinceLayout < 30) return;
+  lastLabelLayout = key;
+  framesSinceLayout = 0;
+  if (requests.length === 0) return;
+
+  const obstacles: Rect[] = appState.components.map((c) => {
+    const b = c.getBounds();
+    return { x0: b.x, y0: b.y, x1: b.x + b.w, y1: b.y + b.h };
+  });
+  obstacles.push(...readoutRects());
+  const placement = placeLabels(requests, [...routes.values()], obstacles);
+  for (const { conn } of requests) {
+    const at = placement.get(conn.id);
+    if (!at) continue;
+    conn.labelEl.setAttribute('x', String(at.x));
+    conn.labelEl.setAttribute('y', String(at.y));
+    // A style, not the attribute: .wireLabel's own text-anchor in the stylesheet would win.
+    conn.labelEl.style.textAnchor = at.anchor;
+  }
 }

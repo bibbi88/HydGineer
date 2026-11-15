@@ -1,3 +1,4 @@
+import { onRemoved, runRemoved } from './componentLifetime';
 import type { Component, ComponentId, Connection } from '../core/types';
 import { Modes, type Mode } from './modes';
 
@@ -32,21 +33,35 @@ class AppState {
    * Comparing this to the origin id above is a weak trace for flagging a redistributed file, not
    * real access control. */
   projectLastSavedDeviceId: string | null = null;
+  /** Unix time, s, the project was created - null for a fresh one not yet stamped (see
+   * serializeProject), 'unknown' for one saved before the field existed. */
+  projectCreatedAt: number | null | 'unknown' = null;
+  /** Unix time, s, the project was last saved to a file - null until then. */
+  projectLastSavedAt: number | null = null;
   /** Bumped whenever components/connections are added or removed, so cached graphs know to rebuild. */
+  /** Draw a small jump (half-circle) where a wire crosses another it isn't connected to - a
+   * per-project drawing choice, saved with it. */
+  lineJumps = true;
   topologyVersion = 0;
 
   private changeListeners: Array<() => void> = [];
   private modeListeners: Array<() => void> = [];
   private suppressed = false;
 
-  /** Notified whenever setMode() runs (Play/Pause/Stop). */
-  onModeChange(cb: () => void): void {
+  /** Notified whenever setMode() runs (Play/Pause/Stop). With `owner` (a component's element),
+   * the subscription ends when that component is removed (see componentLifetime.ts). */
+  onModeChange(cb: () => void, owner?: object): void {
     this.modeListeners.push(cb);
+    if (owner) onRemoved(owner, () => this.modeListeners.splice(this.modeListeners.indexOf(cb), 1));
   }
 
-  /** Notified whenever the project's topology changes (add/remove component or wire). */
-  onChange(cb: () => void): void {
+  /** Notified whenever the project's topology changes (add/remove component or wire). With
+   * `owner`, the subscription ends when that component is removed. */
+  onChange(cb: () => void, owner?: object): void {
     this.changeListeners.push(cb);
+    if (owner) {
+      onRemoved(owner, () => this.changeListeners.splice(this.changeListeners.indexOf(cb), 1));
+    }
   }
 
   /**
@@ -67,7 +82,8 @@ class AppState {
 
   private notifyChange(): void {
     if (this.suppressed) return;
-    for (const cb of this.changeListeners) cb();
+    // A copy: a listener may remove a component, and so other listeners, while this runs.
+    for (const cb of [...this.changeListeners]) cb();
   }
 
   addComponent(c: Component): void {
@@ -80,6 +96,7 @@ class AppState {
     const c = this.components.find((c) => c.id === id);
     c?.el.remove();
     c?.destroy?.();
+    if (c) runRemoved(c.el);
     this.components = this.components.filter((c) => c.id !== id);
     this.selectedComponents.delete(id);
     this.topologyVersion++;
@@ -105,7 +122,7 @@ class AppState {
 
   setMode(mode: Mode): void {
     this.mode = mode;
-    for (const cb of this.modeListeners) cb();
+    for (const cb of [...this.modeListeners]) cb();
   }
 
   /** For edits that change the project (e.g. dragging a wire bend) without adding/removing a

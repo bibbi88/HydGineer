@@ -1,6 +1,7 @@
 import { appState } from '../app/AppState';
 import { portKey } from './ports';
 import { getSignal, setSignal } from './signals';
+import { tapLinks } from '../wires/taps';
 
 /** Upper bound on relay-chain settling passes per frame (a coil closing a contact that
  * energizes another coil, and so on) - far more than any realistic circuit needs. */
@@ -63,6 +64,8 @@ export function solveElectrical(dt: number): void {
     for (const conn of appState.connections) {
       link(portKey(conn.from.id, conn.from.port), portKey(conn.to.id, conn.to.port));
     }
+    // A tap junction is part of the line of the wire it sits on (wires/taps.ts).
+    for (const [j, end] of tapLinks()) link(portKey(j.id, j.port), portKey(end.id, end.port));
 
     const plus: string[] = [];
     const zero: string[] = [];

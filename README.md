@@ -2,8 +2,14 @@
 
 **▶ Try it in your browser: [bibbi88.github.io/HydGineer](https://bibbi88.github.io/HydGineer/)**
 
+**⬇ Download the desktop app:**
+[Windows installer](https://github.com/bibbi88/HydGineer/releases/latest/download/HydGineer-Setup.exe) ·
+[Linux Flatpak](https://github.com/bibbi88/HydGineer/releases/latest/download/HydGineer.flatpak) ·
+[standalone HTML file](https://github.com/bibbi88/HydGineer/releases/latest/download/HydGineer.html) ·
+[all releases](https://github.com/bibbi88/HydGineer/releases)
+
 A browser-based **hydraulic** circuit editor and simulator - the hydraulic sibling of
-[PneuGineer](https://github.com/bibbi88/PneuGineerCL), built on the same editor. Drag pumps,
+[PneuGineer](https://github.com/bibbi88/PneuGineer), built on the same editor. Drag pumps,
 valves, cylinders and motors onto a canvas, wire them together and run the simulation: every
 line shows its **pressure (bar)** and **flow (L/min)**, solved from the actual hydraulic
 relationships rather than an on/off pressure graph.
@@ -33,6 +39,10 @@ continuation, see `src/sim/hydraulics.ts`):
 - **Counterbalance valve**: free flow in, opens for flow out when p_load + ratio·p_pilot ≥ setting.
 - **3-way pressure compensator** (load sensing with a fixed pump): lets the surplus oil to tank
   at the LS pressure plus its Δp, so the fixed pump idles at that Δp in neutral.
+- **Steering unit (Orbitrol)**: open centre in neutral; turning the wheel at n rev/s, the
+  gerotor meters Q = D · n into L or R while the open centre holds the pump just above the load.
+  Built-in inlet check, relief and suction valves; with the pump stopped it steers by hand (the
+  readout shows the wheel torque).
 - **Sequence valve**: shut until its inlet reaches the setting, then opens and holds the inlet
   there while passing the oil on; drained spring chamber, optional bypass check for the return.
 - **Pressure-compensated pump**: displacement swivels back over the last few bar below the
@@ -60,14 +70,15 @@ Units: bar (gauge), L/min, N, Nm, mm, cm³/rev.
   over-centre pump for closed loops (motor can be
   switched by a relay or pressure switch), tank, gas-loaded accumulator, filter (with bypass check)
 - Directional valves: 4/3 (closed / tandem / float / open centre) and 4/2, solenoid or hand lever;
-  proportional load-sensing valve (lever slider or solenoids) with LS port; shuttle valve
+  proportional load-sensing valve (lever slider or solenoids) with LS port; shuttle valve; steering unit (Orbitrol)
+  with a steering wheel
 - Pressure control: relief valve, cross-port relief valves, pressure-reducing valve,
   counterbalance valve, sequence valve, 2-way pressure compensator (LS), 3-way pressure
   compensator (LS with a fixed pump)
 - Flow & check: check valve, pilot-operated check valve, throttle, one-way flow control,
   pressure-compensated flow control (optional bypass check), flow divider (spool with
   compensating sleeve, and rotary gear type)
-- Actuators: double-acting cylinder, single-acting spring-return cylinder, hydraulic motor
+- Actuators: double-acting cylinder, double-rod (steering) cylinder, single-acting spring-return cylinder, hydraulic motor
   (fixed or variable displacement)
 - Measuring: pressure gauge, flow meter (flow and volume passed), pressure switch (publishes a
   signal, e.g. S1)
@@ -77,22 +88,76 @@ The **Examples** menu in the toolbar loads ready-made circuits (meter-out speed 
 electro-hydraulic control, motor speed control, load holding, and synchronising two
 cylinders with each type of flow divider, accumulator charging, counterbalance valve,
 clamp-then-press with a sequence valve, pressure-compensated pump, inertia and pressure peaks, load sensing with one and two
-sections, with and without pressure compensators, load sensing with a fixed pump, hydrostatic transmission with fixed or
+sections, with and without pressure compensators, load sensing with a fixed pump, hydrostatic steering with an Orbitrol, hydrostatic transmission with fixed or
 variable motor). Flow dividers, pumps, motors, directional valves, check valves and throttles /
 flow controls can be swapped type in place from the inspector, or by dropping the other type onto
 them.
 
 Several circuits can be open at once, as **tabs** above the canvas (or listed in the inspector -
 see **Settings**, the gear in the toolbar), each with its own undo history. Examples and loaded
-files open in a new tab. Every open circuit is kept in the browser and is back after a reload.
+files open in a new tab. Every open circuit is kept in the browser (IndexedDB) and is back after a
+reload; Save all and Export all sheets (one PDF) cover every tab at once.
 
-## Running
+Drawing: wires snap to a port within 16 px, a wire let go on another joins it with a tap
+junction without cutting it, and crossing wires get ISO line jumps. Live pressure/flow labels
+keep clear of the other wires, symbols and readouts. Cylinders mark the sensors something reads
+(a0, a1...) at the rod, lit while on during a run. Pictures can be pasted, dropped or chosen onto
+the canvas, and a run can be recorded as a video (the record button while simulating).
+
+## Running HydGineer
+
+There are four ways to run the app, from simplest to most involved.
+
+### 1. In the browser
+
+Open [bibbi88.github.io/HydGineer](https://bibbi88.github.io/HydGineer/). Nothing to install.
+The site is rebuilt and redeployed automatically on every push to `main`.
+
+### 2. Offline, from a single file
+
+The production build is one self-contained HTML file, [`dist/index.html`](dist/index.html), with
+all scripts and styles inlined.
+[Download it](https://github.com/bibbi88/HydGineer/releases/latest/download/HydGineer.html)
+(`HydGineer.html`, from the latest release) and double-click it to open it in your browser. It
+needs no server and no internet connection, so it can be copied to a USB stick or shared by email.
+
+### 3. As a desktop app (Windows, Linux)
+
+The same app in its own window, without a browser - it opens and saves project files (`.hgcl`)
+like any desktop program, and greets you with recent files and the examples.
+
+- **Windows:** download the
+  [installer](https://github.com/bibbi88/HydGineer/releases/latest/download/HydGineer-Setup.exe)
+  and run it. It isn't code-signed, so Windows SmartScreen may warn that it's from an unknown
+  publisher: choose **More info → Run anyway**.
+- **Linux:** download the
+  [Flatpak](https://github.com/bibbi88/HydGineer/releases/latest/download/HydGineer.flatpak),
+  then `flatpak install --user HydGineer.flatpak` and start HydGineer from the app menu (or
+  `flatpak run io.github.bibbi88.HydGineer`). The Freedesktop runtime it needs is fetched from
+  Flathub on install.
+
+Both are built by GitHub Actions ([`.github/workflows/desktop.yml`](.github/workflows/desktop.yml))
+from [`desktop/`](desktop/) - an Electron shell around the built `dist/index.html` - on every push
+to `main`, into the [latest release](https://github.com/bibbi88/HydGineer/releases/latest). The
+links above always fetch the newest. For a numbered release of its own, push a version tag:
+
+```bash
+git tag v1.0.0
+git push origin v1.0.0
+```
+
+The workflow can also be run by hand on any branch (**Actions → Desktop apps → Run workflow**);
+such a run keeps the installer, the Flatpak and the HTML file as downloadable artifacts, without
+a release.
+
+### 4. From source
+
+Requires [Node.js](https://nodejs.org/) 22 or newer.
 
 ```bash
 npm install
 npm run dev      # dev server
 npm run test     # unit tests (solver checked against hand calculations)
 npm run build    # single self-contained file: dist/index.html
+npm run lint     # eslint + prettier check
 ```
-
-The built `dist/index.html` runs offline by double-clicking it.

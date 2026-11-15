@@ -36,9 +36,41 @@ body {
   /* The toolbar spans all three columns as its own row above them, so it reads as belonging to
      the whole window rather than to any one panel. The document tabs sit in a row of their own
      above the canvas, which collapses to nothing while they're hidden. */
-  grid-template-columns: 244px 1fr 260px;
+  grid-template-columns: var(--library-w, 244px) 1fr var(--inspector-w, 260px);
   grid-template-rows: auto auto 1fr;
   height: 100vh;
+}
+
+/* The library's and the inspector's inner edges, dragged to resize them (ui/panelResize.ts):
+   strips laid over the edge in the panel's own grid cell. */
+.panelResizer {
+  grid-row: 2 / span 2;
+  width: 7px;
+  z-index: 5;
+  cursor: col-resize;
+}
+
+.panelResizer--library {
+  grid-column: 1;
+  justify-self: end;
+  margin-right: -3px;
+}
+
+.panelResizer--inspector {
+  grid-column: 3;
+  justify-self: start;
+  margin-left: -3px;
+}
+
+.panelResizer:hover,
+body.panelResizing .panelResizer:hover {
+  background: color-mix(in srgb, var(--port) 35%, transparent);
+}
+
+body.panelResizing,
+body.panelResizing * {
+  cursor: col-resize !important;
+  user-select: none;
 }
 
 .tabbar {
@@ -149,6 +181,24 @@ body {
 .iconBtn:disabled {
   opacity: 0.35;
   cursor: default;
+}
+
+/* A toolbar button with a narrow ▾ beside it for related actions (Save all, Export all sheets -
+   ui/projectBar.ts). */
+.splitButton {
+  display: inline-flex;
+  align-items: center;
+}
+
+.iconBtn.iconBtn--menuArrow {
+  width: 16px;
+  margin-left: -3px;
+  padding: 0;
+}
+
+.iconBtn.iconBtn--menuArrow svg {
+  width: 12px;
+  height: 12px;
 }
 
 /* Stop is the one transport control that interrupts something, so it's the one given color. */
@@ -565,6 +615,29 @@ body {
   pointer-events: none;
 }
 
+/* A selected picture's corner handles (components/picture.ts), on the selection outline's
+   corners. */
+.pictureHandle {
+  display: none;
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  margin: -5px 0 0 -5px;
+  box-sizing: border-box;
+  background: #fff;
+  border: 2px solid var(--accent);
+  border-radius: 2px;
+  z-index: 2;
+}
+
+.comp.compSelected .pictureHandle {
+  display: block;
+}
+
+.workspace.simulating .pictureHandle {
+  display: none;
+}
+
 /* The box is the drawing inset by 2px (see svgHelpers.ts), so the offset puts the outline a
    clear 3px outside the artwork - on top of its frame lines it would all but disappear. */
 .boundsBox.selected {
@@ -842,6 +915,16 @@ rect.wireHandle.wireStubHandle {
   stroke-width: 3;
 }
 
+/* The port a wire being drawn would connect to if let go now (interaction/linking.ts) - red,
+   whether the port is wired already or not, and over the hover style above. */
+.port.portSnapTarget,
+.port.portConnected.portSnapTarget,
+.port.portElectrical.portSnapTarget {
+  fill: #ffd6d6;
+  stroke: var(--accent);
+  stroke-width: 3;
+}
+
 .wireHandle {
   fill: #fff;
   stroke: var(--port);
@@ -851,10 +934,17 @@ rect.wireHandle.wireStubHandle {
 
 .marquee {
   position: fixed;
-  border: 1px dashed var(--port);
+  border: 1px solid var(--port);
   background: rgba(10, 116, 255, 0.08);
   pointer-events: none;
   z-index: 999;
+}
+
+/* Dragged right to left: selects whatever it touches, not only what's wholly inside - drawn
+   dashed and green, as CAD programs tell the two apart. */
+.marquee.marqueeCrossing {
+  border: 1px dashed var(--insert);
+  background: rgba(26, 156, 74, 0.08);
 }
 
 .ctxmenu {
@@ -981,6 +1071,51 @@ rect.wireHandle.wireStubHandle {
   font-size: 13px;
   font-weight: 600;
   margin: 10px 0 4px;
+}
+
+/* A section heading with a checkbox on its right, e.g. Name ... [x] Show. */
+.inspectorHeadingWithToggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.inspectorHeadingToggle {
+  font-weight: 400;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+
+.inspectorNameInput {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 4px 6px;
+  border: 1px solid #bbb;
+  border-radius: 4px;
+  font: inherit;
+  font-size: 13px;
+}
+
+/* A short line naming the boxes on the row under it (e.g. a cylinder's dimensions). */
+.inspectorCaption {
+  margin: 10px 0 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.inspectorRow.inspectorDimsRow {
+  justify-content: flex-start;
+  gap: 4px;
+  margin-top: 2px;
+}
+
+.inspectorRow.inspectorDimsRow input {
+  width: 52px;
+  min-width: 0;
+}
+
+.inspectorDimsSep {
+  color: var(--muted);
 }
 
 /* One sensor per block: its label/bounds/remove on one line, a slider below - separated by a
@@ -1118,19 +1253,6 @@ rect.wireHandle.wireStubHandle {
   cursor: grab;
 }
 
-.projectName {
-  /* Sized for the toolbar rather than stretched to a panel width: wide enough for a typical
-     project name, and allowed to shrink before the icon buttons beside it do. */
-  flex: 0 1 180px;
-  min-width: 90px;
-  padding: 6px 8px;
-  border: 1px solid #bbb;
-  border-radius: 6px;
-  background: #fff;
-  font: inherit;
-  font-size: 13px;
-}
-
 .restoreBanner {
   position: absolute;
   top: 12px;
@@ -1157,36 +1279,18 @@ rect.wireHandle.wireStubHandle {
   font-size: 12px;
 }
 
-/* One row of orientation for a new canvas: what to do with the sidebar, and the two mouse
-   gestures that are otherwise undiscoverable. Wraps rather than running past the workspace edge
-   on a narrow window, so it stays a single row wherever there is room for one. */
-.hint {
-  position: absolute;
-  bottom: 8px;
-  left: 8px;
-  right: 8px;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 4px 8px;
-  width: fit-content;
-  max-width: calc(100% - 16px);
-  padding: 6px 8px;
+/* Tips (the toolbar's lightbulb, app/settings.ts showTips): the canvas shortcuts and the short
+   explanations in the inspector show only while it's on. */
+body:not(.tipsOn) .tipText {
+  display: none;
+}
+
+.inspectorTipList {
+  margin: 0 0 10px;
+  padding-left: 16px;
   font-size: 12px;
-  color: #333;
-  background: #ffffffcc;
-  border: 1px solid #ddd;
-  border-radius: 6px;
-  z-index: 3;
-}
-
-.hint .hintSep {
-  color: var(--faint);
-}
-
-.hint .hintKey {
-  font-weight: 600;
-  color: var(--ink);
+  line-height: 1.5;
+  color: var(--muted);
 }
 
 /* ---------- Export dialog ---------- */
@@ -1704,13 +1808,12 @@ rect.wireHandle.wireStubHandle {
 
 .wireLabel {
   font-variant-numeric: tabular-nums;
-}
-
-.exampleSelect {
-  margin-left: 4px;
-  max-width: 130px;
-  font: inherit;
-  font-size: 12px;
+  /* A thin outline in the canvas colour, so a line passing under the text can't hide it. */
+  stroke: var(--bg);
+  stroke-width: 3px;
+  stroke-linejoin: round;
+  paint-order: stroke;
+  pointer-events: none;
 }
 
 .hydInfo[data-side='left'] {
@@ -1759,6 +1862,10 @@ rect.wireHandle.wireStubHandle {
   .inspectorPanel {
     grid-column: 1;
     grid-row: 5;
+  }
+  /* Stacked, the panels are full width: nothing to resize. */
+  .panelResizer {
+    display: none;
   }
   .sidebar,
   .inspectorPanel {
@@ -2108,6 +2215,14 @@ body.libraryDragging * {
   color: var(--ink);
 }
 
+/* The toolbar's Examples menu (ui/projectBar.ts). */
+.exampleSelect {
+  margin-left: 4px;
+  max-width: 124px;
+  font: inherit;
+  font-size: 12px;
+}
+
 /* ---------- Open documents (ui/documentTabs.ts) ---------- */
 
 .tabbar {
@@ -2274,4 +2389,319 @@ body.libraryDragging * {
 
 .settingsDialog .inspectorRow select {
   width: auto;
+}
+
+/* A mirrored cylinder's sensor names still read left to right (sensorMarks.ts). */
+.comp[data-mirror='1'] .sensorMarkLabel {
+  transform: scaleX(-1);
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+/* A cylinder sensor that is on during a run: its name gets a yellow box (sensorMarks.ts). Canvas
+   only - exports don't carry this style. */
+.sensorMarkActive .sensorMarkBg {
+  fill: #ffe14d;
+  stroke: #d4b000;
+  stroke-width: 1;
+}
+
+/* A button in the inspector that does something to the component (e.g. choose a picture). */
+.inspectorActionBtn {
+  margin: 8px 0;
+}
+
+/* Pictures (components/picture.ts) sit beneath every other component, so one placed or pasted
+   later never hides a valve or cylinder. They're still above the wires: keep them beside the
+   circuit rather than under it. */
+.comp[data-type='picture'] {
+  z-index: -1;
+}
+
+/* The 5/2 valve configurator (ui/valveConfigurator.ts): the valve drawn across the inspector,
+   a dropdown under each end. */
+.valveConfigPreview {
+  display: block;
+  width: 100%;
+  height: auto;
+  background: #fff;
+  border: 1px solid var(--line-soft);
+  border-radius: 6px;
+}
+
+.valveConfigEnds {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 6px 0 4px;
+}
+
+.valveConfigEnds select {
+  flex: 0 1 46%;
+  min-width: 0;
+  padding: 4px 6px;
+  border: 1px solid #bbb;
+  border-radius: 4px;
+  font: inherit;
+  font-size: 12.5px;
+}
+
+/* A cylinder sensor that is on during a run: its name gets a yellow box (sensorMarks.ts). Canvas
+   only - exports don't carry this style. */
+.sensorMarkActive .sensorMarkBg {
+  fill: #ffe14d;
+  stroke: #d4b000;
+  stroke-width: 1;
+}
+
+/* Record video (ui/recordButton.ts): only while simulating, red while recording, the time
+   beside it. */
+.iconBtn[hidden] {
+  display: none;
+}
+
+.iconBtn.iconBtn--recording,
+.iconBtn.iconBtn--recording:hover:not(:disabled) {
+  color: #fff;
+  background: #d00;
+  border-color: #d00;
+  animation: recordPulse 1.2s ease-in-out infinite;
+}
+
+@keyframes recordPulse {
+  50% {
+    opacity: 0.7;
+  }
+}
+
+.recordTime {
+  align-self: center;
+  min-width: 2.6em;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: #d00;
+}
+
+/* A steering unit's wheel (components/hyd/steering.ts): a slider by the wheel symbol, shown
+   while simulating. Held to one side it turns the wheel that way; let go, it springs back. */
+.steerWheel {
+  position: absolute;
+  /* Above the wheel, outside the unit's dashed outline. */
+  top: 34px;
+  left: -48px;
+  width: 80px;
+  accent-color: var(--accent);
+  cursor: ew-resize;
+}
+
+.workspace:not(.simulating) .steerWheel {
+  display: none;
+}
+
+/* The desktop app's start screen (ui/startScreen.ts): over the app, under dialogs such as the
+   terms (z-index 2000). */
+.startScreen {
+  position: fixed;
+  inset: 0;
+  z-index: 1500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(29, 59, 139, 0.18);
+  backdrop-filter: blur(3px);
+}
+
+.startCard {
+  position: relative;
+  display: grid;
+  grid-template-columns: 260px 1fr;
+  width: min(880px, 100%);
+  max-height: calc(100vh - 48px);
+  overflow: hidden;
+  background: #fff;
+  border-radius: 14px;
+  box-shadow: 0 24px 60px rgba(17, 24, 39, 0.28);
+}
+
+.startClose {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  border: none;
+  background: none;
+  font-size: 16px;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: 6px;
+}
+
+.startClose:hover {
+  background: var(--panel);
+}
+
+.startSide {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 28px;
+  padding: 32px 26px;
+  background: linear-gradient(160deg, #1d3b8b, #142a63);
+  color: #fff;
+}
+
+.startBrand svg {
+  display: block;
+  margin-bottom: 14px;
+  border-radius: 14px;
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.25);
+}
+
+.startName {
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+
+.startName span {
+  color: #8fc2ff;
+}
+
+.startTagline {
+  margin-top: 4px;
+  font-size: 13.5px;
+  opacity: 0.85;
+}
+
+.startVersion {
+  margin-top: 10px;
+  font-size: 12px;
+  opacity: 0.6;
+}
+
+.startActions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.startAction {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.startAction:hover {
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.startAction strong {
+  font-size: 15px;
+}
+
+.startAction span {
+  font-size: 12px;
+  opacity: 0.75;
+}
+
+.startMain {
+  padding: 28px 30px 26px;
+  overflow-y: auto;
+}
+
+.startMain h2 {
+  margin: 0 0 8px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.startMain h2:not(:first-child) {
+  margin-top: 22px;
+}
+
+.startEmpty {
+  margin: 0;
+  color: var(--faint);
+  font-size: 13.5px;
+}
+
+.startList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.startItem {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  column-gap: 12px;
+  width: 100%;
+  padding: 8px 10px;
+  border: none;
+  border-radius: 8px;
+  background: none;
+  font: inherit;
+  text-align: left;
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.startItem:hover {
+  background: var(--panel);
+}
+
+.startItem strong {
+  font-size: 14px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.startItemWhen {
+  font-size: 12px;
+  color: var(--faint);
+}
+
+.startItemPath {
+  grid-column: 1 / -1;
+  font-size: 12px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.startExamples .startItem strong {
+  font-weight: 500;
+}
+
+@media (max-width: 640px) {
+  .startCard {
+    grid-template-columns: 1fr;
+    overflow-y: auto;
+  }
+}
+
+/* A link dressed as the buttons beside it (the desktop app's downloads): their font, too. */
+a.inspectorTipsBtn {
+  color: inherit;
+  text-decoration: none;
+  font:
+    13.3333px Arial,
+    sans-serif;
 }

@@ -52,9 +52,13 @@ const TIP_SECTIONS: TipSection[] = [
       'The Examples menu in the toolbar loads ready-made circuits to start from - each in a ' +
         'new tab, like a loaded file.',
       'Tabs above the canvas hold several circuits at once, each with its own undo history. ' +
-        'Click + for a new one, double-click a tab to rename it, middle-click or × to close ' +
-        'it, right-click for more. They are kept in the browser, so they are back after a ' +
-        'reload. Settings (the gear) can list them in the inspector instead.',
+        'Click + (or the New circuit button) for a new one, double-click a tab to rename it, ' +
+        'middle-click or × to close it, right-click for more. They are kept in the browser, so ' +
+        'they are back after a reload. Settings (the gear) can list them in the inspector ' +
+        'instead.',
+      'The lightbulb in the toolbar turns tips on: the canvas shortcuts and short ' +
+        'explanations in the inspector. Drag the inner edge of the library or the inspector to ' +
+        'make it wider or narrower (double-click the edge for the default width).',
       'Right-click a component for Rotate, Copy, and Delete.',
       'Right-click a hydraulic port to put a tank symbol on it - the quick way to draw a ' +
         'return line, e.g. on a valve’s T port.',
@@ -62,6 +66,10 @@ const TIP_SECTIONS: TipSection[] = [
       'Delete or Backspace removes the current selection.',
       'Ctrl+C / Ctrl+V copies and pastes the selection.',
       'Ctrl+Z undoes, Ctrl+R redoes.',
+      'Let a new wire go on an existing one to join it there: a junction dot is put on that ' +
+        'wire, which stays one wire, and the dot keeps to it when things move. Where wires ' +
+        'cross without being joined, the horizontal one jumps over the other - "Line jumps at ' +
+        'crossings" under Project info turns that off.',
       'Escape cancels a wire you’re in the middle of drawing, or clears the current selection ' +
         'if nothing is being drawn.',
     ],
@@ -123,8 +131,13 @@ const TIP_SECTIONS: TipSection[] = [
         'then holds its outlet at the highest load pressure plus its margin, so the flow follows ' +
         'the lever and not the load, and the pump only makes the pressure that’s needed. In ' +
         'neutral the LS line is vented and the pump idles at standby pressure.',
-      'Load-sensing valve lever: drag the slider above the valve while simulating - left = ' +
-        'P→A, right = P→B, middle = closed (double-click it to centre). With several sections, ' +
+      'Steering unit (Orbitrol): while simulating, hold the slider under its wheel to one side ' +
+        'to turn the wheel that way - let go and it stops. The gerotor lets through its ' +
+        'displacement per wheel turn, so the steering cylinder follows the wheel; in neutral ' +
+        'the pump oil goes straight to tank (open centre) and the cylinder holds.',
+      'Load-sensing valve lever: drag the slider above the valve while simulating. It moves ' +
+        'the way the valve does: right brings the left box over the ports (P→A), left the right ' +
+        'box (P→B), middle = closed (double-click it to centre). With several sections, ' +
         'a lightly loaded section takes most of the oil unless each one has a pressure ' +
         'compensator: either tick "Section pressure compensator" on the valve, or fit a separate ' +
         'Pressure compensator in front of its P port with its LS port on that section’s LS line.',

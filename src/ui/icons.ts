@@ -16,6 +16,8 @@ export type IconName =
   | 'download'
   | 'play'
   | 'stop'
+  | 'record'
+  | 'chevronDown'
   | 'pause'
   | 'step'
   | 'undo'
@@ -75,6 +77,11 @@ const ICONS: Record<IconName, Shape[]> = {
   ],
   play: [['path', { d: 'M6 3.5 20 12 6 20.5Z', ...FILLED }]],
   stop: [['rect', { x: 6, y: 6, width: 12, height: 12, rx: 1.5, ...FILLED }]],
+  chevronDown: [['path', { d: 'm6 9 6 6 6-6' }]],
+  record: [
+    ['circle', { cx: 12, cy: 12, r: 8.5 }],
+    ['circle', { cx: 12, cy: 12, r: 4.5, ...FILLED }],
+  ],
   pause: [
     ['rect', { x: 6, y: 4.5, width: 4, height: 15, rx: 1, ...FILLED }],
     ['rect', { x: 14, y: 4.5, width: 4, height: 15, rx: 1, ...FILLED }],

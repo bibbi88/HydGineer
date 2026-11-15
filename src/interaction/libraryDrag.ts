@@ -162,14 +162,19 @@ export function initLibraryDrag(
       // Dropping a check/throttle/one-way-flow valve (etc.) close enough to an existing wire
       // splices it into that wire instead of landing unconnected on top of it - see
       // interaction/wireInsertion.ts for which types support this and why.
-      const spliced = trySpliceOntoWire(
-        type,
-        ctx,
-        viewport,
-        workspaceEl,
-        world,
-        rotated ? rotation : undefined,
-      );
+      // The component and both halves of the wire it splits: one history step.
+      let spliced = false;
+      appState.runSuppressed(() => {
+        spliced =
+          trySpliceOntoWire(
+            type,
+            ctx,
+            viewport,
+            workspaceEl,
+            world,
+            rotated ? rotation : undefined,
+          ) !== null;
+      });
       if (spliced) return;
       // One history step for the placement and its rotation together.
       appState.runSuppressed(() => {

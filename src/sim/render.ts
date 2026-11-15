@@ -2,6 +2,7 @@ import { appState } from '../app/AppState';
 import { portKey } from './ports';
 import { isElectricallyLive } from './electrical';
 import type { HydFrame } from './engine';
+import { layoutWireLabels } from '../wires/connection';
 import { FLOW_THRESHOLD, PRESSURE_THRESHOLD, flowDuration, pressureColor } from './pressureScale';
 
 function fmtP(p: number): string {
@@ -123,6 +124,7 @@ export function applyToDom(frame: HydFrame | null): void {
     conn.labelEl.textContent = labelWires.has(conn.id) ? text : '';
     setWireTitle(conn.hitEl, text);
   }
+  layoutWireLabels();
 
   const el = status();
   if (!el) return;
