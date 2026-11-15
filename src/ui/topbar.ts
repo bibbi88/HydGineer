@@ -5,56 +5,27 @@ import { renderToolbar } from './toolbar';
 import { renderRecordButton } from './recordButton';
 import { renderViewControls } from './viewControls';
 import { renderArrangeControls } from './arrangeControls';
-import { createSvgEl } from '../components/shared/svgHelpers';
 import { iconButton } from './iconButton';
+import { createBrandMark } from './brandMark';
 import { openSettingsDialog } from './settingsDialog';
 import { getSettings, onSettingsChange, updateSettings } from '../app/settings';
 
 /** The app's mark and name, with the build version (yymmdd, see vite.config.ts) under it. The
- * mark is a double-acting cylinder: barrel, piston and rod. */
+ * mark is a hydraulic cylinder (see brandMark.ts). */
 function renderBrand(container: HTMLElement): void {
   const brand = document.createElement('div');
   brand.className = 'brand';
 
-  const logo = createSvgEl('svg', {
-    class: 'brandLogo',
-    viewBox: '0 0 32 32',
-    width: 28,
-    height: 28,
-    'aria-hidden': 'true',
-  });
-  logo.append(
-    createSvgEl('rect', { x: 1, y: 1, width: 30, height: 30, rx: 7, fill: '#1d3b8b' }),
-    createSvgEl('rect', {
-      x: 5,
-      y: 10,
-      width: 15,
-      height: 12,
-      rx: 1.5,
-      fill: 'none',
-      stroke: '#fff',
-      'stroke-width': 2,
-    }),
-    createSvgEl('rect', { x: 10, y: 11, width: 3, height: 10, fill: '#5fa8ff' }),
-    createSvgEl('line', {
-      x1: 13,
-      y1: 16,
-      x2: 28,
-      y2: 16,
-      stroke: '#fff',
-      'stroke-width': 2.5,
-      'stroke-linecap': 'round',
-    }),
-  );
+  const logo = createBrandMark(28, 'brandLogo');
 
   const text = document.createElement('div');
   text.className = 'brandText';
   const name = document.createElement('span');
   name.className = 'brandName';
-  const pneu = document.createElement('span');
-  pneu.className = 'brandNameAccent';
-  pneu.textContent = 'Hyd';
-  name.append(pneu, 'Gineer');
+  const hyd = document.createElement('span');
+  hyd.className = 'brandNameAccent';
+  hyd.textContent = 'Hyd';
+  name.append(hyd, 'Gineer');
   const version = document.createElement('span');
   version.className = 'brandVersion';
   version.textContent = `v${__APP_VERSION__}`;
