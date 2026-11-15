@@ -102,14 +102,17 @@ ipcMain.handle('save-file-as', async (_event, suggestedName, text) => {
   return file;
 });
 
-// Updates (Windows installer only): checked only when the page asks - it does, at start, while
+// Updates (Windows installer, Linux AppImage): checked only when the page asks - it does, at start, while
 // its "Check for updates" setting is on - so with the setting off the app never goes online.
 // electron-updater isn't even loaded until then. A newer version is downloaded in the
 // background, and installed when the user chooses Restart now, or else when the app is closed.
 let updater = null;
 
+/** The Windows installer, or the Linux AppImage (which replaces its own file) - not the Flatpak,
+ * which Flatpak keeps up to date, nor a development run. */
 function updatesSupported() {
-  return process.platform === 'win32' && app.isPackaged;
+  if (!app.isPackaged) return false;
+  return process.platform === 'win32' || (process.platform === 'linux' && !!process.env.APPIMAGE);
 }
 
 function sendUpdateStatus(status) {

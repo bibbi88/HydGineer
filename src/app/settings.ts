@@ -13,7 +13,7 @@ export interface Settings {
   openInNewDoc: boolean;
   /** Show tips: the canvas shortcuts and the short explanations in the inspector. */
   showTips: boolean;
-  /** Desktop app (Windows): look for a newer version at start - the one time the app goes on the
+  /** Desktop app (Windows, Linux AppImage): look for a newer version at start - the one time the app goes on the
    * internet. Off: it never does. */
   checkUpdates: boolean;
 }

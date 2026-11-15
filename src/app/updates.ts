@@ -1,5 +1,5 @@
 /**
- * The desktop app updating itself (Windows): whether it can, checking at start while the
+ * The desktop app updating itself (Windows installer, Linux AppImage): whether it can, checking at start while the
  * "Check for updates" setting is on, and offering to install a downloaded update. Nothing here
  * goes online by itself - the check is the desktop shell's (desktop/main.cjs), and it only runs
  * when asked from here.
@@ -15,8 +15,8 @@ let status: UpdateStatus | null = null;
 const listeners: Array<() => void> = [];
 let readyListener: ((version: string | undefined) => void) | null = null;
 
-/** Whether this install can update itself (the Windows installer; not the browser, nor Linux,
- * whose Flatpak updates through Flatpak). Known once initUpdates has run. */
+/** Whether this install can update itself (the Windows installer, the Linux AppImage; not the
+ * browser, nor the Flatpak, which updates through Flatpak). Known once initUpdates has run. */
 export function updatesSupported(): boolean {
   return supported;
 }

@@ -10,7 +10,8 @@
   "scripts": {
     "start": "electron .",
     "dist:win": "electron-builder --win nsis --publish never",
-    "dist:flatpak": "electron-builder --linux flatpak --publish never"
+    "dist:flatpak": "electron-builder --linux flatpak --publish never",
+    "dist:appimage": "electron-builder --linux AppImage --publish never"
   },
   "devDependencies": {
     "electron": "45.3.2",

@@ -1,10 +1,11 @@
-# Builds HydGineer as a desktop app (desktop/: Electron + electron-builder) - a Windows installer
-# and a Linux Flatpak - and publishes them as a GitHub Release:
+# Builds HydGineer as a desktop app (desktop/: Electron + electron-builder) - a Windows installer,
+# a Linux AppImage and a Linux Flatpak - and publishes them as a GitHub Release:
 #
 # - every push to main updates the "latest" release (tag desktop-latest), so these always fetch
 #   the newest build:
 #     https://github.com/bibbi88/HydGineer/releases/latest/download/HydGineer-Setup.exe
 #     https://github.com/bibbi88/HydGineer/releases/latest/download/HydGineer.flatpak
+#     https://github.com/bibbi88/HydGineer/releases/latest/download/HydGineer.AppImage
 #     https://github.com/bibbi88/HydGineer/releases/latest/download/HydGineer.html
 # - pushing a version tag (git tag v1.2.3 && git push origin v1.2.3) makes a release of its own.
 #
@@ -111,10 +112,45 @@ jobs:
           path: HydGineer.html
           if-no-files-found: error
 
+  appimage:
+    name: Linux AppImage
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            desktop/package-lock.json
+      - name: Build the web app
+        run: |
+          npm ci
+          npm run build
+      - name: Package
+        run: |
+          mkdir -p desktop/app
+          cp dist/index.html desktop/app/index.html
+          cd desktop
+          npm ci
+          npm pkg set version="$(../.github/desktop-version.sh)"
+          npm run dist:appimage
+      # latest-linux.yml is what an installed AppImage reads to find a newer version.
+      - name: Check the update file is there
+        run: test -f desktop/release/latest-linux.yml && cat desktop/release/latest-linux.yml
+      - uses: actions/upload-artifact@v4
+        with:
+          name: HydGineer-appimage
+          path: |
+            desktop/release/*.AppImage
+            desktop/release/latest-linux.yml
+          if-no-files-found: error
+
   release:
     name: GitHub Release
     if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main'
-    needs: [windows, flatpak]
+    needs: [windows, flatpak, appimage]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -143,7 +179,10 @@ jobs:
             - **Windows:** download **HydGineer-Setup.exe** and run it. It isn't code-signed, so
               Windows may warn about an unknown publisher: choose *More info → Run anyway*.
               Once installed it updates itself (Settings → Updates; can be turned off).
-            - **Linux:** download **HydGineer.flatpak**, then
+            - **Linux, AppImage:** download **HydGineer.AppImage**, make it executable
+              (`chmod +x HydGineer.AppImage`) and run it. It updates itself, like the Windows app.
+              Ubuntu 24.04 and later need `sudo apt install libfuse2t64` once.
+            - **Linux, Flatpak:** download **HydGineer.flatpak**, then
               `flatpak install --user HydGineer.flatpak` and start HydGineer from the app menu.
             - **Any computer, no install:** download **HydGineer.html** and open it in a browser.
               It's the whole app in one file, and works offline - from a USB stick, too.

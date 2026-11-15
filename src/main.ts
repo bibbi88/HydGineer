@@ -195,7 +195,7 @@ async function restoreDocuments(): Promise<void> {
 }
 void restoreDocuments();
 
-// The desktop app (Windows) updates itself - only while its "Check for updates" setting is on.
+// The desktop app (Windows, Linux AppImage) updates itself - only while "Check for updates" is on.
 if (isDesktop) void initUpdates(showUpdateReady);
 
 // Hidden or closed: whatever changed in the last moment is kept now, not lost with the page.

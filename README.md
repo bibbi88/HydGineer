@@ -4,6 +4,7 @@
 
 **⬇ Download the desktop app:**
 [Windows installer](https://github.com/bibbi88/HydGineer/releases/latest/download/HydGineer-Setup.exe) ·
+[Linux AppImage](https://github.com/bibbi88/HydGineer/releases/latest/download/HydGineer.AppImage) ·
 [Linux Flatpak](https://github.com/bibbi88/HydGineer/releases/latest/download/HydGineer.flatpak) ·
 [standalone HTML file](https://github.com/bibbi88/HydGineer/releases/latest/download/HydGineer.html) ·
 [all releases](https://github.com/bibbi88/HydGineer/releases)
@@ -132,17 +133,23 @@ like any desktop program, and greets you with recent files and the examples.
   publisher: choose **More info → Run anyway**. Once installed it **updates itself**: at start
   it asks GitHub for a newer version, downloads it in the background and offers to restart into
   it (or installs it when the app is closed).
-- **Linux:** download the
+- **Linux, AppImage:** download the
+  [AppImage](https://github.com/bibbi88/HydGineer/releases/latest/download/HydGineer.AppImage),
+  make it executable (`chmod +x HydGineer.AppImage`, or Properties → Allow executing) and run
+  it - one file, nothing to install. Like the Windows app it **updates itself**. Ubuntu 24.04
+  and later need the FUSE library once: `sudo apt install libfuse2t64`.
+- **Linux, Flatpak:** download the
   [Flatpak](https://github.com/bibbi88/HydGineer/releases/latest/download/HydGineer.flatpak),
   then `flatpak install --user HydGineer.flatpak` and start HydGineer from the app menu (or
   `flatpak run io.github.bibbi88.HydGineer`). The Freedesktop runtime it needs is fetched from
   Flathub on install.
 
 **Internet use.** HydGineer doesn't use the internet - the web app loads nothing from
-anywhere once open, and your circuits never leave your device. The one exception is the Windows
-app's update check, an ordinary download request to GitHub at start. It can be turned off under
-**Settings → Updates**, after which the app never connects to the internet. The Linux Flatpak
-doesn't update itself (use `flatpak update`, or install a newer file) and never goes online.
+anywhere once open, and your circuits never leave your device. The one exception is the update
+check of the Windows app and the Linux AppImage, an ordinary download request to GitHub at
+start. It can be turned off under **Settings → Updates**, after which the app never connects to
+the internet. The Linux Flatpak doesn't update itself (use `flatpak update`, or install a newer
+file) and never goes online.
 
 Both are built by GitHub Actions ([`.github/workflows/desktop.yml`](.github/workflows/desktop.yml))
 from [`desktop/`](desktop/) - an Electron shell around the built `dist/index.html` - on every push
