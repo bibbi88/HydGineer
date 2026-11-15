@@ -21,13 +21,14 @@ import {
   updateDocumentFile,
 } from '../app/documents';
 import { resetHistory } from '../history/historyStore';
-import { rememberRecentFile } from '../app/recentFiles';
 import { loadProject, serializeProject, unixNow } from '../persistence/project';
 import { migrate } from '../persistence/migrations';
 import { saveProjectToFile } from '../persistence/save';
 import { loadProjectFromPicker } from '../persistence/load';
 import { downloadPdf, renderPdfPage, type PdfPaper } from '../persistence/exportImage';
 import { getPageFrameWorldBounds } from './pageFrame';
+import { forgetRecentFile, rememberRecentFile } from '../app/recentFiles';
+import { closeStartScreen } from './startScreen';
 import { computeContentBounds } from '../geometry/contentBounds';
 
 export interface FileActionDeps {
@@ -45,6 +46,8 @@ export interface FileActions {
   saveAs(): Promise<void>;
   saveAll(): Promise<void>;
   open(): Promise<void>;
+  /** Desktop only: a recent file by its path; whether it opened. */
+  openRecent(path: string): Promise<boolean>;
   exportAllSheets(): Promise<void>;
   isDesktop: boolean;
 }
@@ -124,8 +127,10 @@ export function createFileActions(deps: FileActionDeps): FileActions {
   }
 
   function openFromOutside(f: DesktopFile): void {
+    closeStartScreen();
     try {
       openText(f.text, f.path);
+      rememberRecentFile(f.path);
     } catch (err) {
       window.alert(`Couldn't open ${f.path}: ${err instanceof Error ? err.message : String(err)}`);
     }
@@ -142,6 +147,7 @@ export function createFileActions(deps: FileActionDeps): FileActions {
     markDocumentSaved(activeDocumentId(), file);
     setActiveDocumentPath(path);
     deps.setName(fileBaseName(path));
+    rememberRecentFile(path);
     return true;
   }
 
@@ -264,6 +270,19 @@ export function createFileActions(deps: FileActionDeps): FileActions {
     if (f) openFromOutside(f);
   }
 
+  /** A file from the start screen's recent list. One that's gone is taken off the list. */
+  async function openRecent(path: string): Promise<boolean> {
+    if (!bridge) return false;
+    const f = await bridge.openPath(path);
+    if (!f) {
+      forgetRecentFile(path);
+      window.alert(`${path} isn't there any more - it may have been moved or deleted.`);
+      return false;
+    }
+    openFromOutside(f);
+    return true;
+  }
+
   /** Every open circuit as one PDF, a page each: its page frame's sheet on that paper if it has
    * one, else the whole circuit on A4. Empty circuits are left out. */
   async function exportAllSheets(): Promise<void> {
@@ -328,7 +347,10 @@ export function createFileActions(deps: FileActionDeps): FileActions {
     }
     void file
       .text()
-      .then((text) => openText(text))
+      .then((text) => {
+        closeStartScreen();
+        openText(text);
+      })
       .catch((err: unknown) => {
         window.alert(`Couldn't open ${file.name}: ${err instanceof Error ? err.message : err}`);
       });
@@ -359,6 +381,7 @@ export function createFileActions(deps: FileActionDeps): FileActions {
     },
     saveAll,
     open,
+    openRecent,
     exportAllSheets,
     isDesktop: bridge !== null,
   };

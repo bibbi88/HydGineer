@@ -26,6 +26,7 @@ import { initPageFrame } from './ui/pageFrame';
 import { snap } from './core/grid';
 import { canEdit } from './app/modes';
 import { initConfirmBeforeUnload } from './app/confirmClose';
+import { desktopBridge } from './app/desktopBridge';
 import {
   initDocuments,
   onDocumentsChange,
@@ -90,7 +91,8 @@ initPlcMonitor();
 initWireSplitting(compLayer, viewport, workspaceEl);
 // The browser's own "leave this page?" warning. Not in the desktop app, which asks about unsaved
 // circuits itself when its window is closed (and where this would silently block closing).
-initConfirmBeforeUnload();
+// The desktop app asks Save / Don't save itself on closing (desktop/main.cjs).
+if (!desktopBridge()) initConfirmBeforeUnload();
 
 const factoryCtx: ComponentFactoryContext = { compLayer };
 initHistory(factoryCtx, viewport);
@@ -152,9 +154,11 @@ onSettingsChange(refreshTabs);
 // Documents kept in the browser come back as they were. Before there were documents, only the
 // one circuit was kept (autosave) - offered back once, into the first document. Kept documents
 // are read back from IndexedDB, which takes a moment: everything else is set up first, then they
-// come back (persistence/docStore.ts).
+// come back (persistence/docStore.ts). The desktop app starts with one empty circuit and its
+// start screen, as desktop programs do - its circuits are files.
+const isDesktop = desktopBridge() !== null;
 async function restoreDocuments(): Promise<void> {
-  const stored = await readStoredDocuments().catch(() => null);
+  const stored = isDesktop ? null : await readStoredDocuments().catch(() => null);
   const restored = initDocuments(
     {
       ctx: factoryCtx,
@@ -162,9 +166,9 @@ async function restoreDocuments(): Promise<void> {
       getName: () => projectBar.getName(),
       setName: (name) => projectBar.setName(name),
     },
-    { stored },
+    { fresh: isDesktop, stored },
   );
-  const autosaved = readAutosave();
+  const autosaved = isDesktop ? null : readAutosave();
   if (restored) {
     clearAutosave();
   } else if (autosaved) {
@@ -179,6 +183,10 @@ async function restoreDocuments(): Promise<void> {
     );
   }
   refreshTabs();
+
+  // The desktop app greets with its start screen: new, open, recent files, examples. A project
+  // file the app was started with closes it again as it opens (see ui/fileActions.ts).
+  if (isDesktop) projectBar.showStartScreen?.();
 
   // Last, so the terms sit on top of everything else that opens with the app.
   if (termsNeedAgreement()) openTermsDialog({ requireAgreement: true });

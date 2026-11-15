@@ -1,0 +1,4 @@
+node_modules/
+release/
+# The web app's build, copied in when packaging (see .github/workflows/desktop.yml).
+app/

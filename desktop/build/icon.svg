@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="512" height="512">
+  <!-- The app's mark (see src/ui/topbar.ts): a double-acting cylinder - barrel, piston, rod. -->
+  <rect x="1" y="1" width="30" height="30" rx="7" fill="#1d3b8b"/>
+  <rect x="5" y="10" width="15" height="12" rx="1.5" fill="none" stroke="#fff" stroke-width="2"/>
+  <rect x="10" y="11" width="3" height="10" fill="#5fa8ff"/>
+  <line x1="13" y1="16" x2="28" y2="16" stroke="#fff" stroke-width="2.5" stroke-linecap="round"/>
+</svg>

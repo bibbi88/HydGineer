@@ -8,12 +8,15 @@ import { zoomToFit } from '../interaction/zoomToFit';
 import { appState } from '../app/AppState';
 import { canEdit } from '../app/modes';
 import {
+  activeDocumentId,
   activeNameChanged,
+  isDocumentEmpty,
   listDocuments,
   newDocument,
   prepareToOpen,
   setActiveDocumentPath,
 } from '../app/documents';
+import { openStartScreen } from './startScreen';
 import { createFileActions } from './fileActions';
 import { showContextMenu, type ContextMenuItem } from '../interaction/contextMenu';
 
@@ -40,6 +43,8 @@ const EXAMPLE_READOUT_ROOM = 130;
 export interface ProjectBarRefs {
   getName(): string;
   setName(name: string): void;
+  /** The desktop app's start screen (ui/startScreen.ts). */
+  showStartScreen?(): void;
 }
 
 /** The toolbar's project section: new, save, load, export and the examples. The project's name
@@ -117,9 +122,9 @@ export function renderProjectBar(
     o.textContent = ex.title;
     examples.appendChild(o);
   });
-  examples.addEventListener('change', () => {
-    const ex = EXAMPLES[Number(examples.value)];
-    examples.value = '';
+  /** Opens example `index` (from the menu or the start screen). */
+  function openExample(index: number): void {
+    const ex = EXAMPLES[index];
     if (!ex || !canEdit(appState.mode)) return;
     const file = ex.file();
     prepareToOpen();
@@ -132,6 +137,11 @@ export function renderProjectBar(
     appState.markDirty();
     // Room on the right for the simulation readouts beside the right-most components.
     requestAnimationFrame(() => zoomToFit(viewport, workspaceEl, EXAMPLE_READOUT_ROOM));
+  }
+  examples.addEventListener('change', () => {
+    const value = examples.value;
+    examples.value = '';
+    if (value !== '') openExample(Number(value));
   });
 
   container.append(
@@ -143,6 +153,19 @@ export function renderProjectBar(
   );
 
   return {
+    showStartScreen: () =>
+      openStartScreen(
+        {
+          newCircuit: () => {
+            // The app opens with one empty circuit: that's the new one.
+            if (!isDocumentEmpty(activeDocumentId())) newDocument();
+          },
+          open: () => files.open(),
+          openRecent: (path) => files.openRecent(path),
+          examples: EXAMPLES.map((ex, i) => ({ title: ex.title, open: () => openExample(i) })),
+        },
+        __APP_VERSION__,
+      ),
     getName: () => projectName || 'project',
     setName: (name: string) => {
       projectName = name;
