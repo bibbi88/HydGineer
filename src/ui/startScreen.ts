@@ -1,4 +1,4 @@
-import { createSvgEl } from '../components/shared/svgHelpers';
+import { createBrandMark } from './brandMark';
 import { listRecentFiles } from '../app/recentFiles';
 import { fileBaseName } from '../app/desktopBridge';
 
@@ -25,36 +25,7 @@ export function isStartScreenOpen(): boolean {
 }
 
 function logo(size: number): SVGSVGElement {
-  const svg = createSvgEl('svg', {
-    viewBox: '0 0 32 32',
-    width: size,
-    height: size,
-    'aria-hidden': 'true',
-  }) as SVGSVGElement;
-  svg.append(
-    createSvgEl('rect', { x: 1, y: 1, width: 30, height: 30, rx: 7, fill: '#1d3b8b' }),
-    createSvgEl('rect', {
-      x: 5,
-      y: 10,
-      width: 15,
-      height: 12,
-      rx: 1.5,
-      fill: 'none',
-      stroke: '#fff',
-      'stroke-width': 2,
-    }),
-    createSvgEl('rect', { x: 10, y: 11, width: 3, height: 10, fill: '#5fa8ff' }),
-    createSvgEl('line', {
-      x1: 13,
-      y1: 16,
-      x2: 28,
-      y2: 16,
-      stroke: '#fff',
-      'stroke-width': 2.5,
-      'stroke-linecap': 'round',
-    }),
-  );
-  return svg;
+  return createBrandMark(size);
 }
 
 function folderOf(path: string): string {

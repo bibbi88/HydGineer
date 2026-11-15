@@ -141,7 +141,7 @@ body.panelResizing * {
 }
 
 .brandNameAccent {
-  color: #1d3b8b;
+  color: #9b1c1c;
 }
 
 .brandVersion {
@@ -2547,7 +2547,7 @@ body.libraryDragging * {
   justify-content: space-between;
   gap: 28px;
   padding: 32px 26px;
-  background: linear-gradient(160deg, #1d3b8b, #142a63);
+  background: linear-gradient(160deg, #9b1c1c, #5f1010);
   color: #fff;
 }
 
@@ -2565,7 +2565,7 @@ body.libraryDragging * {
 }
 
 .startName span {
-  color: #8fc2ff;
+  color: #ffb4a8;
 }
 
 .startTagline {
