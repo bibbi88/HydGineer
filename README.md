@@ -34,7 +34,9 @@ continuation, see `src/sim/hydraulics.ts`):
 - **3-way pressure compensator** (load sensing with a fixed pump): lets the surplus oil to tank
   at the LS pressure plus its Δp, so the fixed pump idles at that Δp in neutral.
 - **Steering unit (Orbitrol)**: open centre in neutral; turning the wheel at n rev/s, the
-  gerotor meters Q = D · n into L or R, the open centre closing as it turns faster.
+  gerotor meters Q = D · n into L or R while the open centre holds the pump just above the load.
+  Built-in inlet check, relief and suction valves; with the pump stopped it steers by hand (the
+  readout shows the wheel torque).
 - **Sequence valve**: shut until its inlet reaches the setting, then opens and holds the inlet
   there while passing the oil on; drained spring chamber, optional bypass check for the return.
 - **Pressure-compensated pump**: displacement swivels back over the last few bar below the
@@ -70,7 +72,7 @@ Units: bar (gauge), L/min, N, Nm, mm, cm³/rev.
 - Flow & check: check valve, pilot-operated check valve, throttle, one-way flow control,
   pressure-compensated flow control (optional bypass check), flow divider (spool with
   compensating sleeve, and rotary gear type)
-- Actuators: double-acting cylinder, single-acting spring-return cylinder, hydraulic motor
+- Actuators: double-acting cylinder, double-rod (steering) cylinder, single-acting spring-return cylinder, hydraulic motor
   (fixed or variable displacement)
 - Measuring: pressure gauge, flow meter (flow and volume passed), pressure switch (publishes a
   signal, e.g. S1)

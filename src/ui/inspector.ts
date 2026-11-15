@@ -359,6 +359,14 @@ const INSPECTOR_FIELDS: Record<string, InspectorField[]> = {
       max: 2000,
       step: 1,
     },
+    {
+      kind: 'number',
+      key: 'reliefSetting',
+      label: 'Built-in relief valve (bar)',
+      min: 1,
+      max: 700,
+      step: 5,
+    },
   ],
   [HYD_VALVE_LS_TYPE]: [
     { kind: 'actuatorMode', label: 'Valve type', options: swapFamilyOf(HYD_VALVE_LS_TYPE) },

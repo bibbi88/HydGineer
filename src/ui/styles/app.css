@@ -2482,13 +2482,14 @@ body.libraryDragging * {
   color: #d00;
 }
 
-/* A steering unit's wheel (components/hyd/steering.ts): a slider under the wheel symbol, shown
+/* A steering unit's wheel (components/hyd/steering.ts): a slider by the wheel symbol, shown
    while simulating. Held to one side it turns the wheel that way; let go, it springs back. */
 .steerWheel {
   position: absolute;
-  top: 98px;
-  left: -10px;
-  width: 84px;
+  /* Above the wheel, outside the unit's dashed outline. */
+  top: 34px;
+  left: -48px;
+  width: 80px;
   accent-color: var(--accent);
   cursor: ew-resize;
 }

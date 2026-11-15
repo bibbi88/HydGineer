@@ -260,16 +260,17 @@ describe('example circuits behave as described', () => {
     expect(p(f, pump, 'P')).toBeLessThan(pLoad);
   });
 
-  it('steering unit: the cylinder follows the wheel, D · n; holds in neutral', () => {
+  it('steering unit: the cylinder follows the wheel at D · n either way, holds, steers by hand', () => {
     const comps = load('Hydrostatic steering');
     const pump = byType(comps, 'hydPump');
     const unit = byType(comps, 'hydSteeringUnit');
-    const cyl = byType(comps, 'hydCylinderDouble');
+    const cyl = byType(comps, 'hydCylinderDoubleRod');
     const turn = (pct: number): void => {
       const input = unit.el.querySelector<HTMLInputElement>('input.steerWheel')!;
       input.value = String(pct);
       input.dispatchEvent(new Event('input'));
     };
+    const info = (): string => unit.el.querySelector('.hydInfo')?.textContent ?? '';
     // Neutral: open centre, the pump's oil straight to tank at low pressure.
     let f = run(1);
     expect(p(f, pump, 'P')).toBeLessThan(10);
@@ -278,10 +279,11 @@ describe('example circuits behave as described', () => {
     // Wheel to the left at 60 %: 0.9 rev/s x 100 cm³ = 5.4 L/min into L, the cylinder's A side.
     turn(-60);
     f = run(1.5);
-    expect(-flowOut(f, cyl, 'A')).toBeCloseTo(5.4, 1);
+    const qLeft = -flowOut(f, cyl, 'A');
+    expect(qLeft).toBeCloseTo(5.4, 1);
     // The pump, not the driver, makes the pressure: a little above the cylinder's.
     expect(p(f, pump, 'P')).toBeGreaterThan(p(f, cyl, 'A'));
-    expect(p(f, pump, 'P') - p(f, cyl, 'A')).toBeLessThan(10);
+    expect(info()).not.toContain('wheel torque');
     const out = snap(cyl).pos;
     expect(out).toBeGreaterThan(0.1);
 
@@ -290,10 +292,21 @@ describe('example circuits behave as described', () => {
     run(1);
     expect(Math.abs(snap(cyl).pos - out)).toBeLessThan(0.005);
 
-    // Wheel to the right: back the other way.
+    // Wheel to the right: back the other way, at the same speed (equal areas).
     turn(60);
-    run(1);
+    f = run(0.5);
+    expect(-flowOut(f, cyl, 'B')).toBeCloseTo(qLeft, 1);
     expect(snap(cyl).pos).toBeLessThan(out - 0.05);
+
+    // Pump stopped: still steers, by hand - the gerotor draws through the suction check.
+    turn(0);
+    pump.restore({ ...pump.snapshot(), speed: 0 });
+    run(0.5);
+    const before = snap(cyl).pos;
+    turn(-60);
+    run(1);
+    expect(snap(cyl).pos).toBeGreaterThan(before + 0.05);
+    expect(info()).toContain('wheel torque');
   });
 
   it('hydrostatic transmission: speed and direction from the swash plate, charge holds the low side', () => {
