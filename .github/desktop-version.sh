@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
-# The desktop app's version: the tag's (v1.2.3 -> 1.2.3) for a versioned release, otherwise the
-# build date (yy.m.d), as the web app's own version is - e.g. 26.11.14.
-if [[ "${GITHUB_REF:-}" == refs/tags/v* ]]; then
-  echo "${GITHUB_REF#refs/tags/v}"
-else
-  date -u +%y.%-m.%-d
-fi
+# The desktop app's version: yy.mmdd.<workflow run number>, e.g. 26.1115.12 - always higher than
+# the build before, which is what installed apps compare when they check for an update. (Tagged
+# releases use it too, so an update from one to the other is always recognised.)
+month=$((10#$(date -u +%m)))
+day=$((10#$(date -u +%d)))
+echo "$(date -u +%y).$((month * 100 + day)).${GITHUB_RUN_NUMBER:-0}"

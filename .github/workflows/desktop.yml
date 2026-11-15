@@ -51,10 +51,16 @@ jobs:
           npm ci
           npm pkg set version="$(../.github/desktop-version.sh)"
           npm run dist:win
+      # latest.yml is what installed apps read to find a newer version (see desktop/main.cjs).
+      - name: Check the update file is there
+        shell: bash
+        run: test -f desktop/release/latest.yml && cat desktop/release/latest.yml
       - uses: actions/upload-artifact@v4
         with:
           name: HydGineer-windows
-          path: desktop/release/*.exe
+          path: |
+            desktop/release/*.exe
+            desktop/release/latest.yml
           if-no-files-found: error
 
   flatpak:
@@ -136,6 +142,7 @@ jobs:
 
             - **Windows:** download **HydGineer-Setup.exe** and run it. It isn't code-signed, so
               Windows may warn about an unknown publisher: choose *More info → Run anyway*.
+              Once installed it updates itself (Settings → Updates; can be turned off).
             - **Linux:** download **HydGineer.flatpak**, then
               `flatpak install --user HydGineer.flatpak` and start HydGineer from the app menu.
             - **Any computer, no install:** download **HydGineer.html** and open it in a browser.

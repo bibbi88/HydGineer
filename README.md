@@ -129,12 +129,20 @@ like any desktop program, and greets you with recent files and the examples.
 - **Windows:** download the
   [installer](https://github.com/bibbi88/HydGineer/releases/latest/download/HydGineer-Setup.exe)
   and run it. It isn't code-signed, so Windows SmartScreen may warn that it's from an unknown
-  publisher: choose **More info → Run anyway**.
+  publisher: choose **More info → Run anyway**. Once installed it **updates itself**: at start
+  it asks GitHub for a newer version, downloads it in the background and offers to restart into
+  it (or installs it when the app is closed).
 - **Linux:** download the
   [Flatpak](https://github.com/bibbi88/HydGineer/releases/latest/download/HydGineer.flatpak),
   then `flatpak install --user HydGineer.flatpak` and start HydGineer from the app menu (or
   `flatpak run io.github.bibbi88.HydGineer`). The Freedesktop runtime it needs is fetched from
   Flathub on install.
+
+**Internet use.** HydGineer doesn't use the internet - the web app loads nothing from
+anywhere once open, and your circuits never leave your device. The one exception is the Windows
+app's update check, an ordinary download request to GitHub at start. It can be turned off under
+**Settings → Updates**, after which the app never connects to the internet. The Linux Flatpak
+doesn't update itself (use `flatpak update`, or install a newer file) and never goes online.
 
 Both are built by GitHub Actions ([`.github/workflows/desktop.yml`](.github/workflows/desktop.yml))
 from [`desktop/`](desktop/) - an Electron shell around the built `dist/index.html` - on every push

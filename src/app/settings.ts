@@ -13,6 +13,9 @@ export interface Settings {
   openInNewDoc: boolean;
   /** Show tips: the canvas shortcuts and the short explanations in the inspector. */
   showTips: boolean;
+  /** Desktop app (Windows): look for a newer version at start - the one time the app goes on the
+   * internet. Off: it never does. */
+  checkUpdates: boolean;
 }
 
 const STORAGE_KEY = 'hydgineer.settings';
@@ -22,6 +25,7 @@ const DEFAULTS: Settings = {
   docsAlways: true,
   openInNewDoc: true,
   showTips: false,
+  checkUpdates: true,
 };
 
 let settings: Settings = load();
@@ -36,6 +40,8 @@ function load(): Settings {
       openInNewDoc:
         typeof saved.openInNewDoc === 'boolean' ? saved.openInNewDoc : DEFAULTS.openInNewDoc,
       showTips: typeof saved.showTips === 'boolean' ? saved.showTips : DEFAULTS.showTips,
+      checkUpdates:
+        typeof saved.checkUpdates === 'boolean' ? saved.checkUpdates : DEFAULTS.checkUpdates,
     };
   } catch {
     return { ...DEFAULTS };

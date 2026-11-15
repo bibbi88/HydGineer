@@ -102,6 +102,61 @@ ipcMain.handle('save-file-as', async (_event, suggestedName, text) => {
   return file;
 });
 
+// Updates (Windows installer only): checked only when the page asks - it does, at start, while
+// its "Check for updates" setting is on - so with the setting off the app never goes online.
+// electron-updater isn't even loaded until then. A newer version is downloaded in the
+// background, and installed when the user chooses Restart now, or else when the app is closed.
+let updater = null;
+
+function updatesSupported() {
+  return process.platform === 'win32' && app.isPackaged;
+}
+
+function sendUpdateStatus(status) {
+  if (win) win.webContents.send('update-status', status);
+}
+
+function getUpdater() {
+  if (updater) return updater;
+  updater = require('electron-updater').autoUpdater;
+  updater.autoDownload = true;
+  updater.autoInstallOnAppQuit = true;
+  // The installer keeps one file name across versions (for fixed download links), which
+  // differential downloads can't work with: always the whole installer.
+  updater.disableDifferentialDownload = true;
+  updater.logger = null;
+  updater.on('checking-for-update', () => sendUpdateStatus({ state: 'checking' }));
+  updater.on('update-not-available', () => sendUpdateStatus({ state: 'none' }));
+  updater.on('update-available', (info) =>
+    sendUpdateStatus({ state: 'downloading', version: info.version, percent: 0 }),
+  );
+  updater.on('download-progress', (p) =>
+    sendUpdateStatus({ state: 'downloading', percent: Math.round(p.percent) }),
+  );
+  updater.on('update-downloaded', (info) =>
+    sendUpdateStatus({ state: 'ready', version: info.version }),
+  );
+  updater.on('error', (err) =>
+    sendUpdateStatus({ state: 'error', message: err ? String(err.message || err) : 'unknown' }),
+  );
+  return updater;
+}
+
+ipcMain.handle('updates-supported', () => updatesSupported());
+ipcMain.handle('check-updates', async () => {
+  if (!updatesSupported()) return;
+  try {
+    await getUpdater().checkForUpdates();
+  } catch (err) {
+    sendUpdateStatus({ state: 'error', message: String((err && err.message) || err) });
+  }
+});
+ipcMain.on('install-update', () => {
+  // Silently, and the app starts again afterwards. Unsaved circuits are asked about first (the
+  // window's close handler); if that's cancelled, the update waits for the next time it closes.
+  if (updater) updater.quitAndInstall(true, true);
+});
+
 ipcMain.on('renderer-ready', () => {
   rendererReady = true;
   void sendFiles(pending.splice(0));

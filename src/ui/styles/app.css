@@ -2705,3 +2705,40 @@ a.inspectorTipsBtn {
     13.3333px Arial,
     sans-serif;
 }
+
+/* A downloaded update, ready to install (ui/updateBanner.ts). */
+.updateBanner {
+  position: fixed;
+  left: 50%;
+  bottom: 18px;
+  z-index: 1800;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px 10px 16px;
+  border-radius: 10px;
+  background: #1d3b8b;
+  color: #fff;
+  font-size: 14px;
+  box-shadow: 0 10px 30px rgba(17, 24, 39, 0.3);
+}
+
+.updateBanner span {
+  white-space: nowrap;
+}
+
+.updateBanner .btn,
+.settingsUpdateRow .btn {
+  width: auto;
+  flex: 0 0 auto;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.settingsUpdateRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 2px 0 8px;
+}

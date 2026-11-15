@@ -89,10 +89,17 @@ export const TERMS_SECTIONS: TermsSection[] = [
   {
     heading: '5. Your data',
     paragraphs: [
-      'The software runs entirely in your web browser. Your projects and settings are kept ' +
-        'only on your own device - in the browser’s storage and in the files you save - and ' +
-        'are not sent to the authors or anyone else. Browser storage can be cleared, so keep ' +
-        'your own copies of work you want to keep.',
+      'The software runs entirely on your own device - in your web browser, or as the desktop ' +
+        'app. Your projects and settings are kept only there - in the browser’s or app’s ' +
+        'storage and in the files you save - and are never sent to the authors or anyone ' +
+        'else. Browser storage can be cleared, so keep your own copies of work you want to keep.',
+      'The software does not use the internet, with one exception: the Windows desktop app ' +
+        'checks GitHub (github.com, where it is published) for a newer version when it starts, ' +
+        'and downloads it. That check is an ordinary download request: GitHub sees your IP ' +
+        'address and that the update file was requested, as with any download - nothing about ' +
+        'you or your projects is sent. You can turn it off under Settings → Updates, after ' +
+        'which the app never connects to the internet. Links you choose to open (such as the ' +
+        'GitHub pages) open in your web browser.',
     ],
   },
   {

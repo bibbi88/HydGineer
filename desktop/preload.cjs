@@ -30,6 +30,16 @@ contextBridge.exposeInMainWorld('hydgineerDesktop', {
   pathForFile: (file) => webUtils.getPathForFile(file),
   saveFile: (path, text) => ipcRenderer.invoke('save-file', path, text),
   saveFileAs: (suggestedName, text) => ipcRenderer.invoke('save-file-as', suggestedName, text),
+  // Updates (desktop/main.cjs): whether this install can update itself, a check, its progress,
+  // and installing a downloaded update.
+  updates: {
+    supported: () => ipcRenderer.invoke('updates-supported'),
+    check: () => ipcRenderer.invoke('check-updates'),
+    install: () => ipcRenderer.send('install-update'),
+    onStatus: (cb) => {
+      ipcRenderer.on('update-status', (_event, status) => cb(status));
+    },
+  },
   onCloseRequest: (cb) => {
     closeHandler = cb;
   },

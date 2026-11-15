@@ -3,6 +3,31 @@
  * browser, not in the project. Opened from the toolbar's gear button.
  */
 import { getSettings, updateSettings, type Settings } from '../app/settings';
+import { desktopBridge } from '../app/desktopBridge';
+import {
+  checkForUpdatesNow,
+  getUpdateStatus,
+  onUpdateStatus,
+  updatesSupported,
+} from '../app/updates';
+
+/** The update check's state, in words. */
+function describeUpdateStatus(): string {
+  const s = getUpdateStatus();
+  if (!s) return '';
+  switch (s.state) {
+    case 'checking':
+      return 'Checking…';
+    case 'none':
+      return 'HydGineer is up to date.';
+    case 'downloading':
+      return `Downloading${s.version ? ` version ${s.version}` : ''}… ${s.percent ?? 0}%`;
+    case 'ready':
+      return `Version ${s.version ?? ''} is ready - it's installed when HydGineer restarts.`;
+    case 'error':
+      return `Couldn't check for updates (${s.message ?? 'no connection'}).`;
+  }
+}
 
 function checkboxOption(
   label: string,
@@ -103,6 +128,49 @@ export function openSettingsDialog(): void {
       (openInNewDoc) => updateSettings({ openInNewDoc }),
     ),
   );
+
+  // Desktop app: updates - the one thing that ever goes online, and the switch to keep it off.
+  if (desktopBridge()) {
+    const heading2 = document.createElement('h3');
+    heading2.className = 'inspectorSectionHeading';
+    heading2.textContent = 'Updates';
+    dialog.appendChild(heading2);
+    if (updatesSupported()) {
+      dialog.appendChild(
+        checkboxOption(
+          'Check for updates (connects to GitHub)',
+          'At start, HydGineer asks GitHub whether there is a newer version and downloads it. ' +
+            'Off: the app never connects to the internet - it works completely offline.',
+          settings.checkUpdates,
+          (checkUpdates) => updateSettings({ checkUpdates }),
+        ),
+      );
+      const row = document.createElement('div');
+      row.className = 'settingsUpdateRow';
+      const checkBtn = document.createElement('button');
+      checkBtn.type = 'button';
+      checkBtn.className = 'btn';
+      checkBtn.textContent = 'Check now';
+      checkBtn.addEventListener('click', () => checkForUpdatesNow());
+      const statusEl = document.createElement('span');
+      statusEl.className = 'inspectorHint';
+      const showStatus = (): void => {
+        statusEl.textContent = describeUpdateStatus();
+      };
+      showStatus();
+      onUpdateStatus(showStatus);
+      row.append(checkBtn, statusEl);
+      dialog.appendChild(row);
+    } else {
+      const flatpak = document.createElement('p');
+      flatpak.className = 'inspectorHint';
+      flatpak.textContent =
+        'This version doesn\u2019t update itself: on Linux, update with "flatpak update", or ' +
+        'install a newer HydGineer.flatpak from the GitHub release page. It never connects to ' +
+        'the internet by itself.';
+      dialog.appendChild(flatpak);
+    }
+  }
 
   const note = document.createElement('p');
   note.className = 'inspectorHint';

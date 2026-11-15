@@ -10,7 +10,24 @@ export interface DesktopFile {
   text: string;
 }
 
+/** Where an update stands (desktop/main.cjs): checking, none newer, downloading, downloaded and
+ * ready to install, or a failure. */
+export interface UpdateStatus {
+  state: 'checking' | 'none' | 'downloading' | 'ready' | 'error';
+  version?: string;
+  percent?: number;
+  message?: string;
+}
+
 export interface DesktopBridge {
+  /** Self-update (the Windows installer): whether this install can, checking, progress, and
+   * installing a downloaded update. */
+  updates?: {
+    supported(): Promise<boolean>;
+    check(): Promise<void>;
+    install(): void;
+    onStatus(cb: (status: UpdateStatus) => void): void;
+  };
   /** Shows an Open dialog for a project file; null if cancelled. */
   openFile(): Promise<DesktopFile | null>;
   /** Reads the project file at `path` - a recent file; null if it's no longer there. */

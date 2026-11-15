@@ -27,6 +27,8 @@ import { snap } from './core/grid';
 import { canEdit } from './app/modes';
 import { initConfirmBeforeUnload } from './app/confirmClose';
 import { desktopBridge } from './app/desktopBridge';
+import { initUpdates } from './app/updates';
+import { showUpdateReady } from './ui/updateBanner';
 import {
   initDocuments,
   onDocumentsChange,
@@ -192,6 +194,9 @@ async function restoreDocuments(): Promise<void> {
   if (termsNeedAgreement()) openTermsDialog({ requireAgreement: true });
 }
 void restoreDocuments();
+
+// The desktop app (Windows) updates itself - only while its "Check for updates" setting is on.
+if (isDesktop) void initUpdates(showUpdateReady);
 
 // Hidden or closed: whatever changed in the last moment is kept now, not lost with the page.
 window.addEventListener('pagehide', storeDocumentsNow);

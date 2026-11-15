@@ -70,6 +70,16 @@
         "--device=dri",
         "--filesystem=home"
       ]
-    }
+    },
+    "publish": [
+      {
+        "provider": "generic",
+        "url": "https://github.com/bibbi88/HydGineer/releases/latest/download",
+        "channel": "latest"
+      }
+    ]
+  },
+  "dependencies": {
+    "electron-updater": "^6.8.11"
   }
 }
