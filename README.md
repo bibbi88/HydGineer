@@ -35,6 +35,8 @@ continuation, see `src/sim/hydraulics.ts`):
 - **Relief valve**: shut below the cracking pressure, then passes the surplus flow.
 - **Pressure-reducing valve**, **pressure-compensated flow control**, **pilot-operated check**.
 - **Cylinders**: force balance p_A·A_A − p_B·A_B = F_load ± friction, speed v = Q/A; end stops.
+  The losses can be given as a friction force (N) or as a hydromechanical efficiency ηhm: the
+  seals then take (1 − ηhm) of the driving chamber's force, so the rod gives F = p·A·ηhm.
 - **Motors**: n = Q/V, Δp = 20π·T / (V·ηhm) (bar, Nm, cm³/rev) with the hydromechanical
   efficiency ηhm (default 90 %); hydraulic power in and shaft power out are shown.
 - **Flow dividers**: spool type - two metering orifices plus a compensating sleeve that

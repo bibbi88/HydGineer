@@ -261,6 +261,48 @@ const VALVE_FLOW_FIELD: NumberField = {
   step: 1,
 };
 
+/** A cylinder's losses: a friction force, or a hydromechanical efficiency - the rod then gives
+ * F = p·A·ηhm (components/hyd/actuators.ts, sim/hydraulics.ts). */
+function cylinderLossFields(forceLabel: string): InspectorField[] {
+  const mode = (snap: Record<string, unknown>): string => String(snap.frictionMode ?? 'force');
+  return [
+    {
+      kind: 'select',
+      key: 'frictionMode',
+      label: 'Losses given as',
+      options: [
+        { value: 'force', label: 'Friction force (N)' },
+        { value: 'efficiency', label: 'Hydromechanical efficiency ηhm (%)' },
+      ],
+    },
+    {
+      kind: 'number',
+      key: 'friction',
+      label: forceLabel,
+      min: 0,
+      step: 10,
+      showIf: (snap) => mode(snap) === 'force',
+    },
+    {
+      kind: 'number',
+      key: 'etaHm',
+      label: 'Hydromechanical efficiency ηhm (%)',
+      min: 5,
+      max: 100,
+      step: 1,
+      showIf: (snap) => mode(snap) === 'efficiency',
+    },
+    {
+      kind: 'note',
+      showIf: (snap) => mode(snap) === 'efficiency',
+      text: (snap) =>
+        `The seals take ${(100 - Number(snap.etaHm ?? 95)).toFixed(0)} % of the driving ` +
+        'chamber force: the rod gives F = p·A·ηhm, and the cylinder starts to move only once ' +
+        'that exceeds the load.',
+    },
+  ];
+}
+
 /** A pump sized by its displacement or by the flow it should give - the other follows from the
  * motor speed (components/hyd/supply.ts). */
 function pumpSizeFields(dispLabel: string, flowLabel: string): InspectorField[] {
@@ -793,7 +835,7 @@ const INSPECTOR_FIELDS: Record<string, InspectorField[]> = {
     },
     { kind: 'cylinderDims', bore: 'bore', rod: 'rodD', stroke: 'stroke' },
     { kind: 'number', key: 'load', label: 'Load force (N, + opposes extension)', step: 100 },
-    { kind: 'number', key: 'friction', label: 'Seal friction (N)', min: 0, step: 10 },
+    ...cylinderLossFields('Seal friction (N)'),
     {
       kind: 'number',
       key: 'mass',
@@ -812,7 +854,7 @@ const INSPECTOR_FIELDS: Record<string, InspectorField[]> = {
     },
     { kind: 'cylinderDims', bore: 'bore', rod: 'rodD', stroke: 'stroke' },
     { kind: 'number', key: 'load', label: 'Load force (N, + opposes A → B)', step: 100 },
-    { kind: 'number', key: 'friction', label: 'Friction (N, e.g. tyre scrub)', min: 0, step: 10 },
+    ...cylinderLossFields('Friction (N, e.g. tyre scrub)'),
     {
       kind: 'number',
       key: 'mass',
@@ -828,7 +870,7 @@ const INSPECTOR_FIELDS: Record<string, InspectorField[]> = {
     { kind: 'number', key: 'load', label: 'Load force (N, + opposes extension)', step: 100 },
     { kind: 'number', key: 'springPreload', label: 'Spring preload (N)', min: 0, step: 10 },
     { kind: 'number', key: 'springRate', label: 'Spring rate (N/mm)', min: 0, step: 0.5 },
-    { kind: 'number', key: 'friction', label: 'Seal friction (N)', min: 0, step: 10 },
+    ...cylinderLossFields('Seal friction (N)'),
     {
       kind: 'number',
       key: 'mass',

@@ -207,6 +207,15 @@ function cylinderLabelMethods(
   };
 }
 
+/** The piston element's losses: a friction force, or a hydromechanical efficiency. */
+function lossElement(
+  mode: 'force' | 'efficiency',
+  friction: number,
+  etaHm: number,
+): { friction: number; etaHm?: number } {
+  return mode === 'efficiency' ? { friction: 0, etaHm: etaHm / 100 } : { friction };
+}
+
 /**
  * Double-acting differential cylinder. Port A feeds the full bore, port B the annulus around
  * the rod. With the inertia of the load neglected the piston moves at v = Q_A / A_bore when
@@ -252,6 +261,9 @@ export function createHydCylinderDouble(
   let stroke = 200;
   let load = 0;
   let friction = 100;
+  /** Losses given as a friction force (N), or as a hydromechanical efficiency (%). */
+  let frictionMode: 'force' | 'efficiency' = 'force';
+  let etaHm = 95;
   /** Moving mass (kg): 0 = inertia ignored (the piston follows the flow instantly). */
   let mass = 0;
   let vLast = 0;
@@ -275,7 +287,7 @@ export function createHydCylinderDouble(
         areaA: areaA(),
         areaB: areaB(),
         load,
-        friction,
+        ...lossElement(frictionMode, friction, etaHm),
         atMin: pos <= 0,
         atMax: pos >= 1,
         volA: 0.01 + areaA() * pos * stroke * 1e-4,
@@ -310,6 +322,8 @@ export function createHydCylinderDouble(
       stroke,
       load,
       friction,
+      frictionMode,
+      etaHm,
       mass,
     }),
     restore(data: Record<string, unknown>): void {
@@ -323,6 +337,10 @@ export function createHydCylinderDouble(
       stroke = readNum(data, 'stroke', stroke, 1, 10000);
       load = readNum(data, 'load', load, -1e7, 1e7);
       friction = readNum(data, 'friction', friction, 0, 1e6);
+      if (data.frictionMode === 'force' || data.frictionMode === 'efficiency') {
+        frictionMode = data.frictionMode;
+      }
+      etaHm = readNum(data, 'etaHm', etaHm, 5, 100);
       mass = readNum(data, 'mass', mass, 0, 1e6);
       drawing.update(pos);
     },
@@ -367,6 +385,8 @@ export function createHydCylinderSingle(compLayer: HTMLElement, x: number, y: nu
   let stroke = 150;
   let load = 0;
   let friction = 50;
+  let frictionMode: 'force' | 'efficiency' = 'force';
+  let etaHm = 95;
   let springPreload = 300;
   let springRate = 2;
   let mass = 0;
@@ -385,7 +405,7 @@ export function createHydCylinderSingle(compLayer: HTMLElement, x: number, y: nu
         areaA: areaA(),
         areaB: 0,
         load: load + springForce(),
-        friction,
+        ...lossElement(frictionMode, friction, etaHm),
         atMin: pos <= 0,
         atMax: pos >= 1,
         volA: 0.01 + areaA() * pos * stroke * 1e-4,
@@ -418,6 +438,8 @@ export function createHydCylinderSingle(compLayer: HTMLElement, x: number, y: nu
       stroke,
       load,
       friction,
+      frictionMode,
+      etaHm,
       springPreload,
       springRate,
       mass,
@@ -432,6 +454,10 @@ export function createHydCylinderSingle(compLayer: HTMLElement, x: number, y: nu
       stroke = readNum(data, 'stroke', stroke, 1, 10000);
       load = readNum(data, 'load', load, -1e7, 1e7);
       friction = readNum(data, 'friction', friction, 0, 1e6);
+      if (data.frictionMode === 'force' || data.frictionMode === 'efficiency') {
+        frictionMode = data.frictionMode;
+      }
+      etaHm = readNum(data, 'etaHm', etaHm, 5, 100);
       springPreload = readNum(data, 'springPreload', springPreload, 0, 1e7);
       springRate = readNum(data, 'springRate', springRate, 0, 1e6);
       mass = readNum(data, 'mass', mass, 0, 1e6);

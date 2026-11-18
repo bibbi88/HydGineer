@@ -192,6 +192,9 @@ export type HydElement =
       areaB: number;
       load: number;
       friction: number;
+      /** Hydromechanical efficiency (0…1), instead of or besides `friction`: the seals then take
+       * (1 − ηhm) of the driving chamber's pressure force, so the rod gives F = p·A·ηhm. */
+      etaHm?: number;
       atMin: boolean;
       atMax: boolean;
       /** Oil volume (L) of each chamber, for compressibility (see HydInput.dt). */
@@ -311,6 +314,19 @@ const SHUTTLE_BAND = 0.5;
 
 /** End-stop stiffness of a flow divider's compensating sleeve (bar per unit overtravel). */
 const SPOOL_END_STIFFNESS = 2000;
+/** A piston's friction force (N) at chamber pressures `pa`, `pb`: its set friction, plus the
+ * share (1 − ηhm) of the larger chamber force when it's given an efficiency. */
+function pistonFriction(
+  e: { areaA: number; areaB: number; friction: number; etaHm?: number },
+  pa: number,
+  pb: number,
+): number {
+  if (e.etaHm === undefined) return e.friction;
+  const eta = Math.min(1, Math.max(0.05, e.etaHm));
+  const drive = Math.max(Math.max(0, pa) * e.areaA, Math.max(0, pb) * e.areaB) * 10;
+  return e.friction + (1 - eta) * drive;
+}
+
 /** Viscous damping of a piston, as the extra pressure (bar) it takes per m/s - small. */
 const PISTON_VISCOUS_BAR = 0.02;
 /** Viscous damping of a motor, bar per rev/s - small. */
@@ -672,10 +688,13 @@ export function solveHydraulics(input: HydInput): HydSolution {
         // Newton's second law, implicit Euler: m·(v − v_prev)/dt = net − friction. Coulomb
         // friction is smoothed over ±FRICTION_V0 so a stopped piston can't creep noticeably.
         const accel = (e.mass * (v - (e.vPrev ?? 0))) / Math.max(input.dt, 1e-4);
-        const friction = e.friction * Math.tanh(v / FRICTION_V0);
+        const friction = pistonFriction(e, pa, pb) * Math.tanh(v / FRICTION_V0);
         return PISTON_VISCOUS_BAR * v + (accel + friction - net) / (10 * aRef);
       }
-      return PISTON_VISCOUS_BAR * v - deadZone(net / (10 * aRef), e.friction / (10 * aRef));
+      return (
+        PISTON_VISCOUS_BAR * v -
+        deadZone(net / (10 * aRef), pistonFriction(e, pa, pb) / (10 * aRef))
+      );
     }
     if (e.kind === 'motor') {
       const n = xx[varOfElement[i]!]!;
@@ -851,7 +870,8 @@ export function solveHydraulics(input: HydInput): HydSolution {
         const pa = pressureOf(x, tA[i]!);
         const pb = pressureOf(x, tB[i]!);
         const drive = pa * e.areaA * 10 - pb * e.areaB * 10 - e.load;
-        const away = e.atMax ? drive < -e.friction : drive > e.friction;
+        const f = pistonFriction(e, pa, pb);
+        const away = e.atMax ? drive < -f : drive > f;
         if (away || (!e.atMin && !e.atMax)) {
           locked[i] = false;
           changed = true;
