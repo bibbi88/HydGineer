@@ -18,17 +18,16 @@ import {
 } from '../app/documents';
 import { getSettings } from '../app/settings';
 import { showContextMenu, type ContextMenuItem } from '../interaction/contextMenu';
-import { saveProjectToFile } from '../persistence/save';
+import { saveDocumentById } from '../app/saveCommand';
 
 /** Whether the documents are shown at all - with only one open, only if the setting asks. */
 function documentsShown(): boolean {
   return getSettings().docsAlways || listDocuments().length > 1;
 }
 
-function saveToFile(doc: ProjectDocument): void {
-  // Saving goes by what's on the canvas, so the document goes there first.
-  switchDocument(doc.id);
-  void saveProjectToFile(doc.name || 'project');
+/** Saves `doc` (as Save does - back to its file, or asking where), then closes it if it was. */
+async function saveThenClose(doc: ProjectDocument): Promise<void> {
+  if (await saveDocumentById(doc.id)) closeDocument(doc.id);
 }
 
 /** Closes `doc` - straight away if there's nothing in it, otherwise after asking, since its
@@ -43,7 +42,7 @@ export function askToCloseDocument(doc: ProjectDocument, x: number, y: number): 
       label: `Close “${doc.name}” - its circuit is removed from this browser`,
       onClick: () => closeDocument(doc.id),
     },
-    { label: 'Save it to a file first…', onClick: () => saveToFile(doc) },
+    { label: 'Save, then close', onClick: () => void saveThenClose(doc) },
     { label: 'Cancel', onClick: () => {} },
   ]);
 }
@@ -81,7 +80,7 @@ function documentMenu(doc: ProjectDocument, item: HTMLElement, x: number, y: num
   const items: ContextMenuItem[] = [
     { label: 'Rename', onClick: () => renameInPlace(doc, item) },
     { label: 'Duplicate', onClick: () => duplicateDocument(doc.id) },
-    { label: 'Save to a file…', onClick: () => saveToFile(doc) },
+    { label: 'Save', onClick: () => void saveDocumentById(doc.id) },
   ];
   if (i > 0) items.push({ label: 'Move left', onClick: () => moveDocument(doc.id, -1) });
   if (i < docs.length - 1)

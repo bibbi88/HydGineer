@@ -36,6 +36,10 @@ export interface DesktopBridge {
   pathForFile(file: File): string;
   /** Writes `text` to `path`; whether it worked. */
   saveFile(path: string, text: string): Promise<boolean>;
+  /** Shows a Save As dialog starting at `suggestedName` and returns the chosen path (allowed
+   * for saveFile from then on) without writing anything; null if cancelled. Backs the page's
+   * showSaveFilePicker stand-in (persistence/save.ts). */
+  pickSavePath?(suggestedName: string): Promise<string | null>;
   /** Shows a Save As dialog starting at `suggestedName` and writes `text` there; the chosen
    * path, or null if cancelled. */
   saveFileAs(suggestedName: string, text: string): Promise<string | null>;

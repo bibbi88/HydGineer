@@ -82,6 +82,23 @@ ipcMain.handle('save-file', async (_event, file, text) => {
   }
 });
 
+// The Save dialog alone (the page's showSaveFilePicker stand-in): the chosen path, which the
+// page may write to from then on, or null if cancelled. Nothing is written yet.
+ipcMain.handle('pick-save-path', async (_event, suggestedName) => {
+  const result = await dialog.showSaveDialog(win, {
+    title: 'Save project',
+    defaultPath: path.join(lastDir ?? app.getPath('documents'), String(suggestedName)),
+    filters: FILTERS,
+  });
+  if (result.canceled || !result.filePath) return null;
+  let file = result.filePath;
+  if (!/\.[^\\/.]+$/.test(path.basename(file))) file += '.hgcl';
+  if (!PROJECT_FILE.test(file)) file += '.hgcl';
+  lastDir = path.dirname(file);
+  allowedPaths.add(path.resolve(file));
+  return file;
+});
+
 ipcMain.handle('save-file-as', async (_event, suggestedName, text) => {
   const result = await dialog.showSaveDialog(win, {
     title: 'Save project',

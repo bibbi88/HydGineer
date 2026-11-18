@@ -66,6 +66,7 @@ const TIP_SECTIONS: TipSection[] = [
       'Delete or Backspace removes the current selection.',
       'Ctrl+C / Ctrl+V copies and pastes the selection.',
       'Ctrl+Z undoes, Ctrl+R redoes.',
+      'Ctrl+S saves (back to the same file once it has one), Ctrl+Shift+S saves as a new file.',
       'Let a new wire go on an existing one to join it there: a junction dot is put on that ' +
         'wire, which stays one wire, and the dot keeps to it when things move. Where wires ' +
         'cross without being joined, the horizontal one jumps over the other - "Line jumps at ' +

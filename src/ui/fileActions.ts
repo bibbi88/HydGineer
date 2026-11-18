@@ -7,13 +7,13 @@ import { getDeviceId } from '../app/deviceId';
 import { desktopBridge, fileBaseName, type DesktopFile } from '../app/desktopBridge';
 import {
   activeDocumentId,
-  activeDocumentPath,
   forEachDocumentOnCanvas,
   listDocuments,
   markDocumentSaved,
   onDocumentsChange,
   prepareToOpen,
   setActiveDocumentPath,
+  renameDocument,
   setDocumentPath,
   snapshotDocuments,
   switchDocument,
@@ -23,7 +23,17 @@ import {
 import { resetHistory } from '../history/historyStore';
 import { loadProject, serializeProject, unixNow } from '../persistence/project';
 import { migrate } from '../persistence/migrations';
-import { saveProjectToFile } from '../persistence/save';
+import {
+  documentNameFor,
+  fileHandles,
+  handleForPath,
+  installDesktopSavePicker,
+  saveDocument,
+} from '../persistence/save';
+import { getLastProjectFile } from '../persistence/fileHandle';
+import type { FileHandleLike } from '../persistence/save';
+import { showToast } from './toast';
+import { setDocumentSaver } from '../app/saveCommand';
 import { loadProjectFromPicker } from '../persistence/load';
 import { downloadPdf, renderPdfPage, type PdfPaper } from '../persistence/exportImage';
 import { getPageFrameWorldBounds } from './pageFrame';
@@ -41,9 +51,13 @@ export interface FileActionDeps {
 }
 
 export interface FileActions {
-  save(): Promise<void>;
-  /** Desktop only: save under a new name. */
-  saveAs(): Promise<void>;
+  /** Save: back to the circuit's file without asking, once it has one (else as Save as).
+   * Whether it was saved. */
+  save(): Promise<boolean>;
+  /** Save as: a new file, picked now - later Saves go there. */
+  saveAs(): Promise<boolean>;
+  /** Saves document `id` (Save), e.g. before closing it. */
+  saveDocumentById(id: string): Promise<boolean>;
   saveAll(): Promise<void>;
   open(): Promise<void>;
   /** Desktop only: a recent file by its path; whether it opened. */
@@ -122,6 +136,8 @@ export function createFileActions(deps: FileActionDeps): FileActions {
     loadProject(file, deps.ctx, deps.viewport);
     deps.setName(path ? fileBaseName(path) : file.name || 'project');
     setActiveDocumentPath(path);
+    if (path) fileHandles.set(activeDocumentId(), handleForPath(path));
+    else fileHandles.delete(activeDocumentId());
     // Just as in its file: nothing to save yet.
     markDocumentSaved(activeDocumentId(), serializeProject(deps.getName()));
   }
@@ -136,40 +152,77 @@ export function createFileActions(deps: FileActionDeps): FileActions {
     }
   }
 
-  async function saveAsDesktop(): Promise<boolean> {
-    if (!bridge) return false;
+  /**
+   * Saves document `id` - the circuit on the canvas, or one in another tab - through
+   * persistence/save.ts: back to its file, or to one picked now (`asNew`: always picked), or as
+   * a download where the page can't write files. Whether it was saved.
+   */
+  async function saveDoc(id: string, asNew = false): Promise<boolean> {
     // A file holds the circuit at rest, never mid-run.
     stopSimulation();
-    const file = stamped(serializeProject(deps.getName()));
-    const path = await bridge.saveFileAs(`${safeFileName(deps.getName())}.hgcl`, json(file));
-    if (!path) return false;
-    commitActiveSaved(file);
-    markDocumentSaved(activeDocumentId(), file);
-    setActiveDocumentPath(path);
-    deps.setName(fileBaseName(path));
-    rememberRecentFile(path);
+    syncHandles();
+    // One never saved is shown before asking where - so it's clear which one.
+    if (id !== activeDocumentId() && (asNew || !fileHandles.has(id))) switchDocument(id);
+    const isActive = id === activeDocumentId();
+    const kept = isActive ? null : snapshotDocuments().find((d) => d.id === id);
+    if (!isActive && !kept) return false;
+    const name = isActive ? deps.getName() : kept!.name;
+    const hadFile = fileHandles.has(id) && !asNew;
+    let file: ProjectFileV1 | null = null;
+    const outcome = await saveDocument({
+      docId: id,
+      name: safeFileName(name),
+      asNew,
+      text: () => {
+        file = stamped(isActive ? serializeProject(deps.getName()) : kept!.file);
+        return json(file);
+      },
+    });
+    if (outcome.kind === 'cancelled' || !file) return false;
+    const saved: ProjectFileV1 = file;
+    markDocumentSaved(id, saved);
+    if (id === activeDocumentId()) commitActiveSaved(saved);
+    else updateDocumentFile(id, saved);
+    if (outcome.kind === 'written') {
+      const path = outcome.handle.path;
+      if (path) {
+        setDocumentPath(id, path);
+        rememberRecentFile(path);
+      }
+      // A newly picked file names the circuit, as in a desktop program.
+      if (!hadFile) {
+        const base = documentNameFor(outcome.fileName);
+        if (base && base !== name) renameDocument(id, base);
+      }
+      showToast(`Saved ${outcome.fileName}`);
+    } else showToast(`Downloaded ${outcome.fileName}`);
     return true;
   }
 
-  async function save(): Promise<void> {
-    // A file holds the circuit at rest, never mid-run.
-    stopSimulation();
-    if (!bridge) {
-      await saveProjectToFile(deps.getName());
-      return;
+  const save = (): Promise<boolean> => saveDoc(activeDocumentId());
+  const saveAs = (): Promise<boolean> => saveDoc(activeDocumentId(), true);
+
+  /**
+   * Keeps the file handles in step with the documents: a closed document's handle goes; in the
+   * desktop app a document's file is its path (kept across restarts), so one with a path gets a
+   * handle writing there, and one whose path was cleared (an example opened into it) loses it.
+   */
+  function syncHandles(): void {
+    const docs = listDocuments();
+    for (const id of [...fileHandles.keys()]) {
+      if (!docs.some((d) => d.id === id)) fileHandles.delete(id);
     }
-    const path = activeDocumentPath();
-    if (!path) {
-      await saveAsDesktop();
-      return;
+    if (!bridge) return;
+    for (const d of docs) {
+      const h = fileHandles.get(d.id);
+      if (d.path && h?.path !== d.path) fileHandles.set(d.id, handleForPath(d.path));
+      else if (!d.path && h?.path) fileHandles.delete(d.id);
     }
-    const file = stamped(serializeProject(deps.getName()));
-    if (await bridge.saveFile(path, json(file))) {
-      commitActiveSaved(file);
-      markDocumentSaved(activeDocumentId(), file);
-      rememberRecentFile(path);
-    } else window.alert(`Couldn't save to ${path}.`);
   }
+  if (bridge) installDesktopSavePicker();
+  setDocumentSaver((id) => saveDoc(id));
+  onDocumentsChange(syncHandles);
+  syncHandles();
 
   async function saveAll(): Promise<void> {
     // A file holds the circuit at rest, never mid-run.
@@ -219,35 +272,13 @@ export function createFileActions(deps: FileActionDeps): FileActions {
   /** Desktop: saves the open documents - only those in `only`, if given - each back to its own
    * file, asking where for one never saved. Whether every one of them got saved. */
   async function saveDocumentsDesktop(only?: Set<string>): Promise<boolean> {
-    if (!bridge) return false;
-    const docs = snapshotDocuments().filter((d) => !only || only.has(d.id));
     const activeId = activeDocumentId();
     let all = true;
-    for (const doc of docs) {
-      const file = stamped(doc.file);
-      let path: string | null | undefined = doc.path;
-      if (path) {
-        if (!(await bridge.saveFile(path, json(file)))) {
-          window.alert(`Couldn't save to ${path}.`);
-          all = false;
-          continue;
-        }
-      } else {
-        // Never saved: asked where, with the tab shown so it's clear which one.
-        switchDocument(doc.id);
-        path = await bridge.saveFileAs(`${safeFileName(doc.name)}.hgcl`, json(file));
-        if (!path) {
-          all = false;
-          continue;
-        }
-        setDocumentPath(doc.id, path);
-      }
-      rememberRecentFile(path);
-      markDocumentSaved(doc.id, file);
-      if (doc.id === activeDocumentId()) commitActiveSaved(file);
-      else updateDocumentFile(doc.id, file);
+    for (const doc of listDocuments().slice()) {
+      if (only && !only.has(doc.id)) continue;
+      if (!(await saveDoc(doc.id))) all = false;
     }
-    switchDocument(activeId);
+    if (listDocuments().some((d) => d.id === activeId)) switchDocument(activeId);
     return all;
   }
 
@@ -263,7 +294,15 @@ export function createFileActions(deps: FileActionDeps): FileActions {
       const loadedName = await loadProjectFromPicker(deps.ctx, deps.viewport, () => {
         if (prepareToOpen() === 'current') resetHistory();
       });
-      if (loadedName) deps.setName(loadedName);
+      if (loadedName === undefined) return;
+      deps.setName(loadedName);
+      // Opened through the browser's picker: Save writes back to that file (Chrome asks for
+      // permission on the first save). A plain file input gives no handle: Save asks.
+      const handle = getLastProjectFile() as FileHandleLike | null;
+      if (handle && typeof handle.createWritable === 'function') {
+        fileHandles.set(activeDocumentId(), handle);
+      } else fileHandles.delete(activeDocumentId());
+      markDocumentSaved(activeDocumentId(), serializeProject(deps.getName()));
       return;
     }
     const f = await bridge.openFile();
@@ -366,7 +405,7 @@ export function createFileActions(deps: FileActionDeps): FileActions {
     const key = e.key.toLowerCase();
     if (key === 's') {
       e.preventDefault();
-      void (e.shiftKey && bridge ? saveAsDesktop() : save());
+      void (e.shiftKey ? saveAs() : save());
     } else if (key === 'o' && !e.shiftKey) {
       e.preventDefault();
       void open();
@@ -375,10 +414,8 @@ export function createFileActions(deps: FileActionDeps): FileActions {
 
   return {
     save,
-    saveAs: async () => {
-      if (bridge) await saveAsDesktop();
-      else await save();
-    },
+    saveAs,
+    saveDocumentById: (id) => saveDoc(id),
     saveAll,
     open,
     openRecent,

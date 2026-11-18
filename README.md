@@ -99,6 +99,13 @@ see **Settings**, the gear in the toolbar), each with its own undo history. Exam
 files open in a new tab. Every open circuit is kept in the browser (IndexedDB) and is back after a
 reload; Save all and Export all sheets (one PDF) cover every tab at once.
 
+**Saving** works as in a desktop program: the first **Save** (Ctrl+S) asks where, and later
+Saves write back to that file without asking; **Save as** (Ctrl+Shift+S, or the ▾ beside Save)
+picks a new file, and later Saves go there. The button reads "Save as" until the circuit has a
+file. This needs a browser that can write files - Chrome or Edge - or the desktop app; Firefox
+and Safari download the file on every save. In the browser the link to a file lasts until the
+page is reloaded (the first Save after that asks again); the desktop app remembers it.
+
 Drawing: wires snap to a port within 16 px, a wire let go on another joins it with a tap
 junction without cutting it, and crossing wires get ISO line jumps. Live pressure/flow labels
 keep clear of the other wires, symbols and readouts. Cylinders mark the sensors something reads

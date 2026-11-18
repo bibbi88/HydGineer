@@ -1,144 +1,148 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-
-vi.mock('./project', () => ({
-  serializeProject: (name: string) => ({ schemaVersion: 1, name, comps: [], conns: [] }),
-  unixNow: () => 1_800_000_000,
-}));
-
-import { saveProjectToFile } from './save';
-import { appState } from '../app/AppState';
-import { getDeviceId } from '../app/deviceId';
+import { canWriteBack, fileHandles, saveDocument, type FileHandleLike } from './save';
 
 interface WindowWithPicker {
   showSaveFilePicker?: (...args: unknown[]) => Promise<unknown>;
 }
 
-describe('saveProjectToFile', () => {
+/** A stand-in for Chrome's showSaveFilePicker: counts the picks and records what's written to
+ * each picked file. */
+function stubPicker(names: string[]) {
+  const writes: Array<{ file: string; text: string }> = [];
+  let picks = 0;
+  const pick = vi.fn(async (_opts?: unknown) => {
+    const name = names[picks++] ?? `file${picks}.hgcl`;
+    const handle: FileHandleLike = {
+      name,
+      async createWritable() {
+        const parts: Array<Blob | string> = [];
+        return {
+          async write(data: Blob | string) {
+            parts.push(data);
+          },
+          async close() {
+            const texts = await Promise.all(
+              parts.map((p) => (typeof p === 'string' ? p : p.text())),
+            );
+            writes.push({ file: name, text: texts.join('') });
+          },
+        };
+      },
+    };
+    return handle;
+  });
+  (window as WindowWithPicker).showSaveFilePicker = pick;
+  return { pick, writes, picks: () => pick.mock.calls.length };
+}
+
+const req = (text: string, asNew = false) => ({
+  docId: 'd1',
+  name: 'beam',
+  text: () => text,
+  asNew,
+});
+
+describe('saveDocument', () => {
   let clickSpy: ReturnType<typeof vi.spyOn>;
   let alertSpy: ReturnType<typeof vi.spyOn>;
+  let promptSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
+    fileHandles.clear();
     clickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
     alertSpy = vi.spyOn(window, 'alert').mockImplementation(() => {});
+    promptSpy = vi.spyOn(window, 'prompt').mockImplementation((_m, d) => d ?? null);
     vi.stubGlobal('URL', { createObjectURL: () => 'blob:mock', revokeObjectURL: () => {} });
   });
 
   afterEach(() => {
-    clickSpy.mockRestore();
-    alertSpy.mockRestore();
+    vi.restoreAllMocks();
     delete (window as WindowWithPicker).showSaveFilePicker;
     vi.unstubAllGlobals();
   });
 
-  it('falls back to a plain download with no alert when the File System Access API is unavailable', async () => {
-    await saveProjectToFile('test');
-    expect(clickSpy).toHaveBeenCalledTimes(1);
-    expect(alertSpy).not.toHaveBeenCalled();
-  });
+  it('asks where on the first Save, then writes back without asking', async () => {
+    const picker = stubPicker(['beam.hgcl']);
+    expect(canWriteBack()).toBe(true);
 
-  it('does nothing (no download) when the user cancels the native picker', async () => {
-    const abort = Object.assign(new DOMException('cancelled', 'AbortError'));
-    (window as WindowWithPicker).showSaveFilePicker = vi.fn().mockRejectedValue(abort);
+    const first = await saveDocument(req('one'));
+    expect(first.kind).toBe('written');
+    expect(picker.picks()).toBe(1);
+    expect(picker.pick.mock.calls[0]?.[0]).toMatchObject({
+      suggestedName: 'beam.hgcl',
+      id: 'hydgineer-files',
+    });
 
-    await saveProjectToFile('test');
-
+    const second = await saveDocument(req('two'));
+    expect(second.kind).toBe('written');
+    expect(picker.picks()).toBe(1);
+    expect(picker.writes).toEqual([
+      { file: 'beam.hgcl', text: 'one' },
+      { file: 'beam.hgcl', text: 'two' },
+    ]);
+    expect(fileHandles.get('d1')?.name).toBe('beam.hgcl');
     expect(clickSpy).not.toHaveBeenCalled();
-    expect(alertSpy).not.toHaveBeenCalled();
   });
 
-  it('falls back to a download with no alert when the picker itself fails (nothing written yet)', async () => {
+  it('Save as always asks, and the next Save goes to the new file', async () => {
+    const picker = stubPicker(['beam.hgcl', 'beam v2.hgcl']);
+    await saveDocument(req('one'));
+    await saveDocument(req('two', true));
+    expect(picker.picks()).toBe(2);
+    await saveDocument(req('three'));
+    expect(picker.picks()).toBe(2);
+    expect(picker.writes.at(-1)).toEqual({ file: 'beam v2.hgcl', text: 'three' });
+    expect(fileHandles.get('d1')?.name).toBe('beam v2.hgcl');
+  });
+
+  it('cancelling the picker saves nothing', async () => {
     (window as WindowWithPicker).showSaveFilePicker = vi
       .fn()
-      .mockRejectedValue(new Error('permission denied'));
-
-    await saveProjectToFile('test');
-
-    expect(clickSpy).toHaveBeenCalledTimes(1);
-    expect(alertSpy).not.toHaveBeenCalled();
-  });
-
-  it('writes through the picked handle with no download/alert when everything succeeds', async () => {
-    const write = vi.fn().mockResolvedValue(undefined);
-    const close = vi.fn().mockResolvedValue(undefined);
-    const handle = { createWritable: vi.fn().mockResolvedValue({ write, close }) };
-    (window as WindowWithPicker).showSaveFilePicker = vi.fn().mockResolvedValue(handle);
-
-    await saveProjectToFile('test');
-
-    expect(write).toHaveBeenCalledTimes(1);
-    expect(close).toHaveBeenCalledTimes(1);
+      .mockRejectedValue(new DOMException('cancelled', 'AbortError'));
+    expect((await saveDocument(req('x'))).kind).toBe('cancelled');
     expect(clickSpy).not.toHaveBeenCalled();
-    expect(alertSpy).not.toHaveBeenCalled();
+    expect(fileHandles.has('d1')).toBe(false);
   });
 
-  // Regression test: createWritable() truncates the picked file to empty as soon as it opens,
-  // before write() ever runs - so a failure here used to silently fall back to an unrelated
-  // download, leaving the user with an empty file at the location they picked and a second,
-  // unexplained save prompt with no idea what happened.
-  it('warns before falling back to a download when writing to the picked file fails partway through', async () => {
-    const handle = {
+  it('drops a handle that no longer writes, and asks again', async () => {
+    const picker = stubPicker(['again.hgcl']);
+    fileHandles.set('d1', {
+      name: 'gone.hgcl',
+      createWritable: () => Promise.reject(new DOMException('moved', 'NotFoundError')),
+    });
+    const out = await saveDocument(req('x'));
+    expect(out.kind).toBe('written');
+    expect(picker.picks()).toBe(1);
+    expect(fileHandles.get('d1')?.name).toBe('again.hgcl');
+  });
+
+  it('warns and downloads when writing the picked file fails partway', async () => {
+    (window as WindowWithPicker).showSaveFilePicker = vi.fn().mockResolvedValue({
+      name: 'beam.hgcl',
       createWritable: vi.fn().mockResolvedValue({
         write: vi.fn().mockRejectedValue(new Error('disk full')),
         close: vi.fn(),
       }),
-    };
-    (window as WindowWithPicker).showSaveFilePicker = vi.fn().mockResolvedValue(handle);
-
-    await saveProjectToFile('test');
-
-    expect(alertSpy).toHaveBeenCalledTimes(1);
+    });
+    const out = await saveDocument(req('x'));
+    expect(out.kind).toBe('downloaded');
     expect(alertSpy.mock.calls[0]?.[0]).toContain('disk full');
     expect(clickSpy).toHaveBeenCalledTimes(1);
   });
 
-  // Regression test: an earlier version re-checked write permission via handle.requestPermission()
-  // before calling createWritable() as a defensive measure - that check itself turned out to be
-  // the actual bug (it consistently resolved as not-granted for at least one real user,
-  // regardless of whether the file already existed, breaking every single save). There's no
-  // permission pre-check anymore; createWritable() is called directly and is trusted to fail on
-  // its own (surfaced via the alert above) if permission genuinely isn't there.
-  it('calls createWritable() directly, with no permission pre-check even if the handle offers one', async () => {
-    const write = vi.fn().mockResolvedValue(undefined);
-    const requestPermission = vi.fn().mockResolvedValue('granted');
-    const handle = {
-      requestPermission,
-      createWritable: vi
-        .fn()
-        .mockResolvedValue({ write, close: vi.fn().mockResolvedValue(undefined) }),
-    };
-    (window as WindowWithPicker).showSaveFilePicker = vi.fn().mockResolvedValue(handle);
+  it('Firefox (no showSaveFilePicker): asks for a name and downloads, every time', async () => {
+    expect(canWriteBack()).toBe(false);
+    promptSpy.mockReturnValue('my beam');
+    const out = await saveDocument(req('x'));
+    expect(out).toEqual({ kind: 'downloaded', fileName: 'my beam.hgcl' });
+    expect(promptSpy).toHaveBeenCalledTimes(1);
+    expect(clickSpy).toHaveBeenCalledTimes(1);
+    await saveDocument(req('y'));
+    expect(promptSpy).toHaveBeenCalledTimes(2);
+    expect(fileHandles.has('d1')).toBe(false);
 
-    await saveProjectToFile('test');
-
-    expect(requestPermission).not.toHaveBeenCalled();
-    expect(write).toHaveBeenCalledTimes(1);
-    expect(alertSpy).not.toHaveBeenCalled();
-  });
-
-  it('stamps LS and lst into the written file, and keeps them once saved', async () => {
-    appState.projectLastSavedAt = null;
-    const write = vi.fn().mockResolvedValue(undefined);
-    const close = vi.fn().mockResolvedValue(undefined);
-    (window as WindowWithPicker).showSaveFilePicker = vi
-      .fn()
-      .mockResolvedValue({ createWritable: () => Promise.resolve({ write, close }) });
-
-    await saveProjectToFile('test');
-
-    const written = JSON.parse(write.mock.calls[0]![0] as string) as Record<string, unknown>;
-    expect(written.LS).toBe(getDeviceId());
-    expect(written.lst).toBe(1_800_000_000);
-    expect(appState.projectLastSavedAt).toBe(1_800_000_000);
-  });
-
-  it('leaves lst alone when the save is cancelled', async () => {
-    appState.projectLastSavedAt = 123;
-    (window as WindowWithPicker).showSaveFilePicker = vi
-      .fn()
-      .mockRejectedValue(new DOMException('cancelled', 'AbortError'));
-
-    await saveProjectToFile('test');
-
-    expect(appState.projectLastSavedAt).toBe(123);
+    promptSpy.mockReturnValue(null);
+    expect((await saveDocument(req('z'))).kind).toBe('cancelled');
+    expect(clickSpy).toHaveBeenCalledTimes(2);
   });
 });

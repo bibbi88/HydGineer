@@ -14,8 +14,11 @@ import {
   listDocuments,
   newDocument,
   prepareToOpen,
+  onDocumentsChange,
   setActiveDocumentPath,
 } from '../app/documents';
+import { createSaveControl } from './saveControl';
+import { canWriteBack, fileHandles, fileNameOf, onFileHandlesChange } from '../persistence/save';
 import { openStartScreen } from './startScreen';
 import { createFileActions } from './fileActions';
 import { showContextMenu, type ContextMenuItem } from '../interaction/contextMenu';
@@ -80,15 +83,17 @@ export function renderProjectBar(
     },
   });
 
-  const saveBtn = iconButton('save', 'Save project', () => void files.save());
-  const saveMenu = menuArrow('More ways to save', () => [
-    { label: 'Save', onClick: () => void files.save() },
-    ...(files.isDesktop ? [{ label: 'Save as…', onClick: () => void files.saveAs() }] : []),
-    {
-      label: listDocuments().length > 1 ? `Save all (${listDocuments().length})` : 'Save all',
-      onClick: () => void files.saveAll(),
-    },
-  ]);
+  // Save, with Save as and the file it goes to under its ▾ (ui/saveControl.ts).
+  const saveControl = createSaveControl({
+    save: () => void files.save(),
+    saveAs: () => void files.saveAs(),
+    saveAll: () => (listDocuments().length > 1 ? () => void files.saveAll() : null),
+    docCount: () => listDocuments().length,
+    canWriteBack,
+    fileName: () => fileNameOf(activeDocumentId()),
+  });
+  onFileHandlesChange(saveControl.refresh);
+  onDocumentsChange(saveControl.refresh);
 
   const loadBtn = iconButton('folderOpen', 'Open project', () => void files.open());
 
@@ -131,6 +136,7 @@ export function renderProjectBar(
     // An example is a new circuit: it doesn't belong to the file this tab may have come from, so
     // Save asks where to put it instead of writing over that file (desktop app).
     setActiveDocumentPath(undefined);
+    fileHandles.delete(activeDocumentId());
     loadProject(file, ctx, viewport);
     projectName = file.name;
     activeNameChanged();
@@ -144,13 +150,7 @@ export function renderProjectBar(
     if (value !== '') openExample(Number(value));
   });
 
-  container.append(
-    newBtn,
-    splitButton(saveBtn, saveMenu),
-    loadBtn,
-    splitButton(exportBtn, exportMenu),
-    examples,
-  );
+  container.append(newBtn, saveControl.el, loadBtn, splitButton(exportBtn, exportMenu), examples);
 
   return {
     showStartScreen: () =>

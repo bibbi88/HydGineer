@@ -13,6 +13,11 @@
   --frame: #5b6b8c;
   --frame-fill: rgba(91, 107, 140, 0.045);
   --insert: #1a9c4a;
+  /* Menus and toasts (ui/saveControl.ts, ui/toast.ts). */
+  --menu-bg: #fff;
+  --menu-hover: #f0f2f7;
+  --menu-accent: #2563eb;
+  --menu-shadow: 0 12px 32px rgba(17, 24, 39, 0.18), 0 2px 6px rgba(17, 24, 39, 0.08);
 }
 
 * {
@@ -2741,4 +2746,159 @@ a.inspectorTipsBtn {
   align-items: center;
   gap: 10px;
   margin: 2px 0 8px;
+}
+
+/* Save: the button names what it will do - "Save as" until the circuit has a file, "Save" after
+   (ui/saveControl.ts). */
+.iconBtn.iconBtn--labelled {
+  width: auto;
+  gap: 5px;
+  padding: 0 7px 0 6px;
+}
+
+.iconBtnLabel {
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.saveMenu {
+  position: fixed;
+  z-index: 1000;
+  width: 330px;
+  max-width: calc(100vw - 8px);
+  padding: 6px;
+  border: 1px solid var(--line-soft);
+  border-radius: 12px;
+  background: var(--menu-bg);
+  color: var(--ink);
+  box-shadow: var(--menu-shadow);
+  transform-origin: top left;
+  animation: saveMenuIn 120ms ease-out;
+}
+
+@keyframes saveMenuIn {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(-4px);
+  }
+}
+
+.saveMenuRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.saveMenuRow:hover,
+.saveMenuRow:focus-visible {
+  background: var(--menu-hover);
+  outline: none;
+}
+
+.saveMenuTile {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  color: var(--menu-accent);
+  background: color-mix(in srgb, var(--menu-accent) 12%, transparent);
+}
+
+.saveMenuText {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.saveMenuText b {
+  font-size: 13.5px;
+}
+
+.saveMenuText small {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+.saveMenuKeys {
+  display: inline-flex;
+  flex: 0 0 auto;
+  gap: 3px;
+}
+
+.saveMenuKeys kbd {
+  min-width: 20px;
+  padding: 1px 5px;
+  border: 1px solid var(--line);
+  border-bottom-width: 2px;
+  border-radius: 4px;
+  color: var(--muted);
+  font:
+    11px/16px system-ui,
+    sans-serif;
+  text-align: center;
+}
+
+.saveMenuFoot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 6px -6px -6px;
+  padding: 9px 14px;
+  border-top: 1px solid var(--line-soft);
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.saveMenuFoot b {
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+
+.saveMenuFoot .icon {
+  flex: 0 0 auto;
+  width: 15px;
+  height: 15px;
+}
+
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: 24px;
+  z-index: 1900;
+  max-width: calc(100vw - 32px);
+  padding: 8px 14px;
+  border-radius: 8px;
+  background: #23262d;
+  color: #fff;
+  font-size: 13px;
+  box-shadow: 0 8px 24px rgba(17, 24, 39, 0.25);
+  transform: translateX(-50%);
+  animation: toastIn 150ms ease-out;
+  transition: opacity 220ms;
+}
+
+.toast--out {
+  opacity: 0;
+}
+
+@keyframes toastIn {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 6px);
+  }
 }

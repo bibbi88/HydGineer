@@ -30,6 +30,8 @@ contextBridge.exposeInMainWorld('hydgineerDesktop', {
   pathForFile: (file) => webUtils.getPathForFile(file),
   saveFile: (path, text) => ipcRenderer.invoke('save-file', path, text),
   saveFileAs: (suggestedName, text) => ipcRenderer.invoke('save-file-as', suggestedName, text),
+  // The Save dialog alone: the path chosen, for the page's showSaveFilePicker stand-in.
+  pickSavePath: (suggestedName) => ipcRenderer.invoke('pick-save-path', suggestedName),
   // Updates (desktop/main.cjs): whether this install can update itself, a check, its progress,
   // and installing a downloaded update.
   updates: {
