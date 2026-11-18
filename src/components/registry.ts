@@ -14,6 +14,8 @@ import {
   HYD_PUMP_LOOP_TYPE,
   HYD_ACCUMULATOR_TYPE,
   HYD_PUMP_TYPE,
+  HYD_PRESSURE_SOURCE_TYPE,
+  createHydPressureSource,
   HYD_TANK_TYPE,
   HYD_RELIEF_TYPE,
   HYD_GAUGE_TYPE,
@@ -128,6 +130,15 @@ export const componentRegistry = new Map<string, RegistryEntry>([
     {
       factory: (ctx, x, y) => createHydPump(ctx.compLayer, x, y),
       label: 'Pump unit (fixed displacement)',
+      placeable: true,
+      category: ComponentCategory.SUPPLY,
+    },
+  ],
+  [
+    HYD_PRESSURE_SOURCE_TYPE,
+    {
+      factory: (ctx, x, y) => createHydPressureSource(ctx.compLayer, x, y),
+      label: 'Pressure source (ideal: max flow & pressure) - experimental',
       placeable: true,
       category: ComponentCategory.SUPPLY,
     },

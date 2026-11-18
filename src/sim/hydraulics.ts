@@ -37,6 +37,29 @@ export function orificeKFromDiameter(dMm: number): number {
   return ORIFICE_CD * areaM2 * Math.sqrt((2 * 1e5) / OIL_DENSITY) * 60000;
 }
 
+/** Orifice coefficient K of a sharp-edged orifice of flow area `areaMm2` (mm²). */
+export function orificeKFromArea(areaMm2: number): number {
+  if (!(areaMm2 > 0)) return 0;
+  return ORIFICE_CD * areaMm2 * 1e-6 * Math.sqrt((2 * 1e5) / OIL_DENSITY) * 60000;
+}
+
+/** Orifice coefficient K from a valve's Kv (m³/h of water at a 1 bar drop): for oil of specific
+ * gravity ρ/1000, Q = Kv·(1000/60)·√(Δp / SG) L/min. A Cv (US gal/min at 1 psi) is Kv / 0.865. */
+export function orificeKFromKv(kv: number): number {
+  if (!(kv > 0)) return 0;
+  return (kv * 1000) / 60 / Math.sqrt(OIL_DENSITY / 1000);
+}
+
+/** Kv per Cv: Kv = 0.865 · Cv. */
+export const KV_PER_CV = 0.865;
+
+/** The diameter (mm) of the sharp-edged orifice with coefficient `k` - for showing what a
+ * rating amounts to. */
+export function equivalentOrificeDiameter(k: number): number {
+  if (!(k > 0)) return 0;
+  return Math.sqrt(k / orificeKFromDiameter(1));
+}
+
 /** Orifice coefficient from a catalogue-style rating: `qNom` L/min at a pressure drop of `dpNom`
  * bar (how directional valve manufacturers specify each flow path). */
 export function orificeKFromRating(qNom: number, dpNom: number): number {

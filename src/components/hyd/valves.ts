@@ -1,10 +1,17 @@
 import type { Component, SimStepContext } from '../../core/types';
-import { orificeKFromDiameter, orificeKFromRating, type HydElement } from '../../sim/hydraulics';
+import { orificeKFromRating, type HydElement } from '../../sim/hydraulics';
 import { getSignal } from '../../sim/signals';
 import { appState } from '../../app/AppState';
 import { Modes } from '../../app/modes';
 import { createPort, createPortLabel, createSvgEl } from '../shared/svgHelpers';
 import { drawBallCheckSymbol } from '../shared/checkValveSymbol';
+import {
+  defaultOrificeSpec,
+  orificeK,
+  orificeSpecSnapshot,
+  orificeSymbolText,
+  restoreOrificeSpec,
+} from './orificeSpec';
 import { clearFlow, paintFlow, paintPaths } from './flowPaint';
 import { FLOW_THRESHOLD } from '../../sim/pressureScale';
 import {
@@ -664,28 +671,27 @@ export function createHydThrottle(compLayer: HTMLElement, x: number, y: number):
   adjustArrow(g, 20, 40, 14);
   const ports = inlinePorts(g, 20);
   shell.setInfoSide('right');
-  const dText = createSvgEl('text', { x: 34, y: 44, 'font-size': 10 });
+  // Left of the symbol: the readouts take the right.
+  const dText = createSvgEl('text', { x: -2, y: 44, 'font-size': 10, 'text-anchor': 'end' });
   g.appendChild(dText);
-  let diameter = 2;
+  const spec = defaultOrificeSpec();
   function refresh(): void {
-    dText.textContent = `⌀${diameter}`;
+    dText.textContent = orificeSymbolText(spec);
   }
   refresh();
   const comp = hydComponentBase(shell, HYD_THROTTLE_TYPE, x, y, svgW, svgH, ports);
   return Object.assign(comp, {
-    hydElements: (): HydElement[] => [
-      { kind: 'orifice', a: 'IN', b: 'OUT', k: orificeKFromDiameter(diameter) },
-    ],
+    hydElements: (): HydElement[] => [{ kind: 'orifice', a: 'IN', b: 'OUT', k: orificeK(spec) }],
     step(_dt: number, ctx: SimStepContext): void {
       const q = ctx.elementValue(0);
       shell.setInfo(throughInfo(ctx, q));
       paintFlow(inHalf, ctx.pressureAt('IN'), q);
       paintFlow(outHalf, ctx.pressureAt('OUT'), q);
     },
-    snapshot: () => ({ ...nameSnapshot(shell), diameter }),
+    snapshot: () => ({ ...nameSnapshot(shell), ...orificeSpecSnapshot(spec) }),
     restore(data: Record<string, unknown>): void {
       restoreName(shell, data);
-      diameter = readNum(data, 'diameter', diameter, 0, 50);
+      restoreOrificeSpec(spec, data);
       refresh();
     },
     reset(): void {
@@ -739,15 +745,15 @@ export function createHydOneWayFlowControl(
   shell.setInfoSide('right');
   const dText = createSvgEl('text', { x: 62, y: 78, 'font-size': 10 });
   g.appendChild(dText);
-  let diameter = 2;
+  const spec = defaultOrificeSpec();
   function refresh(): void {
-    dText.textContent = `⌀${diameter}`;
+    dText.textContent = orificeSymbolText(spec);
   }
   refresh();
   const comp = hydComponentBase(shell, HYD_ONE_WAY_FC_TYPE, x, y, svgW, svgH, ports);
   return Object.assign(comp, {
     hydElements: (): HydElement[] => [
-      { kind: 'orifice', a: 'IN', b: 'OUT', k: orificeKFromDiameter(diameter) },
+      { kind: 'orifice', a: 'IN', b: 'OUT', k: orificeK(spec) },
       { kind: 'check', a: 'OUT', b: 'IN', crack: 0.5, k: orificeKFromRating(40, 2) },
     ],
     step(_dt: number, ctx: SimStepContext): void {
@@ -761,10 +767,10 @@ export function createHydOneWayFlowControl(
       paintFlow(bypassOut, pOut, qBypass);
       paintFlow(bypassIn, pIn, qBypass);
     },
-    snapshot: () => ({ ...nameSnapshot(shell), diameter }),
+    snapshot: () => ({ ...nameSnapshot(shell), ...orificeSpecSnapshot(spec) }),
     restore(data: Record<string, unknown>): void {
       restoreName(shell, data);
-      diameter = readNum(data, 'diameter', diameter, 0, 50);
+      restoreOrificeSpec(spec, data);
       refresh();
     },
     reset(): void {

@@ -18,6 +18,7 @@ import { redrawAllConnections } from '../wires/connection';
 import { setPageFrameSize, renderPageFrame, type PageFrameSize } from './pageFrame';
 import {
   HYD_PUMP_TYPE,
+  HYD_PRESSURE_SOURCE_TYPE,
   HYD_RELIEF_TYPE,
   HYD_GAUGE_TYPE,
   HYD_FILTER_TYPE,
@@ -72,13 +73,30 @@ import { NOTE_STYLES, TEXT_ANNOTATION_TYPE } from '../components/textAnnotation'
 import { MAX_PICTURE_WIDTH, MIN_PICTURE_WIDTH, PICTURE_TYPE } from '../components/picture';
 import { choosePictureFor } from '../interaction/pictures';
 import { HYD_STEERING_UNIT_TYPE } from '../components/hyd/steering';
+import {
+  ORIFICE_SIZINGS,
+  defaultOrificeSpec,
+  orificeSummary,
+  type OrificeSpec,
+} from '../components/hyd/orificeSpec';
 import { renderDocumentListSection } from './documentTabs';
 import { onDocumentsChange } from '../app/documents';
 import { onSettingsChange } from '../app/settings';
 
 type FieldLabel = string | ((comp: Component) => string);
 
-interface NumberField {
+/** Shown only while `showIf` says so - e.g. the fields of the way an orifice is given. */
+interface Conditional {
+  showIf?: (snap: Record<string, unknown>) => boolean;
+}
+
+/** A line of explanation computed from the component's settings. */
+interface NoteField extends Conditional {
+  kind: 'note';
+  text(snap: Record<string, unknown>): string;
+}
+
+interface NumberField extends Conditional {
   kind: 'number';
   key: string;
   label: FieldLabel;
@@ -171,7 +189,7 @@ interface SilencerField {
 }
 
 /** A plain snapshot key/value picked from a fixed list, e.g. a note's style. */
-interface SelectField {
+interface SelectField extends Conditional {
   kind: 'select';
   key: string;
   label: FieldLabel;
@@ -202,6 +220,7 @@ interface MultilineTextField {
 }
 
 type InspectorField =
+  | NoteField
   | ActionField
   | CylinderDimsField
   | SelectField
@@ -242,18 +261,144 @@ const VALVE_FLOW_FIELD: NumberField = {
   step: 1,
 };
 
-const INSPECTOR_FIELDS: Record<string, InspectorField[]> = {
-  [HYD_PUMP_TYPE]: [
-    { kind: 'pumpType' },
+/** A pump sized by its displacement or by the flow it should give - the other follows from the
+ * motor speed (components/hyd/supply.ts). */
+function pumpSizeFields(dispLabel: string, flowLabel: string): InspectorField[] {
+  const by =
+    (sizing: string) =>
+    (snap: Record<string, unknown>): boolean =>
+      (snap.sizing ?? 'displacement') === sizing;
+  return [
+    {
+      kind: 'select',
+      key: 'sizing',
+      label: 'Size by',
+      options: [
+        { value: 'displacement', label: 'Displacement (flow follows)' },
+        { value: 'flow', label: 'Flow (displacement follows)' },
+      ],
+    },
     {
       kind: 'number',
       key: 'displacement',
-      label: 'Displacement (cm³/rev)',
+      label: dispLabel,
       min: 0,
       max: 1000,
       step: 0.5,
+      showIf: by('displacement'),
     },
+    {
+      kind: 'number',
+      key: 'flowSet',
+      label: flowLabel,
+      min: 0,
+      max: 10000,
+      step: 1,
+      showIf: by('flow'),
+    },
+  ];
+}
+
+function pumpSizeNote(snap: Record<string, unknown>): string {
+  const v = Number(snap.displacement) || 0;
+  const n = Number(snap.speed) || 0;
+  const q = Number(snap.flowSet) || 0;
+  return snap.sizing === 'flow'
+    ? `→ displacement ${v.toFixed(2)} cm³/rev at ${n} rpm.`
+    : `→ flow ${q.toFixed(1)} L/min at ${n} rpm (unloaded; less the leakage under pressure).`;
+}
+
+/** A throttle's orifice: how it's given (components/hyd/orificeSpec.ts), that way's values, and
+ * what it amounts to. `suffix` names the throttled direction where there is one. */
+function orificeFields(suffix: string): InspectorField[] {
+  const by =
+    (sizing: string) =>
+    (snap: Record<string, unknown>): boolean =>
+      (snap.sizing ?? 'diameter') === sizing;
+  return [
+    { kind: 'select', key: 'sizing', label: `Orifice given as${suffix}`, options: ORIFICE_SIZINGS },
+    {
+      kind: 'number',
+      key: 'diameter',
+      label: 'Orifice diameter (mm)',
+      min: 0,
+      max: 50,
+      step: 0.1,
+      showIf: by('diameter'),
+    },
+    {
+      kind: 'number',
+      key: 'qRef',
+      label: 'Reference flow Q (L/min)',
+      min: 0,
+      max: 5000,
+      step: 1,
+      showIf: by('rating'),
+    },
+    {
+      kind: 'number',
+      key: 'dpRef',
+      label: '… at pressure drop Δp (bar)',
+      min: 0.01,
+      max: 1000,
+      step: 1,
+      showIf: by('rating'),
+    },
+    {
+      kind: 'number',
+      key: 'area',
+      label: 'Flow area (mm²)',
+      min: 0,
+      max: 2000,
+      step: 0.1,
+      showIf: by('area'),
+    },
+    {
+      kind: 'number',
+      key: 'kv',
+      label: 'Kv (m³/h)',
+      min: 0,
+      max: 500,
+      step: 0.01,
+      showIf: by('kv'),
+    },
+    {
+      kind: 'number',
+      key: 'cv',
+      label: 'Cv (US gpm)',
+      min: 0,
+      max: 600,
+      step: 0.01,
+      showIf: by('cv'),
+    },
+    {
+      kind: 'note',
+      text: (snap) =>
+        orificeSummary({ ...defaultOrificeSpec(), ...(snap as Partial<OrificeSpec>) }),
+    },
+  ];
+}
+
+const INSPECTOR_FIELDS: Record<string, InspectorField[]> = {
+  [HYD_PRESSURE_SOURCE_TYPE]: [
+    { kind: 'number', key: 'qMax', label: 'Max flow (L/min)', min: 0, max: 10000, step: 1 },
+    { kind: 'number', key: 'pMax', label: 'Max pressure (bar)', min: 1, max: 1000, step: 5 },
+    {
+      kind: 'note',
+      text: () =>
+        'Experimental: an ideal source - it gives the max flow until the pressure reaches the ' +
+        'max pressure, then holds that pressure with whatever flow the circuit takes. No motor, ' +
+        'displacement or losses; use it to try a circuit before choosing the pump.',
+    },
+  ],
+  [HYD_PUMP_TYPE]: [
+    { kind: 'pumpType' },
+    ...pumpSizeFields('Displacement (cm³/rev)', 'Flow (L/min, at the motor speed, unloaded)'),
     { kind: 'number', key: 'speed', label: 'Motor speed (rpm)', min: 0, max: 10000, step: 10 },
+    {
+      kind: 'note',
+      text: (snap) => pumpSizeNote(snap),
+    },
     { kind: 'number', key: 'etaV', label: 'Volumetric efficiency (%)', min: 50, max: 100, step: 1 },
     {
       kind: 'number',
@@ -287,15 +432,9 @@ const INSPECTOR_FIELDS: Record<string, InspectorField[]> = {
   ],
   [HYD_PUMP_LS_TYPE]: [
     { kind: 'pumpType' },
-    {
-      kind: 'number',
-      key: 'displacement',
-      label: 'Max displacement (cm³/rev)',
-      min: 0,
-      max: 1000,
-      step: 0.5,
-    },
+    ...pumpSizeFields('Max displacement (cm³/rev)', 'Max flow (L/min, at the motor speed)'),
     { kind: 'number', key: 'speed', label: 'Motor speed (rpm)', min: 0, max: 10000, step: 10 },
+    { kind: 'note', text: (snap) => pumpSizeNote(snap) },
     {
       kind: 'number',
       key: 'margin',
@@ -580,18 +719,11 @@ const INSPECTOR_FIELDS: Record<string, InspectorField[]> = {
   ],
   [HYD_THROTTLE_TYPE]: [
     { kind: 'actuatorMode', label: 'Valve type', options: swapFamilyOf(HYD_THROTTLE_TYPE) },
-    { kind: 'number', key: 'diameter', label: 'Orifice diameter (mm)', min: 0, max: 50, step: 0.1 },
+    ...orificeFields(''),
   ],
   [HYD_ONE_WAY_FC_TYPE]: [
     { kind: 'actuatorMode', label: 'Valve type', options: swapFamilyOf(HYD_ONE_WAY_FC_TYPE) },
-    {
-      kind: 'number',
-      key: 'diameter',
-      label: 'Orifice diameter (mm), IN→OUT',
-      min: 0,
-      max: 50,
-      step: 0.1,
-    },
+    ...orificeFields(', IN→OUT'),
   ],
   [HYD_FLOW_CONTROL_TYPE]: [
     { kind: 'actuatorMode', label: 'Valve type', options: swapFamilyOf(HYD_FLOW_CONTROL_TYPE) },
@@ -837,6 +969,17 @@ function updateComponentField(comp: Component, key: string, value: unknown): voi
   comp.restore({ ...comp.snapshot(), [key]: value });
   redrawAllConnections();
   appState.markDirty();
+}
+
+function renderNoteField(
+  container: HTMLElement,
+  field: NoteField,
+  snap: Record<string, unknown>,
+): void {
+  const p = document.createElement('p');
+  p.className = 'inspectorHint';
+  p.textContent = field.text(snap);
+  container.appendChild(p);
 }
 
 function renderSelectField(
@@ -1727,7 +1870,10 @@ export function renderInspector(container: HTMLElement, projectBar: ProjectBarRe
     }
 
     for (const field of fields) {
-      if (field.kind === 'sensorList') renderSensorListField(container, comp, field, snap, refresh);
+      if ('showIf' in field && field.showIf && !field.showIf(snap)) continue;
+      if (field.kind === 'note') renderNoteField(container, field, snap);
+      else if (field.kind === 'sensorList')
+        renderSensorListField(container, comp, field, snap, refresh);
       else if (field.kind === 'actuatorMode') renderActuatorModeField(container, comp, field);
       else if (field.kind === 'pumpType') renderPumpTypeField(container, comp);
       else if (field.kind === 'sensorKeySelect')

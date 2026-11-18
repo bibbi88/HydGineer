@@ -35,6 +35,7 @@ export const HYD_FILTER_TYPE = 'hydFilter';
 export const HYD_PRESSURE_SWITCH_TYPE = 'hydPressureSwitch';
 export const HYD_ACCUMULATOR_TYPE = 'hydAccumulator';
 export const HYD_PUMP_LOOP_TYPE = 'hydPumpLoop';
+export const HYD_PRESSURE_SOURCE_TYPE = 'hydPressureSource';
 
 /** Pressure (bar) at which an unprotected pump outlet is capped - standing in for whatever
  * would burst first. A circuit reaching it has no working pressure relief. */
@@ -164,6 +165,11 @@ export function createHydPump(
 
   let displacement = 10; // cm³/rev
   let speed = 1450; // rpm
+  /** How the pump is sized: by its 'displacement' (the flow follows from the speed), or by the
+   * 'flow' it should give (L/min, unloaded - the displacement follows from the speed). */
+  let sizing: 'displacement' | 'flow' = 'displacement';
+  /** The flow asked for when sized by flow, L/min at the motor speed, no load. */
+  let flowSet = (displacement * speed) / 1000;
   let etaV = 95; // %
   /** Hydromechanical efficiency, %: the shaft has to give T = V·p / (20π·ηhm). */
   let etaHm = 90;
@@ -175,8 +181,13 @@ export function createHydPump(
   let compSetting = isLS ? 250 : 150; // bar - for the LS pump, its maximum pressure cut-off
   let margin = 20; // bar - LS pump: pressure kept above the highest load
 
+  /** Displacement, cm³/rev: as set, or what gives the set flow at the motor's speed. */
+  function effectiveDisplacement(): number {
+    if (sizing === 'flow') return speed > 0 ? (flowSet * 1000) / speed : 0;
+    return displacement;
+  }
   function theoreticalFlow(): number {
-    return (displacement * speed) / 1000;
+    return (effectiveDisplacement() * speed) / 1000;
   }
   /** The motor runs with no signal set, while the named signal is on, or - written "!S1" -
    * while it is off (e.g. charging an accumulator until a pressure switch cuts the pump out). */
@@ -272,7 +283,10 @@ export function createHydPump(
     snapshot(): Record<string, unknown> {
       return {
         ...nameSnapshot(shell),
-        displacement,
+        sizing,
+        // Both kept in step, so switching how it's sized keeps the pump as it is.
+        displacement: Number(effectiveDisplacement().toFixed(3)),
+        flowSet: Number(theoreticalFlow().toFixed(3)),
         speed,
         etaV,
         etaHm,
@@ -286,6 +300,8 @@ export function createHydPump(
       restoreName(shell, data);
       displacement = readNum(data, 'displacement', displacement, 0, 1000);
       speed = readNum(data, 'speed', speed, 0, 10000);
+      if (data.sizing === 'displacement' || data.sizing === 'flow') sizing = data.sizing;
+      flowSet = readNum(data, 'flowSet', (displacement * speed) / 1000, 0, 10000);
       etaV = readNum(data, 'etaV', etaV, 50, 100);
       etaHm = readNum(data, 'etaHm', etaHm, 50, 100);
       ratedPressure = readNum(data, 'ratedPressure', ratedPressure, 1, 1000);
@@ -301,6 +317,87 @@ export function createHydPump(
       refresh();
       shell.setInfo([]);
       clearFlow(lsLine);
+    },
+  });
+}
+
+/**
+ * Ideal pressure source (experimental): gives up to `qMax` L/min, holding `pMax` bar once the
+ * circuit takes less - an idealised pump with a perfect pressure compensator, without a motor,
+ * displacement or efficiencies. Handy for trying out a circuit before choosing the pump. Its
+ * oil comes from, and returns to, the tank as for a pump.
+ */
+export function createHydPressureSource(compLayer: HTMLElement, x: number, y: number): Component {
+  const svgW = 100;
+  const svgH = 80;
+  const shell = createHydShell(
+    compLayer,
+    HYD_PRESSURE_SOURCE_TYPE,
+    x,
+    y,
+    svgW,
+    svgH,
+    'Pressure source',
+    { x: 4, y: 24, w: 32, h: 34 },
+  );
+  const g = shell.g;
+  const cx = 20;
+  const cy = 42;
+  const r = 14;
+  g.appendChild(
+    createSvgEl('circle', { cx, cy, r, fill: '#fff', stroke: INK, 'stroke-width': STROKE }),
+  );
+  // Filled triangle: hydraulic, pointing to the outlet; no shaft - nothing drives it.
+  g.appendChild(
+    createSvgEl('polygon', {
+      points: `${cx},${cy - r + 1} ${cx - 7},${cy - r + 12} ${cx + 7},${cy - r + 12}`,
+      fill: INK,
+    }),
+  );
+  const outLine = [line(g, cx, 10, cx, cy - r)];
+  const setText = createSvgEl('text', { x: 40, y: 40, 'font-size': 9 });
+  const setText2 = createSvgEl('text', { x: 40, y: 51, 'font-size': 9 });
+  g.append(setText, setText2);
+  const ports = { P: createPort(g, 'P', cx, 10, 'V') };
+  shell.setInfoSide('right');
+
+  let qMax = 20; // L/min
+  let pMax = 150; // bar
+  function refresh(): void {
+    setText.textContent = `≤ ${qMax} L/min`;
+    setText2.textContent = `≤ ${pMax} bar`;
+  }
+  refresh();
+
+  const comp = hydComponentBase(shell, HYD_PRESSURE_SOURCE_TYPE, x, y, svgW, svgH, ports);
+  return Object.assign(comp, {
+    hydElements: (): HydElement[] => [
+      // A perfect compensator: full flow up to just below pMax, none past it.
+      { kind: 'pump', out: 'P', q: qMax, leak: 0, comp: pMax, band: Math.max(0.5, pMax * 0.005) },
+      { kind: 'tank', a: '_S' },
+      { kind: 'relief', a: 'P', b: '_S', set: PUMP_BURST_PRESSURE, gain: 100 },
+    ],
+    step(_dt: number, ctx: SimStepContext): void {
+      const p = ctx.pressureAt('P');
+      const q = ctx.elementValue(0);
+      paintFlow(outLine, p, q);
+      const limit = q < qMax * 0.98 ? 'pressure limit' : 'flow limit';
+      shell.setInfo([
+        `Q ${fmtFlow(q)}`,
+        `p ${fmtBar(p)}`,
+        `P ${((Math.max(0, q) * Math.max(0, p)) / 600).toFixed(2)} kW · ${limit}`,
+      ]);
+    },
+    snapshot: () => ({ ...nameSnapshot(shell), qMax, pMax }),
+    restore(data: Record<string, unknown>): void {
+      restoreName(shell, data);
+      qMax = readNum(data, 'qMax', qMax, 0, 10000);
+      pMax = readNum(data, 'pMax', pMax, 1, 1000);
+      refresh();
+    },
+    reset(): void {
+      shell.setInfo([]);
+      clearFlow(outLine);
     },
   });
 }

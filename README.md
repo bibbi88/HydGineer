@@ -23,9 +23,15 @@ continuation, see `src/sim/hydraulics.ts`):
 - **Continuity** at every line: what flows in flows out.
 - **Orifice law** for valve paths, throttles and check valves: Q = Cd·A·√(2Δp/ρ)
   (Cd 0.62, ρ 870 kg/m³). Directional valves are rated as L/min per path at Δp 5 bar.
+- **Throttles** can be given the way a datasheet states them: orifice diameter, a reference
+  point (Q L/min at Δp bar), flow area (mm²), Kv (m³/h of water at 1 bar) or Cv (US gpm at
+  1 psi); all become Q = K·√Δp, and the inspector shows what the setting amounts to.
 - **Pump**: Q = V·n minus pressure-dependent leakage (volumetric efficiency ηv at rated
   pressure); the drive needs T = V·p / (20π·ηhm) and P = Q_geo·p / (600·ηhm) - the readout shows
   hydraulic and shaft power, shaft torque and the total efficiency ηtot = ηv·ηhm.
+  A pump can be sized by its flow instead: the displacement follows from the motor speed.
+- **Pressure source** (experimental): an ideal source giving up to a set flow, holding a set
+  maximum pressure once the circuit takes less - for trying a circuit before choosing a pump.
 - **Relief valve**: shut below the cracking pressure, then passes the surplus flow.
 - **Pressure-reducing valve**, **pressure-compensated flow control**, **pilot-operated check**.
 - **Cylinders**: force balance p_A·A_A − p_B·A_B = F_load ± friction, speed v = Q/A; end stops.
