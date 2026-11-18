@@ -373,7 +373,9 @@ export const componentRegistry = new Map<string, RegistryEntry>([
     {
       factory: (ctx, x, y) => createHydCylinderDouble(ctx.compLayer, x, y, true),
       label: 'Cylinder, double rod (steering)',
-      placeable: true,
+      // Not in the library: a double-acting cylinder is made double-rod from its inspector
+      // (the type dropdown, see interaction/valveActuatorSwap.ts).
+      placeable: false,
       category: ComponentCategory.ACTUATORS,
     },
   ],

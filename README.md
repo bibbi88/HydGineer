@@ -85,7 +85,7 @@ Units: bar (gauge), L/min, N, Nm, mm, cm³/rev.
 - Flow & check: check valve, pilot-operated check valve, throttle, one-way flow control,
   pressure-compensated flow control (optional bypass check), flow divider (spool with
   compensating sleeve, and rotary gear type)
-- Actuators: double-acting cylinder, double-rod (steering) cylinder, single-acting spring-return cylinder, hydraulic motor
+- Actuators: double-acting cylinder (single rod, or double rod for steering - chosen in its inspector), single-acting spring-return cylinder, hydraulic motor
   (fixed or variable displacement)
 - Measuring: pressure gauge, flow meter (flow and volume passed), pressure switch (publishes a
   signal, e.g. S1)
