@@ -109,6 +109,10 @@ see **Settings**, the gear in the toolbar), each with its own undo history. Exam
 files open in a new tab. Every open circuit is kept in the browser (IndexedDB) and is back after a
 reload; Save all and Export all sheets (one PDF) cover every tab at once.
 
+**Open** opens a project file; the ▾ beside it lists the five most recently opened or saved
+files (Chrome, Edge and the desktop app) and the examples. The toolbar shows each button's name
+under its icon - **Settings → Toolbar** switches to icons only.
+
 **Saving** works as in a desktop program: the first **Save** (Ctrl+S) asks where, and later
 Saves write back to that file without asking; **Save as** (Ctrl+Shift+S, or the ▾ beside Save)
 picks a new file, and later Saves go there. The button reads "Save as" until the circuit has a

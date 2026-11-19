@@ -2220,14 +2220,6 @@ body.libraryDragging * {
   color: var(--ink);
 }
 
-/* The toolbar's Examples menu (ui/projectBar.ts). */
-.exampleSelect {
-  margin-left: 4px;
-  max-width: 124px;
-  font: inherit;
-  font-size: 12px;
-}
-
 /* ---------- Open documents (ui/documentTabs.ts) ---------- */
 
 .tabbar {
@@ -2748,19 +2740,6 @@ a.inspectorTipsBtn {
   margin: 2px 0 8px;
 }
 
-/* Save: the button names what it will do - "Save as" until the circuit has a file, "Save" after
-   (ui/saveControl.ts). */
-.iconBtn.iconBtn--labelled {
-  width: auto;
-  gap: 5px;
-  padding: 0 7px 0 6px;
-}
-
-.iconBtnLabel {
-  font-size: 13px;
-  white-space: nowrap;
-}
-
 .saveMenu {
   position: fixed;
   z-index: 1000;
@@ -2901,4 +2880,82 @@ a.inspectorTipsBtn {
     opacity: 0;
     transform: translate(-50%, 6px);
   }
+}
+
+/* A button's name under its icon: shown in the toolbar while Settings → Toolbar says "Icons with
+   text below" (ui/topbar.ts, ui/iconButton.ts); otherwise only the tooltip names it. */
+.iconBtnCaption {
+  display: none;
+}
+
+.topbar--text .iconBtn:not(.iconBtn--menuArrow) {
+  flex-direction: column;
+  gap: 2px;
+  width: auto;
+  min-width: 38px;
+  height: auto;
+  padding: 4px 5px 3px;
+}
+
+.topbar--text .iconBtnCaption {
+  display: block;
+  font-size: 11px;
+  line-height: 1.1;
+  white-space: nowrap;
+}
+
+.topbar--text .iconBtn.iconBtn--menuArrow {
+  align-self: stretch;
+  height: auto;
+}
+
+/* The Open menu: recent files, then the examples (a scrolling list of their own). */
+.menuHeading {
+  padding: 8px 10px 4px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.menuNote {
+  padding: 4px 10px 8px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.menuScroll {
+  max-height: min(320px, 45vh);
+  overflow-y: auto;
+}
+
+.saveMenu .saveMenuRow + .menuSection,
+.saveMenu .menuSection + .menuHeading {
+  margin-top: 4px;
+  border-top: 1px solid var(--line-soft);
+}
+
+.iconBtn--menuArrow .iconBtnCaption {
+  display: none !important;
+}
+
+.saveMenuRow--compact {
+  padding: 5px 8px;
+}
+
+.saveMenuRow--compact .saveMenuTile {
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+}
+
+.saveMenuRow--compact .saveMenuTile .icon {
+  width: 15px;
+  height: 15px;
+}
+
+.saveMenuRow--compact .saveMenuText b {
+  font-weight: 500;
+  font-size: 13px;
 }

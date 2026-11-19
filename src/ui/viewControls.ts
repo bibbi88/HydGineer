@@ -74,9 +74,17 @@ export function renderViewControls(
   refreshReadout();
   viewport.onTransformChange?.(refreshReadout);
 
-  const fitBtn = iconButton('fit', 'Fit diagram to window', () => zoomToFit(viewport, workspaceEl));
-  const selectionBtn = iconButton('zoomSelection', 'Zoom to selection', () =>
-    zoomToSelection(viewport, workspaceEl),
+  const fitBtn = iconButton(
+    'fit',
+    'Fit diagram to window',
+    () => zoomToFit(viewport, workspaceEl),
+    'Fit',
+  );
+  const selectionBtn = iconButton(
+    'zoomSelection',
+    'Zoom to selection',
+    () => zoomToSelection(viewport, workspaceEl),
+    'Selection',
   );
 
   // Nothing selected means nothing to frame, so the button says so rather than doing nothing.
@@ -91,7 +99,7 @@ export function renderViewControls(
   // to is a worse experience than either fully on or fully off. The setting is per person, not
   // per project, so it persists in localStorage (see app/gridPreference.ts).
   let gridOn = loadGridPreference();
-  const gridBtn = iconButton('grid', 'Show grid', () => setGrid(!gridOn));
+  const gridBtn = iconButton('grid', 'Show grid', () => setGrid(!gridOn), 'Grid');
 
   function setGrid(on: boolean): void {
     gridOn = on;

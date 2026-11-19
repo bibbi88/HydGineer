@@ -86,8 +86,11 @@ export function renderTopbar(
   renderArrangeControls(section('Arrange'));
   // Tips: a toggle, lit while on - the canvas shortcuts and the short explanations in the
   // inspector show only then.
-  const tipsBtn = iconButton('tips', 'Show tips', () =>
-    updateSettings({ showTips: !getSettings().showTips }),
+  const tipsBtn = iconButton(
+    'tips',
+    'Show tips',
+    () => updateSettings({ showTips: !getSettings().showTips }),
+    'Tips',
   );
   const refreshTips = (): void => {
     const on = getSettings().showTips;
@@ -97,9 +100,15 @@ export function renderTopbar(
   };
   onSettingsChange(refreshTips);
   refreshTips();
+  // The buttons' names under their icons, unless the setting says icons only.
+  const applyToolbarStyle = (): void => {
+    container.classList.toggle('topbar--text', getSettings().toolbarStyle === 'text');
+  };
+  onSettingsChange(applyToolbarStyle);
+  applyToolbarStyle();
   section('Settings').append(
     tipsBtn,
-    iconButton('settings', 'Settings', () => openSettingsDialog()),
+    iconButton('settings', 'Settings', () => openSettingsDialog(), 'Options'),
   );
 
   return projectRefs;

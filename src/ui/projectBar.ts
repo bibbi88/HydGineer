@@ -18,6 +18,7 @@ import {
   setActiveDocumentPath,
 } from '../app/documents';
 import { createSaveControl } from './saveControl';
+import { attachDropdown, menuArrowButton } from './dropdownMenu';
 import { canWriteBack, fileHandles, fileNameOf, onFileHandlesChange } from '../persistence/save';
 import { openStartScreen } from './startScreen';
 import { createFileActions } from './fileActions';
@@ -38,6 +39,16 @@ function splitButton(main: HTMLButtonElement, arrow: HTMLButtonElement): HTMLEle
   wrap.className = 'splitButton';
   wrap.append(main, arrow);
   return wrap;
+}
+
+/** "just now", "5 min ago", "3 h ago", "2 days ago". */
+function timeAgo(at: number): string {
+  const s = Math.max(0, (Date.now() - at) / 1000);
+  if (s < 60) return 'just now';
+  if (s < 3600) return `${Math.round(s / 60)} min ago`;
+  if (s < 86400) return `${Math.round(s / 3600)} h ago`;
+  const d = Math.round(s / 86400);
+  return d === 1 ? 'yesterday' : `${d} days ago`;
 }
 
 /** World px kept free right of an example's drawing for its readouts (see zoomToFit). */
@@ -67,7 +78,7 @@ export function renderProjectBar(
   let projectName = 'project';
 
   // A new, empty circuit in a tab of its own - the same as the tab bar's +.
-  const newBtn = iconButton('newDocument', 'New circuit', () => newDocument());
+  const newBtn = iconButton('newDocument', 'New circuit', () => newDocument(), 'New');
 
   // Save, Open and Export, and their ▾ menus - files on disk in the desktop app, downloads and
   // the browser's pickers in a browser (see fileActions.ts).
@@ -95,11 +106,16 @@ export function renderProjectBar(
   onFileHandlesChange(saveControl.refresh);
   onDocumentsChange(saveControl.refresh);
 
-  const loadBtn = iconButton('folderOpen', 'Open project', () => void files.open());
+  const loadBtn = iconButton(
+    'folderOpen',
+    'Open project (Ctrl+O)',
+    () => void files.open(),
+    'Open',
+  );
 
   const openExport = (): void =>
     openExportDialog(projectName || 'project', connLayer, frameLayer, viewport, workspaceEl);
-  const exportBtn = iconButton('download', 'Export image…', openExport);
+  const exportBtn = iconButton('download', 'Export image…', openExport, 'Export');
   const exportMenu = menuArrow('More ways to export', () => [
     { label: 'Export…', onClick: openExport },
     {
@@ -111,22 +127,6 @@ export function renderProjectBar(
     },
   ]);
 
-  // Ready-made circuits to start from - opened in a new document (or, if the setting is off,
-  // replacing whatever is on the canvas: Undo brings it back; no confirm() dialog, which
-  // embedded viewers suppress).
-  const examples = document.createElement('select');
-  examples.className = 'exampleSelect';
-  examples.title = 'Load an example circuit';
-  const placeholder = document.createElement('option');
-  placeholder.value = '';
-  placeholder.textContent = 'Examples…';
-  examples.appendChild(placeholder);
-  EXAMPLES.forEach((ex, i) => {
-    const o = document.createElement('option');
-    o.value = String(i);
-    o.textContent = ex.title;
-    examples.appendChild(o);
-  });
   /** Opens example `index` (from the menu or the start screen). */
   function openExample(index: number): void {
     const ex = EXAMPLES[index];
@@ -144,13 +144,61 @@ export function renderProjectBar(
     // Room on the right for the simulation readouts beside the right-most components.
     requestAnimationFrame(() => zoomToFit(viewport, workspaceEl, EXAMPLE_READOUT_ROOM));
   }
-  examples.addEventListener('change', () => {
-    const value = examples.value;
-    examples.value = '';
-    if (value !== '') openExample(Number(value));
+  // Open, and under its ▾ the most recently opened files and the examples - ready-made
+  // circuits, opened in a new document (or, if the setting is off, replacing whatever is on the
+  // canvas: Undo brings it back).
+  const openArrow = menuArrowButton('Recent files and examples');
+  const openControl = document.createElement('span');
+  openControl.className = 'splitButton openControl';
+  openControl.append(loadBtn, openArrow);
+  attachDropdown(openControl, openArrow, 'Open', (b) => {
+    const recent = document.createElement('div');
+    recent.className = 'menuSection';
+    recent.append(b.heading('Recent files'), b.note('…'));
+    void files.recentFiles(5).then((list) => {
+      recent.replaceChildren(b.heading('Recent files'));
+      if (list.length === 0) {
+        recent.appendChild(
+          b.note(
+            files.isDesktop || canWriteBack()
+              ? 'No recent files yet.'
+              : 'Recent files need Chrome, Edge or the desktop app.',
+          ),
+        );
+      }
+      for (const f of list) {
+        recent.appendChild(
+          b.row({
+            icon: 'document',
+            title: f.name,
+            hint: f.detail || `Last opened or saved ${timeAgo(f.at)}`,
+            run: () => void f.open(),
+          }),
+        );
+      }
+    });
+    const examplesList = document.createElement('div');
+    examplesList.className = 'menuSection menuScroll';
+    EXAMPLES.forEach((ex, i) => {
+      examplesList.appendChild(
+        b.row({ icon: 'newDocument', title: ex.title, compact: true, run: () => openExample(i) }),
+      );
+    });
+    return [
+      b.row({
+        icon: 'folderOpen',
+        title: 'Open…',
+        hint: 'A project file from your computer',
+        keys: ['Ctrl', 'O'],
+        run: () => void files.open(),
+      }),
+      recent,
+      b.heading('Examples'),
+      examplesList,
+    ];
   });
 
-  container.append(newBtn, saveControl.el, loadBtn, splitButton(exportBtn, exportMenu), examples);
+  container.append(newBtn, openControl, saveControl.el, splitButton(exportBtn, exportMenu));
 
   return {
     showStartScreen: () =>

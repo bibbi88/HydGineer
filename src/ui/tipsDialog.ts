@@ -49,8 +49,9 @@ const TIP_SECTIONS: TipSection[] = [
         'canvas - and so does a right-click with the left button still held. A valve dropped ' +
         'onto a wire goes in the way you turned it (along the wire). Escape cancels a drag from ' +
         'the library.',
-      'The Examples menu in the toolbar loads ready-made circuits to start from - each in a ' +
-        'new tab, like a loaded file.',
+      'The ▾ beside Open lists your five most recent files and the examples - ready-made ' +
+        'circuits to start from, each in a new tab, like a loaded file.',
+      'Settings → Toolbar chooses icons with their names below, or icons only.',
       'Tabs above the canvas hold several circuits at once, each with its own undo history. ' +
         'Click + (or the New circuit button) for a new one, double-click a tab to rename it, ' +
         'middle-click or × to close it, right-click for more. They are kept in the browser, so ' +

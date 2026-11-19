@@ -26,11 +26,19 @@ function flipSelection(): void {
  * running (canEdit) and while nothing is selected. Flip additionally needs a selection whose
  * artwork survives being mirrored - see isMirrorableType. */
 export function renderArrangeControls(container: HTMLElement): void {
-  const rotateCcwBtn = iconButton('rotateCcw', 'Rotate counter-clockwise', () =>
-    rotateSelection(-90),
+  const rotateCcwBtn = iconButton(
+    'rotateCcw',
+    'Rotate counter-clockwise',
+    () => rotateSelection(-90),
+    'Rot. left',
   );
-  const rotateCwBtn = iconButton('rotateCw', 'Rotate clockwise', () => rotateSelection(90));
-  const flipBtn = iconButton('flipHorizontal', 'Flip horizontally', flipSelection);
+  const rotateCwBtn = iconButton(
+    'rotateCw',
+    'Rotate clockwise',
+    () => rotateSelection(90),
+    'Rot. right',
+  );
+  const flipBtn = iconButton('flipHorizontal', 'Flip horizontally', flipSelection, 'Flip');
 
   function refresh(): void {
     const selected = getSelectedComponents();

@@ -16,6 +16,8 @@ export interface Settings {
   /** Desktop app (Windows, Linux AppImage): look for a newer version at start - the one time the app goes on the
    * internet. Off: it never does. */
   checkUpdates: boolean;
+  /** The toolbar's buttons: an icon with its name under it, or the icon alone. */
+  toolbarStyle: 'text' | 'icons';
 }
 
 const STORAGE_KEY = 'hydgineer.settings';
@@ -26,6 +28,7 @@ const DEFAULTS: Settings = {
   openInNewDoc: true,
   showTips: false,
   checkUpdates: true,
+  toolbarStyle: 'text',
 };
 
 let settings: Settings = load();
@@ -42,6 +45,7 @@ function load(): Settings {
       showTips: typeof saved.showTips === 'boolean' ? saved.showTips : DEFAULTS.showTips,
       checkUpdates:
         typeof saved.checkUpdates === 'boolean' ? saved.checkUpdates : DEFAULTS.checkUpdates,
+      toolbarStyle: saved.toolbarStyle === 'icons' ? 'icons' : DEFAULTS.toolbarStyle,
     };
   } catch {
     return { ...DEFAULTS };

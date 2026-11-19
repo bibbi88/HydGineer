@@ -3,36 +3,51 @@ import { Modes, canEdit } from '../app/modes';
 import { requestSingleStep } from '../sim/loop';
 import { stopSimulation } from '../sim/stopSimulation';
 import { undo, redo, canUndo, canRedo, onHistoryChange } from '../history/historyStore';
-import { iconButton } from './iconButton';
-import { createIcon } from './icons';
+import { iconButton, setIconButtonLabel } from './iconButton';
 import { formatSimSpeed, getSimSpeed, setSimSpeed, SIM_SPEEDS } from '../app/simSpeed';
 
 /** The toolbar's simulation section: run/stop, pause and single-step the simulation, then undo
- * and redo. Play and Stop share one button, which swaps its icon and label to whichever action
- * the current mode offers. */
+ * and redo. Play and Stop share one button: Play while stopped, Stop (red) while the simulation
+ * runs or is paused. Pause turns into Play (resume) while paused. */
 export function renderToolbar(container: HTMLElement): void {
   const playStopBtn = iconButton('play', 'Play', () => {
-    if (appState.mode === Modes.PLAY) stopSimulation();
-    else appState.setMode(Modes.PLAY);
+    if (appState.mode === Modes.STOP) appState.setMode(Modes.PLAY);
+    else stopSimulation();
   });
 
+  // Pause while running (or from stopped: it starts paused, to step from the very start);
+  // while paused it reads Play and resumes.
   const pauseBtn = iconButton('pause', 'Pause', () => {
-    appState.setMode(Modes.PAUSE);
+    appState.setMode(appState.mode === Modes.PAUSE ? Modes.PLAY : Modes.PAUSE);
   });
-  const stepBtn = iconButton('step', 'Step one cycle', () => {
-    appState.setMode(Modes.PAUSE);
-    requestSingleStep();
-  });
+  const stepBtn = iconButton(
+    'step',
+    'Step one cycle',
+    () => {
+      appState.setMode(Modes.PAUSE);
+      requestSingleStep();
+    },
+    'Step',
+  );
   const undoBtn = iconButton('undo', 'Undo', undo);
   const redoBtn = iconButton('redo', 'Redo', redo);
 
   function updatePlayStopButton(): void {
-    const stopping = appState.mode === Modes.PLAY;
-    const label = stopping ? 'Stop' : 'Play';
-    playStopBtn.title = label;
-    playStopBtn.setAttribute('aria-label', label);
-    playStopBtn.classList.toggle('iconBtn--danger', stopping);
-    playStopBtn.replaceChildren(createIcon(stopping ? 'stop' : 'play'));
+    const running = appState.mode !== Modes.STOP;
+    setIconButtonLabel(
+      playStopBtn,
+      running ? 'Stop' : 'Play',
+      undefined,
+      running ? 'stop' : 'play',
+    );
+    playStopBtn.classList.toggle('iconBtn--danger', running);
+    const paused = appState.mode === Modes.PAUSE;
+    setIconButtonLabel(
+      pauseBtn,
+      paused ? 'Resume' : 'Pause',
+      paused ? 'Play' : 'Pause',
+      paused ? 'play' : 'pause',
+    );
   }
   updatePlayStopButton();
   appState.onModeChange(updatePlayStopButton);

@@ -79,6 +79,32 @@ export function openSettingsDialog(): void {
 
   const settings = getSettings();
 
+  const toolbarHeading = document.createElement('div');
+  toolbarHeading.className = 'inspectorSectionHeading';
+  toolbarHeading.textContent = 'Toolbar';
+  dialog.appendChild(toolbarHeading);
+  const styleRow = document.createElement('label');
+  styleRow.className = 'inspectorRow';
+  const styleLabel = document.createElement('span');
+  styleLabel.textContent = 'Buttons';
+  const style = document.createElement('select');
+  const styles: Array<{ value: Settings['toolbarStyle']; label: string }> = [
+    { value: 'text', label: 'Icons with text below' },
+    { value: 'icons', label: 'Icons only' },
+  ];
+  for (const st of styles) {
+    const option = document.createElement('option');
+    option.value = st.value;
+    option.textContent = st.label;
+    style.appendChild(option);
+  }
+  style.value = settings.toolbarStyle;
+  style.addEventListener('change', () =>
+    updateSettings({ toolbarStyle: style.value as Settings['toolbarStyle'] }),
+  );
+  styleRow.append(styleLabel, style);
+  dialog.appendChild(styleRow);
+
   const heading = document.createElement('div');
   heading.className = 'inspectorSectionHeading';
   heading.textContent = 'Documents';

@@ -37,9 +37,23 @@ import { setDocumentSaver } from '../app/saveCommand';
 import { loadProjectFromPicker } from '../persistence/load';
 import { downloadPdf, renderPdfPage, type PdfPaper } from '../persistence/exportImage';
 import { getPageFrameWorldBounds } from './pageFrame';
-import { forgetRecentFile, rememberRecentFile } from '../app/recentFiles';
+import { forgetRecentFile, listRecentFiles, rememberRecentFile } from '../app/recentFiles';
+import {
+  forgetRecentHandle,
+  listRecentHandles,
+  rememberRecentHandle,
+  type FileHandleRef,
+} from '../app/recentHandles';
 import { closeStartScreen } from './startScreen';
 import { computeContentBounds } from '../geometry/contentBounds';
+
+/** A recently opened or saved file: its name, where it is (if known), when, and how to open it. */
+export interface RecentEntry {
+  name: string;
+  detail: string;
+  at: number;
+  open(): Promise<boolean>;
+}
 
 export interface FileActionDeps {
   ctx: ComponentFactoryContext;
@@ -62,6 +76,8 @@ export interface FileActions {
   open(): Promise<void>;
   /** Desktop only: a recent file by its path; whether it opened. */
   openRecent(path: string): Promise<boolean>;
+  /** The most recently opened or saved files, for the Open button's menu. */
+  recentFiles(max?: number): Promise<RecentEntry[]>;
   exportAllSheets(): Promise<void>;
   isDesktop: boolean;
 }
@@ -188,7 +204,7 @@ export function createFileActions(deps: FileActionDeps): FileActions {
       if (path) {
         setDocumentPath(id, path);
         rememberRecentFile(path);
-      }
+      } else void rememberRecentHandle(outcome.handle);
       // A newly picked file names the circuit, as in a desktop program.
       if (!hadFile) {
         const base = documentNameFor(outcome.fileName);
@@ -301,12 +317,62 @@ export function createFileActions(deps: FileActionDeps): FileActions {
       const handle = getLastProjectFile() as FileHandleLike | null;
       if (handle && typeof handle.createWritable === 'function') {
         fileHandles.set(activeDocumentId(), handle);
+        void rememberRecentHandle(handle);
       } else fileHandles.delete(activeDocumentId());
       markDocumentSaved(activeDocumentId(), serializeProject(deps.getName()));
       return;
     }
     const f = await bridge.openFile();
     if (f) openFromOutside(f);
+  }
+
+  /** A file from the browser's recent list (Chrome, Edge): read through its kept handle, after
+   * the browser's permission prompt; Save then writes back to it. One that can't be read any
+   * more is taken off the list. */
+  async function openRecentHandle(handle: FileHandleRef): Promise<boolean> {
+    try {
+      if (handle.queryPermission && handle.requestPermission) {
+        const opts = { mode: 'readwrite' } as const;
+        if ((await handle.queryPermission(opts)) !== 'granted') {
+          await handle.requestPermission(opts);
+        }
+      }
+      const file = await handle.getFile!();
+      const text = await file.text();
+      closeStartScreen();
+      openText(text);
+      deps.setName(fileBaseName(handle.name));
+      fileHandles.set(activeDocumentId(), handle as unknown as FileHandleLike);
+      markDocumentSaved(activeDocumentId(), serializeProject(deps.getName()));
+      void rememberRecentHandle(handle);
+      return true;
+    } catch (err) {
+      void forgetRecentHandle(handle);
+      const detail = err instanceof Error ? err.message : String(err);
+      window.alert(`Couldn't open ${handle.name} (${detail}) - it may have been moved or deleted.`);
+      return false;
+    }
+  }
+
+  /** Up to `max` recently opened or saved files, newest first, each with how to open it: paths
+   * in the desktop app, kept file handles in Chrome and Edge, none elsewhere. */
+  async function recentFiles(max = 5): Promise<RecentEntry[]> {
+    if (bridge) {
+      return listRecentFiles()
+        .slice(0, max)
+        .map((f) => ({
+          name: f.path.split(/[\\/]/).pop() ?? f.path,
+          detail: f.path.replace(/[\\/][^\\/]*$/, ''),
+          at: f.at,
+          open: () => openRecent(f.path),
+        }));
+    }
+    return (await listRecentHandles()).slice(0, max).map((e) => ({
+      name: e.name,
+      detail: '',
+      at: e.at,
+      open: () => openRecentHandle(e.handle),
+    }));
   }
 
   /** A file from the start screen's recent list. One that's gone is taken off the list. */
@@ -419,6 +485,7 @@ export function createFileActions(deps: FileActionDeps): FileActions {
     saveAll,
     open,
     openRecent,
+    recentFiles,
     exportAllSheets,
     isDesktop: bridge !== null,
   };

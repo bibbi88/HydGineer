@@ -1,8 +1,7 @@
 import type { ViewportAdapter } from './viewport';
-import { iconButton } from './iconButton';
+import { iconButton, setIconButtonLabel } from './iconButton';
 import { appState } from '../app/AppState';
 import { Modes } from '../app/modes';
-import { createIcon } from './icons';
 import {
   canRecordVideo,
   startVideoRecording,
@@ -37,39 +36,42 @@ export function renderRecordButton(container: HTMLElement, deps: RecordButtonDep
   time.className = 'recordTime';
   time.hidden = true;
 
-  const btn = iconButton('record', 'Record video', () => {
-    if (recording) {
-      recording.stop();
-      return;
-    }
-    recording = startVideoRecording({
-      name: deps.getName() || 'simulation',
-      connLayer: deps.connLayer,
-      frameLayer: deps.frameLayer,
-      viewport: deps.viewport,
-      workspaceEl: deps.workspaceEl,
-      onEnd: () => {
-        recording = null;
-        refresh();
-      },
-    });
-    if (!recording) {
-      window.alert(
-        'This browser cannot record video. Try a current Chrome, Edge, Firefox or Safari.',
-      );
-      return;
-    }
-    refresh();
-  });
+  const btn = iconButton(
+    'record',
+    'Record video',
+    () => {
+      if (recording) {
+        recording.stop();
+        return;
+      }
+      recording = startVideoRecording({
+        name: deps.getName() || 'simulation',
+        connLayer: deps.connLayer,
+        frameLayer: deps.frameLayer,
+        viewport: deps.viewport,
+        workspaceEl: deps.workspaceEl,
+        onEnd: () => {
+          recording = null;
+          refresh();
+        },
+      });
+      if (!recording) {
+        window.alert(
+          'This browser cannot record video. Try a current Chrome, Edge, Firefox or Safari.',
+        );
+        return;
+      }
+      refresh();
+    },
+    'Record',
+  );
 
   function refresh(): void {
     const on = recording !== null;
     const label = on ? 'Stop recording and save the video' : 'Record video';
-    btn.title = label;
-    btn.setAttribute('aria-label', label);
+    setIconButtonLabel(btn, label, on ? 'Stop rec' : 'Record', on ? 'stop' : 'record');
     btn.setAttribute('aria-pressed', String(on));
     btn.classList.toggle('iconBtn--recording', on);
-    btn.replaceChildren(createIcon(on ? 'stop' : 'record'));
     time.hidden = !on;
     clearInterval(ticker);
     if (on) {

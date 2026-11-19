@@ -101,3 +101,32 @@ export function writeDocuments(value: unknown, legacyKey: string): Promise<void>
     return undefined;
   });
 }
+
+/** Another value kept in the same IndexedDB store (e.g. the browser's recent file handles,
+ * app/recentHandles.ts); undefined if there's none or IndexedDB isn't there. */
+export async function readKept(key: string): Promise<unknown> {
+  const db = await openDb();
+  if (!db) return undefined;
+  try {
+    return await request(db.transaction(STORE, 'readonly').objectStore(STORE).get(key));
+  } catch {
+    return undefined;
+  }
+}
+
+/** Keeps `value` under `key`, best effort (nothing if IndexedDB isn't there). */
+export async function writeKept(key: string, value: unknown): Promise<void> {
+  const db = await openDb();
+  if (!db) return;
+  try {
+    const tx = db.transaction(STORE, 'readwrite');
+    tx.objectStore(STORE).put(value, key);
+    await new Promise<void>((resolve) => {
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => resolve();
+      tx.onabort = () => resolve();
+    });
+  } catch {
+    // Best effort.
+  }
+}
