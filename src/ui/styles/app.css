@@ -3105,7 +3105,16 @@ a.inspectorTipsBtn {
   border-radius: 8px;
 }
 
+/* The paper and file name take the room the row has, so their text shows in full. */
+.exportManyDialog .inspectorRow > span {
+  flex: 0 0 auto;
+}
+
 .exportManyDialog .inspectorRow select,
 .exportManyDialog .inspectorRow input[type='text'] {
-  min-width: 260px;
+  flex: 1 1 auto;
+  width: auto;
+  min-width: 0;
+  max-width: 420px;
+  font-size: 13px;
 }
