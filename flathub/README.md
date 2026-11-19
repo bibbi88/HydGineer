@@ -43,7 +43,8 @@ take the build number as the third part (`0.9.37`), so installed apps still upda
 3. Tag it: `git tag v0.10.0 && git push origin v0.10.0`. The workflow makes a release of
    its own with `HydGineer-linux-x64.tar.gz` (the desktop app takes the tag's version).
 4. In the manifest, set the archive's `url` to that release's file and its `sha256`
-   (`sha256sum HydGineer-linux-x64.tar.gz`), and the git source's `tag` to the new tag.
+   (`sha256sum HydGineer-linux-x64.tar.gz`), and the git source's `tag` to the new tag and its
+   `commit` to that tag's commit (`git rev-list -n 1 v0.10.0`).
 
 ## Submitting to Flathub (the first time)
 

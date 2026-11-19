@@ -6,10 +6,10 @@
 # metadata, file type and icons from the same tag in this repository.
 id: io.github.bibbi88.HydGineer
 runtime: org.freedesktop.Platform
-runtime-version: '25.08'
+runtime-version: '26.08'
 sdk: org.freedesktop.Sdk
 base: org.electronjs.Electron2.BaseApp
-base-version: '25.08'
+base-version: '26.08'
 command: hydgineer
 separate-locales: false
 finish-args:
@@ -42,7 +42,8 @@ modules:
       # (x-checker-data) and opens a pull request with the new url and sha256.
       - type: archive
         url: https://github.com/bibbi88/HydGineer/releases/download/v0.9.0/HydGineer-linux-x64.tar.gz
-        sha256: 0000000000000000000000000000000000000000000000000000000000000000
+        # Filled in from the release's file (flathub/README.md, Releasing a version).
+        sha256: '0000000000000000000000000000000000000000000000000000000000000000'
         dest: hydgineer
         x-checker-data:
           type: json
@@ -54,4 +55,5 @@ modules:
       - type: git
         url: https://github.com/bibbi88/HydGineer.git
         tag: v0.9.0
+        # commit: the tag's commit, filled in at release (flathub/README.md).
         dest: src
