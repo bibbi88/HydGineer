@@ -100,7 +100,8 @@ describe('3/2 valve', () => {
 
   it('shows its actuation on the symbol', () => {
     const { valve } = circuit({ actuation: 'roller', sensorKey: 'B1' });
-    expect(valve.el.querySelector('circle')).not.toBeNull();
+    expect(valve.el.querySelectorAll('.hydSpool circle')).toHaveLength(2);
+    expect(valve.el.querySelector<SVGElement>('.hydRollerCam')?.style.display).toBe('none');
     expect(valve.el.textContent).toContain('B1');
   });
 });

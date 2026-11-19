@@ -558,29 +558,41 @@ function drawCell32(g: SVGElement, x0: number, kind: 'pa' | 'at'): CellPaths {
   return { 'A>T': arrowLine(g, xa, top, xb, bot - 1) };
 }
 
-/** Roller (mechanical) actuation on the end face at `edgeX`: a plunger with a roller on its
- * end, the sensor that presses it named above. */
-function drawRoller(g: SVGElement, edgeX: number, dir: 1 | -1, name: string): void {
-  const y = BODY_Y + 12;
-  line(g, edgeX, y, edgeX + dir * 14, y);
-  g.appendChild(
-    createSvgEl('circle', {
-      cx: edgeX + dir * 19,
-      cy: y,
-      r: 5,
-      fill: '#fff',
-      stroke: INK,
-      'stroke-width': STROKE,
-    }),
-  );
-  const t = createSvgEl('text', {
-    x: edgeX + dir * 19,
-    y: y - 9,
-    'text-anchor': 'middle',
-    'font-size': 11,
-  });
+/** Roller lever (mechanical actuation) on the end face at `edgeX`, drawn as PneuGineer draws
+ * it: two arms out to a roller (two rings), the sensor that presses it named above, and the
+ * cylinder's cam - a solid wedge touching the roller - shown while it presses it. Returns the
+ * cam. */
+function drawRoller(g: SVGElement, edgeX: number, dir: 1 | -1, name: string): SVGElement {
+  const cy = BODY_Y + CELL / 2;
+  const reach = edgeX + dir * 26;
+  const cx = reach + dir * 4;
+  const r = 10;
+  line(g, edgeX, cy - 6, reach, cy - 6);
+  line(g, edgeX, cy + 6, reach, cy + 6);
+  for (const radius of [r, 4]) {
+    g.appendChild(
+      createSvgEl('circle', {
+        cx,
+        cy,
+        r: radius,
+        fill: '#fff',
+        stroke: INK,
+        'stroke-width': STROKE,
+      }),
+    );
+  }
+  const t = createSvgEl('text', { x: cx, y: cy - 15, 'text-anchor': 'middle', 'font-size': 11 });
   t.textContent = name || '?';
   g.appendChild(t);
+  const tip = cx + dir * (r + 1);
+  const cam = createSvgEl('path', {
+    d: `M ${tip} ${cy} L ${tip + dir * 14} ${cy - 8} L ${tip + dir * 14} ${cy + 8} Z`,
+    fill: INK,
+    class: 'hydRollerCam',
+  });
+  cam.style.display = 'none';
+  g.appendChild(cam);
+  return cam;
 }
 
 /**
@@ -620,6 +632,8 @@ export function createHydValve32(compLayer: HTMLElement, x: number, y: number): 
   };
   shell.setInfoSide('right');
   let cells: CellPaths[] = [];
+  /** The cylinder's cam on the roller, shown while it presses it. */
+  let cam: SVGElement | null = null;
 
   let key = nextFreeSolenoidKeys(1)[0] ?? 'Y1';
   /** The sensor (cylinder position signal) that presses the roller. */
@@ -638,8 +652,9 @@ export function createHydValve32(compLayer: HTMLElement, x: number, y: number): 
   function draw(): void {
     slide.replaceChildren();
     cells = [drawCell32(slide, 100, shiftedKind()), drawCell32(slide, 140, restKind())];
+    cam = null;
     if (actuation === 'solenoid') drawSolenoid(slide, 100, -1, key);
-    else if (actuation === 'roller') drawRoller(slide, 100, -1, sensorKey);
+    else if (actuation === 'roller') cam = drawRoller(slide, 100, -1, sensorKey);
     else drawLever(slide, 100, -1);
     // A spring returns it, except the lever's detent, which holds it where it was put.
     if (actuation !== 'lever') drawSpring(slide, 180, 1, BODY_Y + 20);
@@ -654,6 +669,8 @@ export function createHydValve32(compLayer: HTMLElement, x: number, y: number): 
   }
   function applyState(): void {
     slide.setAttribute('transform', `translate(${shifted ? 0 : -CELL},0)`);
+    // The cylinder's cam sits on the roller while it holds the valve shifted.
+    if (cam) cam.style.display = shifted ? '' : 'none';
   }
   draw();
 
