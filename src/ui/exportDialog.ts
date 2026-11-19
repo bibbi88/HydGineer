@@ -11,6 +11,7 @@ import {
   type PdfPaper,
 } from '../persistence/exportImage';
 import { appState } from '../app/AppState';
+import { exportZoom, renderExportZoom, type ExportZoomState } from './exportZoom';
 
 type RegionChoice = 'auto' | 'frame' | 'view';
 
@@ -23,7 +24,7 @@ interface RegionOption {
 const REGION_OPTIONS: RegionOption[] = [
   {
     value: 'auto',
-    label: 'Everything',
+    label: 'Whole diagram',
     hint: 'Every component, auto-cropped with a small margin.',
   },
   {
@@ -111,6 +112,16 @@ export function openExportDialog(
   previewBox.className = 'exportPreviewBox';
   dialog.appendChild(previewBox);
 
+  // Zoom: the area fitted to the PDF's page (images at actual size), or a fixed zoom.
+  const zoom: ExportZoomState = { fit: true, percent: 100 };
+  const zoomHeading = document.createElement('div');
+  zoomHeading.className = 'inspectorSectionHeading';
+  zoomHeading.textContent = 'Zoom';
+  dialog.append(
+    zoomHeading,
+    renderExportZoom(zoom, 'Fit to the page (PDF) - images at actual size'),
+  );
+
   const buttonRow = document.createElement('div');
   buttonRow.className = 'exportDialogButtons';
   const svgBtn = document.createElement('button');
@@ -189,7 +200,13 @@ export function openExportDialog(
   }
 
   svgBtn.addEventListener('click', () => {
-    exportProjectAsSvg(name, connLayer, frameLayer, resolveRegion(choice, viewport, workspaceEl));
+    exportProjectAsSvg(
+      name,
+      connLayer,
+      frameLayer,
+      resolveRegion(choice, viewport, workspaceEl),
+      exportZoom(zoom, true),
+    );
     close();
   });
   pngBtn.addEventListener('click', () => {
@@ -198,6 +215,7 @@ export function openExportDialog(
       connLayer,
       frameLayer,
       resolveRegion(choice, viewport, workspaceEl),
+      exportZoom(zoom, true),
     );
     close();
   });
@@ -209,6 +227,7 @@ export function openExportDialog(
       frameLayer,
       resolveRegion(choice, viewport, workspaceEl),
       paperSelect.value as PdfPaper,
+      exportZoom(zoom),
     );
     close();
   });

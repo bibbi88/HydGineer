@@ -412,13 +412,15 @@ export function setDocumentPath(id: string, path: string): void {
 }
 
 /** Puts each document on the canvas in turn, tab order, and runs `fn` on it - then goes back to
- * the one that was open. For Export all sheets, which draws each from the canvas. */
+ * the one that was open. For Export several circuits, which draws each from the canvas; `only`: just those. */
 export async function forEachDocumentOnCanvas(
   fn: (doc: { id: string; name: string }) => Promise<void>,
+  only?: ReadonlySet<string>,
 ): Promise<void> {
   const startId = activeId;
   try {
     for (const doc of [...docs]) {
+      if (only && !only.has(doc.id)) continue;
       switchDocument(doc.id);
       // Let wires and labels settle into place before drawing.
       await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));

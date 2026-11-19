@@ -215,8 +215,10 @@ export function exportProjectAsSvg(
   connLayer: SVGSVGElement,
   frameLayer: SVGSVGElement | null,
   region: ExportRegion,
+  zoom = 1,
 ): void {
   const svg = buildExportSvg(connLayer, frameLayer, region);
+  scaleSvg(svg, zoom);
   const serialized = new XMLSerializer().serializeToString(svg);
   download(new Blob([serialized], { type: 'image/svg+xml' }), `${name}.svg`);
 }
@@ -244,6 +246,11 @@ async function renderToCanvas(
   return canvas;
 }
 
+/** Saves `blob` as a download named `filename`. */
+export function downloadBlob(blob: Blob, filename: string): void {
+  download(blob, filename);
+}
+
 function download(blob: Blob, filename: string): void {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -258,8 +265,9 @@ export async function exportProjectAsPng(
   connLayer: SVGSVGElement,
   frameLayer: SVGSVGElement | null,
   region: ExportRegion,
+  zoom = 1,
 ): Promise<void> {
-  const canvas = await renderToCanvas(buildExportSvg(connLayer, frameLayer, region), 1);
+  const canvas = await renderToCanvas(buildExportSvg(connLayer, frameLayer, region), zoom);
   if (!canvas) return;
   const blob: Blob | null = await new Promise((resolve) => canvas.toBlob(resolve, 'image/png'));
   if (blob) download(blob, `${name}.png`);
@@ -276,19 +284,42 @@ const MAX_CANVAS_PIXELS = 16_000_000;
 
 /** Where a drawing `aspect` (width / height) goes on `paper`: turned to whichever orientation
  * suits it, scaled to fit inside the margins and centered. Sizes in pt. */
+/** One px of the drawing at 100 % zoom, in pt (a CSS px is 1/96 inch, a pt 1/72). */
+const PT_PER_PX = 0.75;
+
+/**
+ * `zoom`: the drawing at that scale (1 = 100 %: a px on screen is 1/96 inch on paper) instead of
+ * fitted to the page - still never larger than the page allows, so nothing is cut off. Needs the
+ * drawing's width in px (`drawingWidth`).
+ */
 export function layoutPdfPage(
   paper: PdfPaper,
   aspect: number,
-): { width: number; height: number; imageRect: { x: number; y: number; w: number; h: number } } {
+  zoom?: number,
+  drawingWidth?: number,
+): {
+  width: number;
+  height: number;
+  imageRect: { x: number; y: number; w: number; h: number };
+  /** The zoom asked for was too large for the paper: it was fitted instead. */
+  shrunk: boolean;
+} {
   const { w: shortMm, h: longMm } = PAPER_MM[paper];
   const landscape = aspect >= 1;
   const width = (landscape ? longMm : shortMm) * MM;
   const height = (landscape ? shortMm : longMm) * MM;
   const boxW = width - 2 * PDF_MARGIN_MM * MM;
   const boxH = height - 2 * PDF_MARGIN_MM * MM;
-  const w = Math.min(boxW, boxH * aspect);
+  const fit = Math.min(boxW, boxH * aspect);
+  const wanted = zoom && drawingWidth ? drawingWidth * PT_PER_PX * zoom : fit;
+  const w = Math.min(fit, wanted);
   const h = w / aspect;
-  return { width, height, imageRect: { x: (width - w) / 2, y: (height - h) / 2, w, h } };
+  return {
+    width,
+    height,
+    imageRect: { x: (width - w) / 2, y: (height - h) / 2, w, h },
+    shrunk: wanted > fit + 0.5,
+  };
 }
 
 /** zlib-compresses `data` (what a PDF's FlateDecode filter expects). */
@@ -307,11 +338,12 @@ export async function renderPdfPage(
   frameLayer: SVGSVGElement | null,
   region: ExportRegion,
   paper: PdfPaper,
-): Promise<{ page: PdfPage; image: PdfImage } | null> {
+  zoom?: number,
+): Promise<{ page: PdfPage; image: PdfImage; shrunk: boolean } | null> {
   const svg = buildExportSvg(connLayer, frameLayer, region);
   const width = Number(svg.getAttribute('width'));
   const height = Number(svg.getAttribute('height'));
-  const page = layoutPdfPage(paper, width / height);
+  const { shrunk, ...page } = layoutPdfPage(paper, width / height, zoom, width);
 
   const wanted = ((page.imageRect.w / 72) * PDF_DPI) / width;
   const scale = Math.min(wanted, Math.sqrt(MAX_CANVAS_PIXELS / (width * height)));
@@ -329,6 +361,7 @@ export async function renderPdfPage(
   return {
     page: { ...page, title },
     image: { width: canvas.width, height: canvas.height, deflated: await deflate(rgb) },
+    shrunk,
   };
 }
 
@@ -345,7 +378,47 @@ export async function exportProjectAsPdf(
   frameLayer: SVGSVGElement | null,
   region: ExportRegion,
   paper: PdfPaper,
+  zoom?: number,
 ): Promise<void> {
-  const page = await renderPdfPage(name, connLayer, frameLayer, region, paper);
+  const page = await renderPdfPage(name, connLayer, frameLayer, region, paper, zoom);
   if (page) downloadPdf(name, [page]);
+}
+
+/** Sets an export svg's displayed size to `zoom` times its drawing (the viewBox stays). */
+function scaleSvg(svg: SVGSVGElement, zoom: number): void {
+  if (zoom === 1) return;
+  const w = Number(svg.getAttribute('width'));
+  const h = Number(svg.getAttribute('height'));
+  if (!svg.getAttribute('viewBox')) svg.setAttribute('viewBox', `0 0 ${w} ${h}`);
+  svg.setAttribute('width', String(Math.round(w * zoom)));
+  svg.setAttribute('height', String(Math.round(h * zoom)));
+}
+
+/** The circuit on the canvas now, cropped to `region`, as an SVG file's contents. */
+export function svgBlob(
+  connLayer: SVGSVGElement,
+  frameLayer: SVGSVGElement | null,
+  region: ExportRegion,
+  zoom = 1,
+): Blob {
+  const svg = buildExportSvg(connLayer, frameLayer, region);
+  scaleSvg(svg, zoom);
+  return new Blob([new XMLSerializer().serializeToString(svg)], { type: 'image/svg+xml' });
+}
+
+/** The circuit on the canvas now, cropped to `region`, as a PNG `scale` times screen size. */
+export async function pngBlob(
+  connLayer: SVGSVGElement,
+  frameLayer: SVGSVGElement | null,
+  region: ExportRegion,
+  scale: number,
+): Promise<Blob | null> {
+  const canvas = await renderToCanvas(buildExportSvg(connLayer, frameLayer, region), scale);
+  if (!canvas) return null;
+  return new Promise((resolve) => canvas.toBlob(resolve, 'image/png'));
+}
+
+/** `pages` as one PDF file's contents. */
+export function pdfBlob(pages: Array<{ page: PdfPage; image: PdfImage }>): Blob {
+  return new Blob([buildPdfPages(pages) as BlobPart], { type: 'application/pdf' });
 }

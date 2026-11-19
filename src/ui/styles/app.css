@@ -2959,3 +2959,86 @@ a.inspectorTipsBtn {
   font-weight: 500;
   font-size: 13px;
 }
+
+/* Export several (ui/exportManyDialog.ts) and the exports' zoom (ui/exportZoom.ts). */
+.exportManyDialog {
+  width: 520px;
+}
+
+.exportManyList {
+  display: flex;
+  flex-direction: column;
+  max-height: 180px;
+  overflow-y: auto;
+  margin-bottom: 4px;
+  padding: 4px 8px;
+  border: 1px solid var(--line-soft);
+  border-radius: 6px;
+}
+
+.exportManyChoice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 0;
+  font-size: 13px;
+}
+
+.exportManyChoice small {
+  color: var(--muted);
+}
+
+.linkBtn {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--menu-accent);
+  font: inherit;
+  font-weight: 500;
+  text-transform: none;
+  letter-spacing: 0;
+  cursor: pointer;
+}
+
+.exportZoomRow {
+  gap: 6px;
+}
+
+.exportZoomStep {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--menu-bg);
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.exportZoomSlider {
+  flex: 1 1 auto;
+  min-width: 120px;
+  accent-color: var(--menu-accent);
+}
+
+.exportZoomValue {
+  min-width: 48px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.exportZoom--fit .exportZoomSlider,
+.exportZoom--fit .exportZoomValue {
+  opacity: 0.45;
+}
+
+.btn.btnPrimary {
+  border-color: var(--menu-accent);
+  background: var(--menu-accent);
+  color: #fff;
+}
+
+.btn.btnPrimary:disabled {
+  opacity: 0.5;
+}

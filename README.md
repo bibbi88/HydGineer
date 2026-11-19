@@ -107,7 +107,11 @@ them.
 Several circuits can be open at once, as **tabs** above the canvas (or listed in the inspector -
 see **Settings**, the gear in the toolbar), each with its own undo history. Examples and loaded
 files open in a new tab. Every open circuit is kept in the browser (IndexedDB) and is back after a
-reload; Save all and Export all sheets (one PDF) cover every tab at once.
+reload; Save all saves every tab at once. **Export several circuits** (the ▾ beside Export) exports
+the tabs you tick as one PDF with a page each, a PDF each, PNG or SVG images - each circuit's page
+frame or its whole diagram, fitted to the page or at a zoom of 25-400 %, on A4, A3 or each
+frame's own paper; several files go into a folder you choose (Chrome, Edge, the desktop app) or
+are downloaded. The single Export has the same zoom.
 
 **Open** opens a project file; the ▾ beside it lists the five most recently opened or saved
 files (Chrome, Edge and the desktop app) and the examples. The toolbar shows each button's name

@@ -1,6 +1,7 @@
 import type { ComponentFactoryContext } from '../components/registry';
 import type { ViewportAdapter } from './viewport';
 import { openExportDialog } from './exportDialog';
+import { openExportManyDialog } from './exportManyDialog';
 import { iconButton } from './iconButton';
 import { EXAMPLES } from '../persistence/examples';
 import { loadProject } from '../persistence/project';
@@ -121,9 +122,9 @@ export function renderProjectBar(
     {
       label:
         listDocuments().length > 1
-          ? `Export all sheets (${listDocuments().length}) as PDF`
-          : 'Export all sheets as PDF',
-      onClick: () => void files.exportAllSheets(),
+          ? `Export several circuits (${listDocuments().length} open)…`
+          : 'Export several circuits…',
+      onClick: () => openExportManyDialog(connLayer, frameLayer),
     },
   ]);
 
