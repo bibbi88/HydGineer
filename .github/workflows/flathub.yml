@@ -57,6 +57,11 @@ jobs:
           sudo apt-get install -y flatpak python3-yaml
           flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
           flatpak install --user -y --noninteractive flathub org.flatpak.Builder
+          # What the manifest builds on - installed here: the builder, in its own sandbox, can't
+          # install them itself on a runner (no D-Bus session).
+          flatpak install --user -y --noninteractive flathub \
+            org.freedesktop.Platform//26.08 org.freedesktop.Sdk//26.08 \
+            org.electronjs.Electron2.BaseApp//26.08
       - name: Lint the manifest and the metadata
         run: |
           lint() { flatpak run --command=flatpak-builder-lint org.flatpak.Builder "$@"; }
@@ -75,7 +80,7 @@ jobs:
         run: |
           python3 flathub/local-manifest.py flathub-build
           cd flathub-build
-          flatpak run org.flatpak.Builder --user --install-deps-from=flathub --force-clean \
+          flatpak run org.flatpak.Builder --user --force-clean \
             --disable-rofiles-fuse --repo=repo builddir io.github.bibbi88.HydGineer.yml
       - name: Lint the built app
         # Some checks only pass on Flathub's own servers (e.g. screenshots mirrored there).
