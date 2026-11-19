@@ -7,6 +7,8 @@
 #     https://github.com/bibbi88/HydGineer/releases/latest/download/HydGineer.flatpak
 #     https://github.com/bibbi88/HydGineer/releases/latest/download/HydGineer.AppImage
 #     https://github.com/bibbi88/HydGineer/releases/latest/download/HydGineer.html
+#     https://github.com/bibbi88/HydGineer/releases/latest/download/HydGineer-linux-x64.tar.gz
+#   (the last one is what the Flathub package installs - see flathub/README.md)
 # - pushing a version tag (git tag v1.2.3 && git push origin v1.2.3) makes a release of its own.
 #
 # Can also be started by hand on any branch (Actions > Desktop apps > Run workflow); such runs
@@ -113,7 +115,7 @@ jobs:
           if-no-files-found: error
 
   appimage:
-    name: Linux AppImage
+    name: Linux AppImage and tar.gz
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -136,6 +138,8 @@ jobs:
           npm ci
           npm pkg set version="$(../.github/desktop-version.sh)"
           npm run dist:appimage
+          # The same build as a plain tar.gz - what the Flathub package installs (flathub/).
+          npm run dist:tarball
       # latest-linux.yml is what an installed AppImage reads to find a newer version.
       - name: Check the update file is there
         run: test -f desktop/release/latest-linux.yml && cat desktop/release/latest-linux.yml
@@ -145,6 +149,7 @@ jobs:
           path: |
             desktop/release/*.AppImage
             desktop/release/latest-linux.yml
+            desktop/release/HydGineer-linux-x64.tar.gz
           if-no-files-found: error
 
   release:

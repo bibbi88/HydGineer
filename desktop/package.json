@@ -1,7 +1,7 @@
 {
   "name": "hydgineer-desktop",
   "productName": "HydGineer",
-  "version": "0.1.0",
+  "version": "26.1119.0",
   "description": "Hydraulic circuit editor and simulator",
   "author": "bibbi88",
   "license": "SEE LICENSE IN LICENSE",
@@ -11,7 +11,8 @@
     "start": "electron .",
     "dist:win": "electron-builder --win nsis --publish never",
     "dist:flatpak": "electron-builder --linux flatpak --publish never",
-    "dist:appimage": "electron-builder --linux AppImage --publish never"
+    "dist:appimage": "electron-builder --linux AppImage --publish never",
+    "dist:tarball": "electron-builder --linux tar.gz --publish never -c.linux.artifactName='HydGineer-linux-x64.${ext}'"
   },
   "devDependencies": {
     "electron": "45.3.2",
@@ -56,7 +57,8 @@
       "category": "Education",
       "synopsis": "Hydraulic circuit editor and simulator",
       "description": "Draw hydraulic and electro-hydraulic circuits with ISO 1219 symbols and simulate their pressures and flows.",
-      "artifactName": "HydGineer.${ext}"
+      "artifactName": "HydGineer.${ext}",
+      "executableName": "hydgineer"
     },
     "flatpak": {
       "runtime": "org.freedesktop.Platform",

@@ -177,6 +177,9 @@ start. It can be turned off under **Settings → Updates**, after which the app 
 the internet. The Linux Flatpak doesn't update itself (use `flatpak update`, or install a newer
 file) and never goes online.
 
+**Flathub:** the files for publishing HydGineer on Flathub - the manifest, metadata, desktop
+entry and file type - are in [`flathub/`](flathub/), with how to release and submit it.
+
 Both are built by GitHub Actions ([`.github/workflows/desktop.yml`](.github/workflows/desktop.yml))
 from [`desktop/`](desktop/) - an Electron shell around the built `dist/index.html` - on every push
 to `main`, into the [latest release](https://github.com/bibbi88/HydGineer/releases/latest). The

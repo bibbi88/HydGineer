@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- AppStream metadata for Flathub and software centres (see flathub/README.md). -->
+<component type="desktop-application">
+  <id>io.github.bibbi88.HydGineer</id>
+  <name>HydGineer</name>
+  <summary>Draw and simulate hydraulic circuits</summary>
+  <developer id="io.github.bibbi88">
+    <name>bibbi88</name>
+  </developer>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>MIT</project_license>
+  <launchable type="desktop-id">io.github.bibbi88.HydGineer.desktop</launchable>
+  <description>
+    <p>
+      HydGineer is a hydraulic circuit editor and simulator for learning and teaching hydraulics
+      and electro-hydraulics. Drag pumps, valves, cylinders and motors onto a canvas, wire them
+      together with ISO 1219 symbols and run the simulation: every line shows its pressure and
+      flow, solved from the actual hydraulic relationships.
+    </p>
+    <ul>
+      <li>Directional, pressure and flow control valves, load sensing, steering units and more</li>
+      <li>Cylinders and motors with loads, friction or efficiency, and moving masses</li>
+      <li>Electrical control: push buttons, relays, solenoids, sensors and a small PLC</li>
+      <li>Ready-made example circuits to start from</li>
+      <li>Several circuits open at once, in tabs</li>
+      <li>Export to PDF, PNG and SVG, one circuit or many</li>
+    </ul>
+    <p>
+      The simulation is a simplified model for education. It is not a design or safety tool.
+    </p>
+  </description>
+  <categories>
+    <category>Education</category>
+    <category>Engineering</category>
+  </categories>
+  <keywords>
+    <keyword>hydraulics</keyword>
+    <keyword>circuit</keyword>
+    <keyword>simulation</keyword>
+    <keyword>ISO 1219</keyword>
+  </keywords>
+  <url type="homepage">https://bibbi88.github.io/HydGineer/</url>
+  <url type="bugtracker">https://github.com/bibbi88/HydGineer/issues</url>
+  <url type="vcs-browser">https://github.com/bibbi88/HydGineer</url>
+  <screenshots>
+    <screenshot type="default">
+      <caption>A load-sensing circuit being simulated</caption>
+      <image>https://raw.githubusercontent.com/bibbi88/HydGineer/main/docs/screenshots/simulation.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>Drawing a circuit, with the component library and the inspector</caption>
+      <image>https://raw.githubusercontent.com/bibbi88/HydGineer/main/docs/screenshots/editor.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>Exporting several circuits, with a preview of each page</caption>
+      <image>https://raw.githubusercontent.com/bibbi88/HydGineer/main/docs/screenshots/export.png</image>
+    </screenshot>
+  </screenshots>
+  <content_rating type="oars-1.1"/>
+  <supports>
+    <control>pointing</control>
+    <control>keyboard</control>
+  </supports>
+  <requires>
+    <display_length compare="ge">768</display_length>
+  </requires>
+  <provides>
+    <mediatype>application/x-hydgineer</mediatype>
+  </provides>
+  <releases>
+    <!-- Newest first. Add one for each version tag before pushing the tag (flathub/README.md). -->
+    <release version="26.1201.0" date="2026-12-01">
+      <description>
+        <p>First release on Flathub.</p>
+      </description>
+    </release>
+  </releases>
+</component>

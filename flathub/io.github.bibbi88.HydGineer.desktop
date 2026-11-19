@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=HydGineer
+GenericName=Hydraulic circuit simulator
+Comment=Draw hydraulic circuits with ISO 1219 symbols and simulate their pressures and flows
+Exec=hydgineer @@u %U @@
+Icon=io.github.bibbi88.HydGineer
+Terminal=false
+Categories=Education;Engineering;Science;
+Keywords=hydraulics;hydraulic;circuit;simulation;ISO 1219;cylinder;valve;pump;
+MimeType=application/x-hydgineer;
+StartupWMClass=HydGineer

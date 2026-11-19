@@ -1,0 +1,85 @@
+# Checks HydGineer's Flathub package (flathub/) the way Flathub builds it: the Linux build of the
+# app, packaged by flathub/io.github.bibbi88.HydGineer.yml on Flathub's Electron base, inside
+# flatpak-builder with no network - then Flathub's own linter on the manifest, the metadata and
+# the built app. Runs on pushes to dev that touch the desktop app or the Flathub files, and by
+# hand (Actions > Flathub check > Run workflow). See flathub/README.md.
+name: Flathub check
+
+on:
+  push:
+    branches: [dev]
+    paths:
+      - 'flathub/**'
+      - 'desktop/**'
+      - '.github/workflows/flathub.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: flathub-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Build and lint the Flatpak
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            desktop/package-lock.json
+      - name: Build the web app
+        run: |
+          npm ci
+          npm run build
+      - name: Linux build (tar.gz)
+        run: |
+          mkdir -p desktop/app
+          cp dist/index.html desktop/app/index.html
+          cd desktop
+          npm ci
+          npm pkg set version="$(../.github/desktop-version.sh)"
+          npm run dist:tarball
+          tar tzf release/HydGineer-linux-x64.tar.gz | head -5
+      - name: Install Flatpak and Flathub's builder
+        timeout-minutes: 20
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y flatpak python3-yaml
+          flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+          flatpak install --user -y --noninteractive flathub org.flatpak.Builder
+      - name: Lint the manifest and the metadata
+        run: |
+          lint() { flatpak run --command=flatpak-builder-lint org.flatpak.Builder "$@"; }
+          lint manifest flathub/io.github.bibbi88.HydGineer.yml
+          lint appstream flathub/io.github.bibbi88.HydGineer.metainfo.xml
+          desktop-file-validate flathub/io.github.bibbi88.HydGineer.desktop || true
+      - name: Build the Flatpak as Flathub would (from this checkout)
+        timeout-minutes: 25
+        run: |
+          python3 flathub/local-manifest.py flathub-build
+          cd flathub-build
+          flatpak run org.flatpak.Builder --user --install-deps-from=flathub --force-clean \
+            --disable-rofiles-fuse --repo=repo builddir io.github.bibbi88.HydGineer.yml
+      - name: Lint the built app
+        # Some checks only pass on Flathub's own servers (e.g. screenshots mirrored there).
+        continue-on-error: true
+        run: |
+          cd flathub-build
+          flatpak run --command=flatpak-builder-lint org.flatpak.Builder repo repo
+      - name: Bundle it for trying out
+        run: |
+          cd flathub-build
+          flatpak build-bundle repo HydGineer-flathub-test.flatpak io.github.bibbi88.HydGineer
+      - uses: actions/upload-artifact@v4
+        with:
+          name: HydGineer-flathub-test
+          path: flathub-build/HydGineer-flathub-test.flatpak
+          if-no-files-found: error

@@ -1,0 +1,56 @@
+# Flathub manifest for HydGineer - this file goes to the app's repository on Flathub
+# (github.com/flathub/io.github.bibbi88.HydGineer); see flathub/README.md.
+#
+# It packages the Linux build of a tagged release (HydGineer-linux-x64.tar.gz, made by
+# .github/workflows/desktop.yml) on Flathub's Electron base, and takes the desktop entry,
+# metadata, file type and icons from the same tag in this repository.
+id: io.github.bibbi88.HydGineer
+runtime: org.freedesktop.Platform
+runtime-version: '25.08'
+sdk: org.freedesktop.Sdk
+base: org.electronjs.Electron2.BaseApp
+base-version: '25.08'
+command: hydgineer
+separate-locales: false
+finish-args:
+  - --share=ipc
+  - --socket=fallback-x11
+  - --socket=wayland
+  - --device=dri
+  # File dialogs through the desktop portal: no access to the home folder is needed, only to the
+  # files picked or opened.
+  - --env=GTK_USE_PORTAL=1
+  - --env=ELECTRON_OZONE_PLATFORM_HINT=auto
+modules:
+  - name: hydgineer
+    buildsystem: simple
+    build-commands:
+      - cp -a hydgineer /app/hydgineer
+      - install -Dm755 src/flathub/hydgineer.sh /app/bin/hydgineer
+      - install -Dm644 src/flathub/io.github.bibbi88.HydGineer.desktop
+        /app/share/applications/io.github.bibbi88.HydGineer.desktop
+      - install -Dm644 src/flathub/io.github.bibbi88.HydGineer.metainfo.xml
+        /app/share/metainfo/io.github.bibbi88.HydGineer.metainfo.xml
+      - install -Dm644 src/flathub/io.github.bibbi88.HydGineer.mime.xml
+        /app/share/mime/packages/io.github.bibbi88.HydGineer.xml
+      - install -Dm644 src/desktop/build/icon.svg
+        /app/share/icons/hicolor/scalable/apps/io.github.bibbi88.HydGineer.svg
+      - install -Dm644 src/desktop/build/icon.png
+        /app/share/icons/hicolor/512x512/apps/io.github.bibbi88.HydGineer.png
+    sources:
+      # The release's Linux build. On a new tag, Flathub's checker updates this entry by itself
+      # (x-checker-data) and opens a pull request with the new url and sha256.
+      - type: archive
+        url: https://github.com/bibbi88/HydGineer/releases/download/v26.1201.0/HydGineer-linux-x64.tar.gz
+        sha256: 0000000000000000000000000000000000000000000000000000000000000000
+        dest: hydgineer
+        x-checker-data:
+          type: json
+          url: https://api.github.com/repos/bibbi88/HydGineer/releases/latest
+          version-query: .tag_name | sub("^v"; "")
+          url-query: .assets[] | select(.name=="HydGineer-linux-x64.tar.gz") | .browser_download_url
+      # The same tag's sources: desktop entry, metadata, file type, icons.
+      - type: git
+        url: https://github.com/bibbi88/HydGineer.git
+        tag: v26.1201.0
+        dest: src
