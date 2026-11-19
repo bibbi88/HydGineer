@@ -111,7 +111,8 @@ reload; Save all saves every tab at once. **Export several circuits** (the ▾ b
 the tabs you tick as one PDF with a page each, a PDF each, PNG or SVG images - each circuit's page
 frame or its whole diagram, fitted to the page or at a zoom of 25-400 %, on A4, A3 or each
 frame's own paper; several files go into a folder you choose (Chrome, Edge, the desktop app) or
-are downloaded. The single Export has the same zoom.
+are downloaded. **Show the pages** previews each one as it will come out; click a page to give that
+circuit its own area, zoom and paper. The single Export has the same zoom.
 
 **Open** opens a project file; the ▾ beside it lists the five most recently opened or saved
 files (Chrome, Edge and the desktop app) and the examples. The toolbar shows each button's name

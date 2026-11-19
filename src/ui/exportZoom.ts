@@ -1,7 +1,7 @@
 /**
- * The exports' zoom: fit the chosen area to the page, or a fixed zoom set with a slider between
- * − and + buttons, its value shown beside it (25-400 %). For an image there's no page: "fit"
- * then means the drawing at 100 %.
+ * The exports' zoom: fit the chosen area to the page, or a fixed zoom - typed in, or stepped with
+ * the − and + beside it (25-400 %). For an image there's no page: "fit" then means the drawing at
+ * 100 %.
  */
 export interface ExportZoomState {
   fit: boolean;
@@ -48,32 +48,36 @@ export function renderExportZoom(
   minus.className = 'exportZoomStep';
   minus.textContent = '−';
   minus.setAttribute('aria-label', 'Zoom out');
-  const slider = document.createElement('input');
-  slider.type = 'range';
-  slider.min = String(ZOOM_MIN);
-  slider.max = String(ZOOM_MAX);
-  slider.step = String(STEP);
-  slider.className = 'exportZoomSlider';
-  slider.setAttribute('aria-label', 'Zoom level');
+  const field = document.createElement('input');
+  field.type = 'number';
+  field.min = String(ZOOM_MIN);
+  field.max = String(ZOOM_MAX);
+  field.step = '5';
+  field.className = 'exportZoomField';
+  field.setAttribute('aria-label', 'Zoom, %');
   const plus = document.createElement('button');
   plus.type = 'button';
   plus.className = 'exportZoomStep';
   plus.textContent = '+';
   plus.setAttribute('aria-label', 'Zoom in');
-  const value = document.createElement('span');
-  value.className = 'exportZoomValue';
-  zoomRow.append(zoomInput, minus, slider, plus, value);
+  const unit = document.createElement('span');
+  unit.className = 'exportZoomUnit';
+  unit.textContent = '%';
+  const zoomLabel = document.createElement('span');
+  zoomLabel.textContent = 'Zoom';
+  zoomRow.append(zoomInput, zoomLabel, minus, field, unit, plus);
   wrap.append(fitRow, zoomRow);
 
   function show(): void {
     fitInput.checked = state.fit;
     zoomInput.checked = !state.fit;
-    slider.value = String(state.percent);
-    value.textContent = `${state.percent} %`;
+    if (document.activeElement !== field) field.value = String(state.percent);
     wrap.classList.toggle('exportZoom--fit', state.fit);
   }
-  function set(percent: number): void {
-    state.percent = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, Math.round(percent / STEP) * STEP));
+  function set(percent: number, snap = true): void {
+    if (!Number.isFinite(percent)) return;
+    const p = snap ? Math.round(percent / STEP) * STEP : Math.round(percent);
+    state.percent = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, p));
     state.fit = false;
     show();
     onChange();
@@ -84,9 +88,16 @@ export function renderExportZoom(
     onChange();
   });
   zoomInput.addEventListener('change', () => set(state.percent));
-  slider.addEventListener('input', () => set(Number(slider.value)));
+  // Typed: any whole percent; tidied to the allowed range when the field is left.
+  field.addEventListener('input', () => set(Number(field.value), false));
+  field.addEventListener('change', () => {
+    set(Number(field.value), false);
+    field.value = String(state.percent);
+  });
   minus.addEventListener('click', () => set(state.percent - STEP));
   plus.addEventListener('click', () => set(state.percent + STEP));
+  minus.addEventListener('mousedown', (e) => e.preventDefault());
+  plus.addEventListener('mousedown', (e) => e.preventDefault());
   show();
   return wrap;
 }

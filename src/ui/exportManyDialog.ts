@@ -1,9 +1,10 @@
 /**
  * Export several circuits at once (the ▾ beside Export): which of the open circuits, in which
  * format - one PDF with a page each, a PDF each, PNG or SVG images - what part of each (its page
- * frame or all its content), the zoom (fit to the page, or a fixed 25-400 %), the paper and the
- * file name. Several files go into a folder picked once where the browser can (Chrome, Edge, the
- * desktop app), else they're downloaded one after another.
+ * frame or its whole diagram), the zoom (fit to the page, or a fixed 25-400 %), the paper and the
+ * file name. A preview shows each page as it will come out; any circuit can be given its own
+ * area, zoom and paper there. Several files go into a folder picked once where the browser can
+ * (Chrome, Edge, the desktop app), else they're downloaded one after another.
  */
 import { appState } from '../app/AppState';
 import {
@@ -14,6 +15,8 @@ import {
 } from '../app/documents';
 import { computeContentBounds } from '../geometry/contentBounds';
 import {
+  buildExportSvg,
+  layoutPdfPage,
   downloadBlob,
   pdfBlob,
   pngBlob,
@@ -30,18 +33,32 @@ export type ManyFormat = 'pdfOne' | 'pdfEach' | 'png' | 'svg';
 export type ManyPart = 'frameOrContent' | 'content';
 export type ManyPaper = 'frame' | PdfPaper;
 
-export interface ManyOptions {
-  ids: string[];
-  format: ManyFormat;
+/** How one circuit comes out: its area, zoom and paper. */
+export interface PageSettings {
   part: ManyPart;
   /** Fit to the page (images: 100 %), or a fixed zoom. */
   zoom: ExportZoomState;
   paper: ManyPaper;
+}
+
+export interface ManyOptions {
+  ids: string[];
+  format: ManyFormat;
+  /** The settings every circuit gets... */
+  common: PageSettings;
+  /** ...except those given their own. */
+  custom: Map<string, PageSettings>;
   /** The combined PDF's name (without .pdf). */
   fileName: string;
   /** Several files: into a folder picked now, or as separate downloads. */
   target: 'folder' | 'downloads';
 }
+
+export function settingsFor(opts: ManyOptions, id: string): PageSettings {
+  return opts.custom.get(id) ?? opts.common;
+}
+
+const isPdf = (f: ManyFormat): boolean => f === 'pdfOne' || f === 'pdfEach';
 
 /** Margin kept round a page frame's sheet - as the single export's. */
 const FRAME_PADDING = 40;
@@ -105,8 +122,9 @@ export async function buildExports(
     if (computeContentBounds() === null && frame === null) {
       result.skipped.push(doc.name);
     } else {
+      const set = settingsFor(opts, doc.id);
       const region: ExportRegion =
-        opts.part === 'frameOrContent' && frame
+        set.part === 'frameOrContent' && frame
           ? {
               minX: frame.minX - FRAME_PADDING,
               minY: frame.minY - FRAME_PADDING,
@@ -115,10 +133,10 @@ export async function buildExports(
             }
           : 'auto';
       const isImage = opts.format === 'png' || opts.format === 'svg';
-      const zoom = exportZoom(opts.zoom, isImage);
+      const zoom = exportZoom(set.zoom, isImage);
       if (opts.format === 'pdfOne' || opts.format === 'pdfEach') {
         const paper: PdfPaper =
-          opts.paper === 'frame' ? (appState.pageFrameSize === 'a3' ? 'a3' : 'a4') : opts.paper;
+          set.paper === 'frame' ? (appState.pageFrameSize === 'a3' ? 'a3' : 'a4') : set.paper;
         const page = await renderPdfPage(doc.name, connLayer, frameLayer, region, paper, zoom);
         if (page) {
           if (page.shrunk) result.shrunk.push(doc.name);
@@ -219,6 +237,95 @@ function heading(text: string): HTMLElement {
   return h;
 }
 
+/** A circuit as drawn for the preview: its page frame's area (if it has one) and its whole
+ * diagram, and the frame's paper. */
+interface Captured {
+  id: string;
+  name: string;
+  frameSvg: SVGSVGElement | null;
+  contentSvg: SVGSVGElement | null;
+  framePaper: PdfPaper;
+}
+
+/** Draws each circuit in `ids` once, for the preview (puts each on the canvas in turn). */
+async function capture(
+  ids: Set<string>,
+  connLayer: SVGSVGElement,
+  frameLayer: SVGSVGElement,
+): Promise<Map<string, Captured>> {
+  const out = new Map<string, Captured>();
+  await forEachDocumentOnCanvas(async (doc) => {
+    const frame = getPageFrameWorldBounds();
+    const content = computeContentBounds() !== null;
+    out.set(doc.id, {
+      id: doc.id,
+      name: doc.name,
+      frameSvg: frame
+        ? buildExportSvg(connLayer, frameLayer, {
+            minX: frame.minX - FRAME_PADDING,
+            minY: frame.minY - FRAME_PADDING,
+            maxX: frame.maxX + FRAME_PADDING,
+            maxY: frame.maxY + FRAME_PADDING,
+          })
+        : null,
+      contentSvg: content ? buildExportSvg(connLayer, frameLayer, 'auto') : null,
+      framePaper: appState.pageFrameSize === 'a3' ? 'a3' : 'a4',
+    });
+  }, ids);
+  return out;
+}
+
+/** Size of a preview page, px. */
+const THUMB = 150;
+
+/** One page of the preview: the paper (PDF) or the image, the drawing placed as it will be,
+ * and a line saying how - paper, orientation, zoom. */
+export function renderThumb(
+  cap: Captured,
+  set: PageSettings,
+  format: ManyFormat,
+): { el: HTMLElement; caption: string } {
+  const svg =
+    set.part === 'frameOrContent' && cap.frameSvg ? cap.frameSvg : (cap.contentSvg ?? cap.frameSvg);
+  const box = document.createElement('div');
+  box.className = 'exportThumbPaper';
+  if (!svg) return { el: box, caption: 'Empty' };
+  const w = Number(svg.getAttribute('width')) || 1;
+  const h = Number(svg.getAttribute('height')) || 1;
+  const img = svg.cloneNode(true) as SVGSVGElement;
+  img.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+  let caption: string;
+  if (isPdf(format)) {
+    const paper: PdfPaper = set.paper === 'frame' ? cap.framePaper : set.paper;
+    const fit = set.zoom.fit;
+    const page = layoutPdfPage(paper, w / h, exportZoom(set.zoom), w);
+    const k = THUMB / Math.max(page.width, page.height);
+    box.style.width = `${page.width * k}px`;
+    box.style.height = `${page.height * k}px`;
+    const r = page.imageRect;
+    img.setAttribute('width', String(r.w * k));
+    img.setAttribute('height', String(r.h * k));
+    img.style.left = `${r.x * k}px`;
+    img.style.top = `${r.y * k}px`;
+    caption =
+      `${paper.toUpperCase()} ${page.width > page.height ? 'landscape' : 'portrait'} · ` +
+      (fit ? 'fit to page' : `${set.zoom.percent} %`) +
+      (page.shrunk ? ' - too large, fitted' : '');
+  } else {
+    const z = exportZoom(set.zoom, true) ?? 1;
+    const k = THUMB / Math.max(w, h);
+    box.style.width = `${w * k}px`;
+    box.style.height = `${h * k}px`;
+    img.setAttribute('width', String(w * k));
+    img.setAttribute('height', String(h * k));
+    img.style.left = '0';
+    img.style.top = '0';
+    caption = `${Math.round(w * z)} × ${Math.round(h * z)} px`;
+  }
+  box.appendChild(img);
+  return { el: box, caption };
+}
+
 export function openExportManyDialog(connLayer: SVGSVGElement, frameLayer: SVGSVGElement): void {
   const docs = listDocuments();
   const activeId = activeDocumentId();
@@ -226,12 +333,19 @@ export function openExportManyDialog(connLayer: SVGSVGElement, frameLayer: SVGSV
   const opts: ManyOptions = {
     ids: [],
     format: 'pdfOne',
-    part: 'frameOrContent',
-    zoom: { fit: true, percent: 100 },
-    paper: 'frame',
+    // Defaults: each page frame (the whole diagram without one), fitted to its page, on the
+    // frame's own paper.
+    common: { part: 'frameOrContent', zoom: { fit: true, percent: 100 }, paper: 'frame' },
+    custom: new Map(),
     fileName: `${docs[0]?.name ?? 'circuits'} - all sheets`,
     target: directoryPicker() ? 'folder' : 'downloads',
   };
+  /** The preview's drawings, once made. */
+  let captured: Map<string, Captured> | null = null;
+  let previewOpen = false;
+  let capturing = false;
+  /** The circuit selected in the preview, whose own settings show under it. */
+  let selected: string | null = null;
 
   const backdrop = document.createElement('div');
   backdrop.className = 'modalBackdrop';
@@ -257,6 +371,8 @@ export function openExportManyDialog(connLayer: SVGSVGElement, frameLayer: SVGSV
   header.append(title, closeBtn);
 
   const body = document.createElement('div');
+  const previewEl = document.createElement('div');
+  previewEl.className = 'exportPreviewSection';
   const status = document.createElement('p');
   status.className = 'exportDialogHint';
   status.setAttribute('role', 'status');
@@ -270,9 +386,66 @@ export function openExportManyDialog(connLayer: SVGSVGElement, frameLayer: SVGSV
   const exportBtn = document.createElement('button');
   exportBtn.className = 'btn btnPrimary';
   buttons.append(cancelBtn, exportBtn);
-  dialog.append(header, body, status, buttons);
+  dialog.append(header, body, previewEl, status, buttons);
 
   let busy = false;
+
+  /** Area buttons, zoom and paper for `set` - the common settings or one circuit's own. */
+  function settingsControls(set: PageSettings, onChange: () => void): HTMLElement[] {
+    const pdf = isPdf(opts.format);
+    const areas = document.createElement('div');
+    areas.className = 'exportRegionRow';
+    for (const a of [
+      {
+        value: 'frameOrContent' as const,
+        label: 'Page frame',
+        hint: 'the whole diagram without one',
+      },
+      { value: 'content' as const, label: 'Whole diagram', hint: 'ignore page frames' },
+    ]) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'exportRegionBtn';
+      b.classList.toggle('selected', set.part === a.value);
+      b.textContent = a.label;
+      b.title = a.hint;
+      b.addEventListener('click', () => {
+        set.part = a.value;
+        render();
+      });
+      areas.appendChild(b);
+    }
+    const out: HTMLElement[] = [heading('Area'), areas, heading('Zoom')];
+    out.push(
+      renderExportZoom(
+        set.zoom,
+        pdf
+          ? set.part === 'content'
+            ? 'Fit the diagram to the page'
+            : 'Fit the frame to the page'
+          : 'Actual size (100 %)',
+        onChange,
+      ),
+    );
+    if (pdf) {
+      out.push(
+        selectRow<ManyPaper>(
+          'Paper',
+          [
+            { value: 'frame', label: "The page frame's size (A4 without one)" },
+            { value: 'a4', label: 'A4' },
+            { value: 'a3', label: 'A3' },
+          ],
+          set.paper,
+          (v) => {
+            set.paper = v;
+            renderPreview();
+          },
+        ),
+      );
+    }
+    return out;
+  }
 
   function render(): void {
     body.replaceChildren();
@@ -315,7 +488,13 @@ export function openExportManyDialog(connLayer: SVGSVGElement, frameLayer: SVGSV
       const span = document.createElement('span');
       span.textContent = d.name;
       const tag = document.createElement('small');
-      tag.textContent = empty ? ' (empty)' : d.id === activeId ? ' (open now)' : '';
+      tag.textContent = empty
+        ? ' (empty)'
+        : opts.custom.has(d.id)
+          ? ' (own settings)'
+          : d.id === activeId
+            ? ' (open now)'
+            : '';
       span.appendChild(tag);
       row.append(box, span);
       list.appendChild(row);
@@ -339,53 +518,10 @@ export function openExportManyDialog(connLayer: SVGSVGElement, frameLayer: SVGSV
       );
     }
 
-    // Area, zoom, paper.
-    const pdf = opts.format === 'pdfOne' || opts.format === 'pdfEach';
-    body.appendChild(heading('Area'));
-    const areas = document.createElement('div');
-    areas.className = 'exportRegionRow';
-    for (const a of [
-      { value: 'frameOrContent' as const, label: 'Page frame', hint: 'all content without one' },
-      { value: 'content' as const, label: 'Whole diagram', hint: 'ignore page frames' },
-    ]) {
-      const b = document.createElement('button');
-      b.type = 'button';
-      b.className = 'exportRegionBtn';
-      b.classList.toggle('selected', opts.part === a.value);
-      b.textContent = a.label;
-      b.title = a.hint;
-      b.addEventListener('click', () => {
-        opts.part = a.value;
-        render();
-      });
-      areas.appendChild(b);
-    }
-    body.appendChild(areas);
-    body.appendChild(heading('Zoom'));
-    body.appendChild(
-      renderExportZoom(
-        opts.zoom,
-        pdf
-          ? opts.part === 'content'
-            ? 'Fit the diagram to the page'
-            : 'Fit the frame to the page'
-          : 'Actual size (100 %)',
-      ),
-    );
-    if (pdf) {
-      body.appendChild(
-        selectRow<ManyPaper>(
-          'Paper',
-          [
-            { value: 'frame', label: "Each circuit's page frame size (A4 without one)" },
-            { value: 'a4', label: 'A4' },
-            { value: 'a3', label: 'A3' },
-          ],
-          opts.paper,
-          (v) => (opts.paper = v),
-        ),
-      );
-    }
+    // The common settings.
+    const commonHead = heading(opts.custom.size > 0 ? 'All other circuits' : 'Every circuit');
+    commonHead.classList.add('exportManyGroupHead');
+    body.append(commonHead, ...settingsControls(opts.common, renderPreview));
 
     // File name / where.
     if (opts.format === 'pdfOne') {
@@ -431,9 +567,112 @@ export function openExportManyDialog(connLayer: SVGSVGElement, frameLayer: SVGSV
       body.appendChild(note);
     }
 
+    renderPreview();
     const n = chosen.size;
     exportBtn.textContent = n === 1 ? 'Export 1 circuit' : `Export ${n} circuits`;
-    exportBtn.disabled = n === 0 || busy;
+    exportBtn.disabled = n === 0 || busy || capturing;
+  }
+
+  /** The preview: a page per chosen circuit, as it will come out; click one to give it its own
+   * settings. */
+  function renderPreview(): void {
+    previewEl.replaceChildren();
+    const head = heading('Preview');
+    const toggle = document.createElement('button');
+    toggle.type = 'button';
+    toggle.className = 'linkBtn';
+    toggle.textContent = previewOpen ? 'Hide' : 'Show the pages';
+    toggle.addEventListener('click', () => {
+      previewOpen = !previewOpen;
+      if (previewOpen && !captured) void loadPreview();
+      else renderPreview();
+    });
+    head.append(' ', toggle);
+    previewEl.appendChild(head);
+    if (!previewOpen) {
+      const hint = document.createElement('p');
+      hint.className = 'inspectorHint';
+      hint.textContent =
+        'See each page before exporting - and give any circuit its own area, zoom or paper.';
+      previewEl.appendChild(hint);
+      return;
+    }
+    if (!captured) {
+      const p = document.createElement('p');
+      p.className = 'inspectorHint';
+      p.textContent = 'Preparing the preview…';
+      previewEl.appendChild(p);
+      return;
+    }
+    const grid = document.createElement('div');
+    grid.className = 'exportThumbs';
+    const ids = docs.filter((d) => chosen.has(d.id)).map((d) => d.id);
+    for (const id of ids) {
+      const cap = captured.get(id);
+      if (!cap) continue;
+      const own = opts.custom.has(id);
+      const { el, caption } = renderThumb(cap, settingsFor(opts, id), opts.format);
+      const item = document.createElement('button');
+      item.type = 'button';
+      item.className = 'exportThumb';
+      item.classList.toggle('selected', selected === id);
+      item.title = 'Click to give this circuit its own settings';
+      const name = document.createElement('b');
+      name.textContent = cap.name;
+      const small = document.createElement('small');
+      small.textContent = caption + (own ? ' · own settings' : '');
+      item.append(el, name, small);
+      item.addEventListener('click', () => {
+        selected = selected === id ? null : id;
+        renderPreview();
+      });
+      grid.appendChild(item);
+    }
+    if (ids.length === 0) {
+      const p = document.createElement('p');
+      p.className = 'inspectorHint';
+      p.textContent = 'No circuits chosen.';
+      previewEl.appendChild(p);
+    }
+    previewEl.appendChild(grid);
+
+    // The selected circuit's own settings.
+    if (selected && chosen.has(selected)) {
+      const id = selected;
+      const panel = document.createElement('div');
+      panel.className = 'exportOwnSettings';
+      const row = document.createElement('label');
+      row.className = 'exportManyChoice';
+      const box = document.createElement('input');
+      box.type = 'checkbox';
+      box.checked = opts.custom.has(id);
+      box.addEventListener('change', () => {
+        if (box.checked) {
+          const c = opts.common;
+          opts.custom.set(id, { part: c.part, zoom: { ...c.zoom }, paper: c.paper });
+        } else opts.custom.delete(id);
+        render();
+      });
+      const label = document.createElement('b');
+      label.textContent = `Own settings for “${captured.get(id)?.name ?? ''}”`;
+      row.append(box, label);
+      panel.appendChild(row);
+      const own = opts.custom.get(id);
+      if (own) panel.append(...settingsControls(own, renderPreview));
+      previewEl.appendChild(panel);
+    }
+  }
+
+  async function loadPreview(): Promise<void> {
+    capturing = true;
+    render();
+    try {
+      const all = new Set(docs.filter((d) => !isDocumentEmpty(d.id)).map((d) => d.id));
+      captured = await capture(all, connLayer, frameLayer);
+    } finally {
+      capturing = false;
+      if (backdrop.isConnected) render();
+    }
   }
 
   exportBtn.addEventListener('click', () => {
@@ -465,7 +704,7 @@ export function openExportManyDialog(connLayer: SVGSVGElement, frameLayer: SVGSV
   });
 
   function close(): void {
-    if (busy) return;
+    if (busy || capturing) return;
     backdrop.remove();
     window.removeEventListener('keydown', onKeydown);
   }

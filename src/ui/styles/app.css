@@ -2961,10 +2961,6 @@ a.inspectorTipsBtn {
 }
 
 /* Export several (ui/exportManyDialog.ts) and the exports' zoom (ui/exportZoom.ts). */
-.exportManyDialog {
-  width: 520px;
-}
-
 .exportManyList {
   display: flex;
   flex-direction: column;
@@ -3016,20 +3012,17 @@ a.inspectorTipsBtn {
   cursor: pointer;
 }
 
-.exportZoomSlider {
-  flex: 1 1 auto;
-  min-width: 120px;
-  accent-color: var(--menu-accent);
-}
-
-.exportZoomValue {
-  min-width: 48px;
+.exportZoomField {
+  width: 64px;
+  padding: 3px 6px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  font: inherit;
   text-align: right;
-  font-variant-numeric: tabular-nums;
 }
 
-.exportZoom--fit .exportZoomSlider,
-.exportZoom--fit .exportZoomValue {
+.exportZoom--fit .exportZoomField,
+.exportZoom--fit .exportZoomUnit {
   opacity: 0.45;
 }
 
@@ -3041,4 +3034,78 @@ a.inspectorTipsBtn {
 
 .btn.btnPrimary:disabled {
   opacity: 0.5;
+}
+
+.exportManyDialog {
+  width: 620px;
+}
+
+.exportThumbs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  max-height: 380px;
+  overflow-y: auto;
+  padding: 8px;
+  border-radius: 8px;
+  background: var(--panel);
+}
+
+.exportThumb {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  width: 172px;
+  padding: 8px 6px;
+  border: 2px solid transparent;
+  border-radius: 8px;
+  background: none;
+  font: inherit;
+  cursor: pointer;
+}
+
+.exportThumb:hover {
+  background: var(--menu-hover);
+}
+
+.exportThumb.selected {
+  border-color: var(--menu-accent);
+}
+
+.exportThumb b {
+  max-width: 100%;
+  overflow: hidden;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.exportThumb small {
+  color: var(--muted);
+  font-size: 11px;
+  text-align: center;
+}
+
+.exportThumbPaper {
+  position: relative;
+  flex: 0 0 auto;
+  background: #fff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
+}
+
+.exportThumbPaper svg {
+  position: absolute;
+}
+
+.exportOwnSettings {
+  margin-top: 8px;
+  padding: 8px 12px;
+  border: 1px solid var(--menu-accent);
+  border-radius: 8px;
+}
+
+.exportManyDialog .inspectorRow select,
+.exportManyDialog .inspectorRow input[type='text'] {
+  min-width: 260px;
 }
