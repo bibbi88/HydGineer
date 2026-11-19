@@ -35,6 +35,7 @@ import {
 
 export const HYD_VALVE_43_TYPE = 'hydValve43';
 export const HYD_VALVE_42_TYPE = 'hydValve42';
+export const HYD_VALVE_32_TYPE = 'hydValve32';
 export const HYD_CHECK_TYPE = 'hydCheck';
 export const HYD_PILOT_CHECK_TYPE = 'hydPilotCheck';
 export const HYD_THROTTLE_TYPE = 'hydThrottle';
@@ -54,6 +55,7 @@ export const HYD_CROSS_RELIEF_TYPE = 'hydCrossRelief';
 export const SOLENOID_VALVE_TYPES = new Set<string>([
   HYD_VALVE_43_TYPE,
   HYD_VALVE_42_TYPE,
+  HYD_VALVE_32_TYPE,
   HYD_VALVE_LS_TYPE,
 ]);
 /** Snapshot fields that hold a solenoid name on those valves. */
@@ -514,6 +516,191 @@ export function createHydValve42(compLayer: HTMLElement, x: number, y: number): 
       restoreName(shell, data);
       if (typeof data.key === 'string') key = data.key;
       if (data.actuation === 'solenoid' || data.actuation === 'lever') actuation = data.actuation;
+      qNom = readNum(data, 'qNom', qNom, 0.1, 2000);
+      draw();
+    },
+    reset(): void {
+      shifted = false;
+      applyState();
+      shell.setInfo([]);
+      clearFlow([...allCellEls(cells), ...Object.values(leads).flat()]);
+    },
+  });
+}
+
+/** How a 3/2 valve is shifted: by hand (lever with detent), a solenoid, or mechanically by a
+ * roller pressed by a cylinder's cam - a sensor position on a cylinder (its signal). */
+export type Actuation32 = 'lever' | 'solenoid' | 'roller';
+
+/** One box of a 3/2 valve: P→A with T blocked, or A→T with P blocked. */
+function drawCell32(g: SVGElement, x0: number, kind: 'pa' | 'at'): CellPaths {
+  const y0 = BODY_Y;
+  g.appendChild(
+    createSvgEl('rect', {
+      x: x0,
+      y: y0,
+      width: CELL,
+      height: CELL,
+      fill: '#fff',
+      stroke: INK,
+      'stroke-width': STROKE,
+    }),
+  );
+  const xa = x0 + 10;
+  const xb = x0 + 30;
+  const top = y0;
+  const bot = y0 + CELL;
+  if (kind === 'pa') {
+    blocked(g, xb, bot, -1);
+    return { 'P>A': arrowLine(g, xa, bot, xa, top + 1) };
+  }
+  blocked(g, xa, bot, -1);
+  return { 'A>T': arrowLine(g, xa, top, xb, bot - 1) };
+}
+
+/** Roller (mechanical) actuation on the end face at `edgeX`: a plunger with a roller on its
+ * end, the sensor that presses it named above. */
+function drawRoller(g: SVGElement, edgeX: number, dir: 1 | -1, name: string): void {
+  const y = BODY_Y + 12;
+  line(g, edgeX, y, edgeX + dir * 14, y);
+  g.appendChild(
+    createSvgEl('circle', {
+      cx: edgeX + dir * 19,
+      cy: y,
+      r: 5,
+      fill: '#fff',
+      stroke: INK,
+      'stroke-width': STROKE,
+    }),
+  );
+  const t = createSvgEl('text', {
+    x: edgeX + dir * 19,
+    y: y - 9,
+    'text-anchor': 'middle',
+    'font-size': 11,
+  });
+  t.textContent = name || '?';
+  g.appendChild(t);
+}
+
+/**
+ * 3/2 directional valve - three ports (P, A, T), two positions - for a single-acting cylinder:
+ * one position feeds the cylinder (P→A, T blocked), the other lets it return to tank (A→T, P
+ * blocked). Normally closed (at rest A→T) or normally open (at rest P→A). Shifted by a hand
+ * lever with detent (click while simulating), a solenoid with spring return, or a roller with
+ * spring return, pressed while a cylinder sensor's signal is on (e.g. "A1" at a rod position).
+ */
+export function createHydValve32(compLayer: HTMLElement, x: number, y: number): Component {
+  const svgW = 240;
+  const svgH = 120;
+  const shell = createHydShell(compLayer, HYD_VALVE_32_TYPE, x, y, svgW, svgH, '3/2 valve', {
+    x: 60,
+    y: 38,
+    w: 80,
+    h: 44,
+  });
+  const slide = createSvgEl('g', { class: 'hydSpool' });
+  shell.g.appendChild(slide);
+  shell.followFrame(slide, -CELL, 0);
+  const g = shell.g;
+  const xa = PORT_CELL_X + 10;
+  const xb = PORT_CELL_X + 30;
+  const leads: Record<string, SVGElement[]> = {
+    A: [line(g, xa, 20, xa, BODY_Y)],
+    P: [line(g, xa, 100, xa, BODY_Y + CELL)],
+    T: [line(g, xb, 100, xb, BODY_Y + CELL)],
+  };
+  createPortLabel(g, xa - 8, 24, 'A', { anchor: 'end', fontSize: 10 });
+  createPortLabel(g, xa - 8, 102, 'P', { anchor: 'end', fontSize: 10 });
+  createPortLabel(g, xb + 8, 102, 'T', { anchor: 'start', fontSize: 10 });
+  const ports = {
+    A: createPort(g, 'A', xa, 20, 'V'),
+    P: createPort(g, 'P', xa, 100, 'V'),
+    T: createPort(g, 'T', xb, 100, 'V'),
+  };
+  shell.setInfoSide('right');
+  let cells: CellPaths[] = [];
+
+  let key = nextFreeSolenoidKeys(1)[0] ?? 'Y1';
+  /** The sensor (cylinder position signal) that presses the roller. */
+  let sensorKey = '';
+  let actuation: Actuation32 = 'solenoid';
+  /** Normally closed: at rest A→T (cylinder vents); normally open: at rest P→A. */
+  let normally: 'closed' | 'open' = 'closed';
+  let qNom = 30;
+  /** true = shifted: the left box over the ports. */
+  let shifted = false;
+  let lastElements: HydElement[] = [];
+
+  const shiftedKind = (): 'pa' | 'at' => (normally === 'closed' ? 'pa' : 'at');
+  const restKind = (): 'pa' | 'at' => (normally === 'closed' ? 'at' : 'pa');
+
+  function draw(): void {
+    slide.replaceChildren();
+    cells = [drawCell32(slide, 100, shiftedKind()), drawCell32(slide, 140, restKind())];
+    if (actuation === 'solenoid') drawSolenoid(slide, 100, -1, key);
+    else if (actuation === 'roller') drawRoller(slide, 100, -1, sensorKey);
+    else drawLever(slide, 100, -1);
+    // A spring returns it, except the lever's detent, which holds it where it was put.
+    if (actuation !== 'lever') drawSpring(slide, 180, 1, BODY_Y + 20);
+    shell.setDefaultName(
+      actuation === 'solenoid'
+        ? '3/2 solenoid valve'
+        : actuation === 'roller'
+          ? '3/2 roller valve'
+          : '3/2 hand valve',
+    );
+    applyState();
+  }
+  function applyState(): void {
+    slide.setAttribute('transform', `translate(${shifted ? 0 : -CELL},0)`);
+  }
+  draw();
+
+  shell.svg.addEventListener('mousedown', (e) => {
+    if (actuation !== 'lever' || appState.mode === Modes.STOP) return;
+    e.stopPropagation();
+    shifted = !shifted;
+    applyState();
+  });
+
+  const comp = hydComponentBase(shell, HYD_VALVE_32_TYPE, x, y, svgW, svgH, ports);
+  return Object.assign(comp, {
+    recompute(): void {
+      if (actuation === 'lever') return;
+      const signal = actuation === 'solenoid' ? key : sensorKey;
+      const next = signal.trim() !== '' && getSignal(signal.trim());
+      if (next !== shifted) {
+        shifted = next;
+        applyState();
+      }
+    },
+    hydElements(): HydElement[] {
+      const k = orificeKFromRating(qNom, VALVE_RATING_DP);
+      const kind = shifted ? shiftedKind() : restKind();
+      lastElements = [
+        kind === 'pa'
+          ? { kind: 'orifice', a: 'P', b: 'A', k }
+          : { kind: 'orifice', a: 'A', b: 'T', k },
+      ];
+      return lastElements;
+    },
+    step(_dt: number, ctx: SimStepContext): void {
+      shell.setInfo(valveInfo(ctx, lastElements));
+      paintValve(ctx, cells, shifted ? 0 : 1, lastElements, leads);
+    },
+    snapshot: () => ({ ...nameSnapshot(shell), actuation, key, sensorKey, normally, qNom }),
+    restore(data: Record<string, unknown>): void {
+      restoreName(shell, data);
+      if (typeof data.key === 'string') key = data.key;
+      if (typeof data.sensorKey === 'string') sensorKey = data.sensorKey;
+      if (
+        data.actuation === 'solenoid' ||
+        data.actuation === 'lever' ||
+        data.actuation === 'roller'
+      )
+        actuation = data.actuation;
+      if (data.normally === 'closed' || data.normally === 'open') normally = data.normally;
       qNom = readNum(data, 'qNom', qNom, 0.1, 2000);
       draw();
     },

@@ -31,6 +31,7 @@ import {
   CENTER_OPTIONS,
   HYD_VALVE_43_TYPE,
   HYD_VALVE_42_TYPE,
+  HYD_VALVE_32_TYPE,
   HYD_CHECK_TYPE,
   HYD_PILOT_CHECK_TYPE,
   HYD_THROTTLE_TYPE,
@@ -105,7 +106,7 @@ interface NumberField extends Conditional {
   step?: number;
 }
 
-interface TextField {
+interface TextField extends Conditional {
   kind: 'text';
   key: string;
   label: FieldLabel;
@@ -129,7 +130,7 @@ interface CheckboxField {
 /** A limit switch's sensor key, shown as a dropdown of every sensor label that actually exists
  * in the project rather than free text - binding becomes a choice, not something that can
  * silently typo-mismatch a cylinder's signal. */
-interface SensorKeySelectField {
+interface SensorKeySelectField extends Conditional {
   kind: 'sensorKeySelect';
   key: string;
   label: FieldLabel;
@@ -749,6 +750,53 @@ const INSPECTOR_FIELDS: Record<string, InspectorField[]> = {
     { kind: 'actuatorMode', label: 'Valve type', options: swapFamilyOf(HYD_VALVE_42_TYPE) },
     { kind: 'select', key: 'actuation', label: 'Actuation', options: ACTUATION_OPTIONS },
     { kind: 'text', key: 'key', label: 'Solenoid (energized: P→A, B→T)' },
+    VALVE_FLOW_FIELD,
+  ],
+  [HYD_VALVE_32_TYPE]: [
+    { kind: 'actuatorMode', label: 'Valve type', options: swapFamilyOf(HYD_VALVE_32_TYPE) },
+    {
+      kind: 'select',
+      key: 'actuation',
+      label: 'Actuation',
+      options: [
+        { value: 'lever', label: 'Manual (hand lever with detent)' },
+        { value: 'solenoid', label: 'Solenoid (electric), spring return' },
+        { value: 'roller', label: 'Mechanical (roller), spring return' },
+      ],
+    },
+    {
+      kind: 'select',
+      key: 'normally',
+      label: 'At rest',
+      options: [
+        { value: 'closed', label: 'Normally closed: A→T (cylinder retracts)' },
+        { value: 'open', label: 'Normally open: P→A (cylinder extends)' },
+      ],
+    },
+    {
+      kind: 'text',
+      key: 'key',
+      label: 'Solenoid',
+      showIf: (snap) => snap.actuation === 'solenoid',
+    },
+    {
+      kind: 'sensorKeySelect',
+      key: 'sensorKey',
+      label: 'Roller pressed by sensor',
+      showIf: (snap) => snap.actuation === 'roller',
+    },
+    {
+      kind: 'note',
+      showIf: (snap) => snap.actuation === 'roller',
+      text: () =>
+        'The roller is pressed while that cylinder sensor is on - add sensors to a cylinder ' +
+        'to choose one here.',
+    },
+    {
+      kind: 'note',
+      showIf: (snap) => snap.actuation === 'lever',
+      text: () => 'Click the valve while simulating to switch it; the detent holds it there.',
+    },
     VALVE_FLOW_FIELD,
   ],
   [HYD_CHECK_TYPE]: [

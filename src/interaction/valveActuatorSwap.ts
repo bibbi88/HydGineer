@@ -23,6 +23,7 @@ import {
   HYD_PILOT_CHECK_TYPE,
   HYD_THROTTLE_TYPE,
   HYD_VALVE_42_TYPE,
+  HYD_VALVE_32_TYPE,
   HYD_VALVE_43_TYPE,
   HYD_VALVE_LS_TYPE,
 } from '../components/hyd/valves';
@@ -47,6 +48,7 @@ export const SWAP_FAMILIES: Array<Array<{ type: string; label: string }>> = [
   [
     { type: HYD_VALVE_43_TYPE, label: '4/3 (three positions)' },
     { type: HYD_VALVE_42_TYPE, label: '4/2 (two positions)' },
+    { type: HYD_VALVE_32_TYPE, label: '3/2 (P, A, T - single-acting cylinders)' },
     { type: HYD_VALVE_LS_TYPE, label: 'Load-sensing, proportional (4/3 + LS port)' },
   ],
   [

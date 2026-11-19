@@ -79,6 +79,8 @@ Units: bar (gauge), L/min, N, Nm, mm, cm³/rev.
   over-centre pump for closed loops (motor can be
   switched by a relay or pressure switch), tank, gas-loaded accumulator, filter (with bypass check)
 - Directional valves: 4/3 (closed / tandem / float / open centre) and 4/2, solenoid or hand lever;
+  3/2 for single-acting cylinders (normally closed or open), by hand lever, solenoid or roller -
+  the roller pressed by a cylinder sensor;
   proportional load-sensing valve (lever slider or solenoids) with LS port; shuttle valve; steering unit (Orbitrol)
   with a steering wheel
 - Pressure control: relief valve, cross-port relief valves, pressure-reducing valve,

@@ -48,6 +48,8 @@ import {
   HYD_SEQUENCE_TYPE,
   HYD_VALVE_43_TYPE,
   HYD_VALVE_42_TYPE,
+  HYD_VALVE_32_TYPE,
+  createHydValve32,
   HYD_CHECK_TYPE,
   HYD_PILOT_CHECK_TYPE,
   HYD_THROTTLE_TYPE,
@@ -202,6 +204,15 @@ export const componentRegistry = new Map<string, RegistryEntry>([
     {
       factory: (ctx, x, y) => createHydValve42(ctx.compLayer, x, y),
       label: '4/2 valve',
+      placeable: true,
+      category: ComponentCategory.DIRECTIONAL,
+    },
+  ],
+  [
+    HYD_VALVE_32_TYPE,
+    {
+      factory: (ctx, x, y) => createHydValve32(ctx.compLayer, x, y),
+      label: '3/2 valve (single-acting cylinders)',
       placeable: true,
       category: ComponentCategory.DIRECTIONAL,
     },
