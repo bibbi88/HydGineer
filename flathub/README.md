@@ -32,10 +32,15 @@ flatpak run io.github.bibbi88.HydGineer
 
 ## Releasing a version
 
-1. Pick the version in the same `yy.mmdd.n` scheme as the other builds, e.g. `26.1201.0`.
-2. Add a `<release version="26.1201.0" date="2026-12-01">` entry at the top of `<releases>` in
-   the metainfo file, merge to `main`.
-3. Tag it: `git tag v26.1201.0 && git push origin v26.1201.0`. The workflow makes a release of
+Versions are `MAJOR.MINOR.BUILD`. Releases are tags that raise MINOR or MAJOR: `v0.9.0` first,
+then `v0.10.0` or `v1.0.0`... Builds from `main` in between keep the newest tag's MAJOR.MINOR and
+take the build number as the third part (`0.9.37`), so installed apps still update to each of them
+(`.github/desktop-version.sh`).
+
+1. Pick the version: the newest tag with MINOR (or MAJOR) raised, e.g. `0.10.0`.
+2. Add a `<release version="0.10.0" date="…">` entry at the top of `<releases>` in the metainfo
+   file (with the tag's date), merge to `main`.
+3. Tag it: `git tag v0.10.0 && git push origin v0.10.0`. The workflow makes a release of
    its own with `HydGineer-linux-x64.tar.gz` (the desktop app takes the tag's version).
 4. In the manifest, set the archive's `url` to that release's file and its `sha256`
    (`sha256sum HydGineer-linux-x64.tar.gz`), and the git source's `tag` to the new tag.

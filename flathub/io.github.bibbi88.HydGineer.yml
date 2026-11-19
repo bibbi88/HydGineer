@@ -41,16 +41,17 @@ modules:
       # The release's Linux build. On a new tag, Flathub's checker updates this entry by itself
       # (x-checker-data) and opens a pull request with the new url and sha256.
       - type: archive
-        url: https://github.com/bibbi88/HydGineer/releases/download/v26.1201.0/HydGineer-linux-x64.tar.gz
+        url: https://github.com/bibbi88/HydGineer/releases/download/v0.9.0/HydGineer-linux-x64.tar.gz
         sha256: 0000000000000000000000000000000000000000000000000000000000000000
         dest: hydgineer
         x-checker-data:
           type: json
-          url: https://api.github.com/repos/bibbi88/HydGineer/releases/latest
-          version-query: .tag_name | sub("^v"; "")
-          url-query: .assets[] | select(.name=="HydGineer-linux-x64.tar.gz") | .browser_download_url
+          url: https://api.github.com/repos/bibbi88/HydGineer/releases
+          # The newest version tag's release (not desktop-latest, the rolling build from main).
+          version-query: '[.[] | select(.tag_name | test("^v[0-9]"))][0].tag_name | sub("^v"; "")'
+          url-query: '[.[] | select(.tag_name | test("^v[0-9]"))][0].assets[] | select(.name == "HydGineer-linux-x64.tar.gz") | .browser_download_url'
       # The same tag's sources: desktop entry, metadata, file type, icons.
       - type: git
         url: https://github.com/bibbi88/HydGineer.git
-        tag: v26.1201.0
+        tag: v0.9.0
         dest: src

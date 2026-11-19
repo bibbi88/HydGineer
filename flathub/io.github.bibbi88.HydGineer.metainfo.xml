@@ -69,7 +69,7 @@
   </provides>
   <releases>
     <!-- Newest first. Add one for each version tag before pushing the tag (flathub/README.md). -->
-    <release version="26.1201.0" date="2026-12-01">
+    <release version="0.9.0" date="2026-11-19">
       <description>
         <p>First release on Flathub.</p>
       </description>
