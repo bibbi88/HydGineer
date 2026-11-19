@@ -61,7 +61,11 @@ jobs:
         run: |
           lint() { flatpak run --command=flatpak-builder-lint org.flatpak.Builder "$@"; }
           lint manifest flathub/io.github.bibbi88.HydGineer.yml
-          lint appstream flathub/io.github.bibbi88.HydGineer.metainfo.xml
+          # The screenshots are linked on main; before they get there, check this commit's own
+          # copies (which also proves the images are there).
+          sed "s#/HydGineer/main/docs/#/HydGineer/${GITHUB_SHA}/docs/#" \
+            flathub/io.github.bibbi88.HydGineer.metainfo.xml > /tmp/io.github.bibbi88.HydGineer.metainfo.xml
+          lint appstream /tmp/io.github.bibbi88.HydGineer.metainfo.xml
           desktop-file-validate flathub/io.github.bibbi88.HydGineer.desktop || true
       - name: Build the Flatpak as Flathub would (from this checkout)
         timeout-minutes: 25
