@@ -2753,6 +2753,18 @@ a.inspectorTipsBtn {
   box-shadow: var(--menu-shadow);
   transform-origin: top left;
   animation: saveMenuIn 120ms ease-out;
+  /* Never past the window's bottom edge: a long list inside scrolls instead. */
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100vh - 72px);
+}
+
+.saveMenu > * {
+  flex: 0 0 auto;
+}
+
+.saveMenu > .menuScroll {
+  flex: 1 1 auto;
 }
 
 @keyframes saveMenuIn {
@@ -2925,8 +2937,11 @@ a.inspectorTipsBtn {
   font-size: 12px;
 }
 
+/* The examples list takes all the height the window has left under the rest of the menu (it is a
+   flex child of .saveMenu, which stops at the window's bottom edge), scrolling past that. */
 .menuScroll {
-  max-height: min(320px, 45vh);
+  flex: 1 1 auto;
+  min-height: 140px;
   overflow-y: auto;
 }
 
