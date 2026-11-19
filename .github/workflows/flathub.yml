@@ -54,11 +54,10 @@ jobs:
         timeout-minutes: 20
         run: |
           sudo apt-get update
-          sudo apt-get install -y flatpak python3-yaml
+          sudo apt-get install -y flatpak flatpak-builder elfutils python3-yaml
           flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
           flatpak install --user -y --noninteractive flathub org.flatpak.Builder
-          # What the manifest builds on - installed here: the builder, in its own sandbox, can't
-          # install them itself on a runner (no D-Bus session).
+          # What the manifest builds on.
           flatpak install --user -y --noninteractive flathub \
             org.freedesktop.Platform//26.08 org.freedesktop.Sdk//26.08 \
             org.electronjs.Electron2.BaseApp//26.08
@@ -75,13 +74,15 @@ jobs:
             > flathub-build/io.github.bibbi88.HydGineer.metainfo.xml
           lint appstream flathub-build/io.github.bibbi88.HydGineer.metainfo.xml
           desktop-file-validate flathub/io.github.bibbi88.HydGineer.desktop || true
+      # flatpak-builder from the system: Flathub's own (org.flatpak.Builder) runs in a sandbox that
+      # doesn't see the runtimes installed here. Same offline build; the linting is Flathub's.
       - name: Build the Flatpak as Flathub would (from this checkout)
         timeout-minutes: 25
         run: |
           python3 flathub/local-manifest.py flathub-build
           cd flathub-build
-          flatpak run org.flatpak.Builder --user --force-clean \
-            --disable-rofiles-fuse --repo=repo builddir io.github.bibbi88.HydGineer.yml
+          flatpak-builder --user --force-clean --disable-rofiles-fuse --repo=repo \
+            builddir io.github.bibbi88.HydGineer.yml
       - name: Lint the built app
         # Some checks only pass on Flathub's own servers (e.g. screenshots mirrored there).
         continue-on-error: true
