@@ -55,5 +55,5 @@ modules:
       - type: git
         url: https://github.com/bibbi88/HydGineer.git
         tag: v0.9.0
-        # commit: the tag's commit, filled in at release (flathub/README.md).
+        commit: aa35f4a8964397b4ab6af42226c23c495f40d9ad
         dest: src
