@@ -26,7 +26,7 @@ function formatTime(s: number): string {
  * Record video: films the circuit - with the simulation's colours, and every press on the
  * canvas - until pressed again or the simulation is stopped, then saves the video (see
  * persistence/recordVideo.ts). Shown only while simulating. While recording it turns red and
- * shows how long it has been going.
+ * shows how long it has been going; while the simulation is paused, so is the recording.
  */
 export function renderRecordButton(container: HTMLElement, deps: RecordButtonDeps): void {
   let recording: VideoRecording | null = null;
@@ -61,6 +61,8 @@ export function renderRecordButton(container: HTMLElement, deps: RecordButtonDep
         );
         return;
       }
+      // Started while paused: the first frame is taken, then it waits for the run to go on.
+      if (appState.mode === Modes.PAUSE) recording.pause();
       refresh();
     },
     'Record',
@@ -68,11 +70,16 @@ export function renderRecordButton(container: HTMLElement, deps: RecordButtonDep
 
   function refresh(): void {
     const on = recording !== null;
-    const label = on ? 'Stop recording and save the video' : 'Record video';
+    const label = !on
+      ? 'Record video'
+      : recording!.paused
+        ? 'Recording paused with the simulation - stop and save the video'
+        : 'Stop recording and save the video';
     setIconButtonLabel(btn, label, on ? 'Stop rec' : 'Record', on ? 'stop' : 'record');
     btn.setAttribute('aria-pressed', String(on));
     btn.classList.toggle('iconBtn--recording', on);
     time.hidden = !on;
+    time.classList.toggle('recordTime--paused', on && recording!.paused);
     clearInterval(ticker);
     if (on) {
       const tick = (): void => {
@@ -93,11 +100,16 @@ export function renderRecordButton(container: HTMLElement, deps: RecordButtonDep
   else container.append(btn, time);
 
   // Shown only while simulating (running or paused); stopping the simulation also ends the
-  // recording and saves it.
+  // recording and saves it. Pausing the simulation pauses the recording too - the video goes
+  // on from where it was once the simulation runs again.
   function followMode(): void {
     const simulating = appState.mode !== Modes.STOP;
     btn.hidden = !simulating;
-    if (!simulating && recording) recording.stop();
+    if (!recording) return;
+    if (!simulating) recording.stop();
+    else if (appState.mode === Modes.PAUSE) recording.pause();
+    else recording.resume();
+    refresh();
   }
   appState.onModeChange(followMode);
   followMode();

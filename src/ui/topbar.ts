@@ -9,6 +9,7 @@ import { iconButton } from './iconButton';
 import { createBrandMark } from './brandMark';
 import { openSettingsDialog } from './settingsDialog';
 import { getSettings, onSettingsChange, updateSettings } from '../app/settings';
+import { appState } from '../app/AppState';
 
 /** The app's mark and name, with the build version (yymmdd, see vite.config.ts) under it. The
  * mark is a hydraulic cylinder (see brandMark.ts). */
@@ -111,5 +112,35 @@ export function renderTopbar(
     iconButton('settings', 'Settings', () => openSettingsDialog(), 'Options'),
   );
 
+  // A narrow window: the logo and version go first, before the toolbar has to scroll.
+  const checkBrand = fitBrand(container);
+  onSettingsChange(checkBrand);
+  appState.onModeChange(checkBrand);
+
   return projectRefs;
+}
+
+let brandObserver: ResizeObserver | null = null;
+
+/** Hides the brand (logo, name, version) while the toolbar wouldn't fit with it, and shows it
+ * again once there's room - measured with it shown, so it doesn't flicker at the edge. Checked
+ * whenever the window or a toolbar group changes size. */
+function fitBrand(container: HTMLElement): () => void {
+  const check = (): void => {
+    container.classList.remove('topbar--noBrand');
+    if (container.scrollWidth > container.clientWidth + 1) {
+      container.classList.add('topbar--noBrand');
+    }
+  };
+  check();
+  if (typeof ResizeObserver === 'undefined') {
+    window.addEventListener('resize', check);
+    return check;
+  }
+  brandObserver?.disconnect();
+  // Sizes change as buttons appear and go (Record, the speed slider, Arrange while simulating).
+  brandObserver = new ResizeObserver(() => check());
+  brandObserver.observe(container);
+  for (const el of container.querySelectorAll('.topbarSection')) brandObserver.observe(el);
+  return check;
 }

@@ -52,16 +52,28 @@ export function renderToolbar(container: HTMLElement): void {
   updatePlayStopButton();
   appState.onModeChange(updatePlayStopButton);
 
-  // Undo and redo rebuild the circuit: only while it's stopped.
+  // Undo and redo rebuild the circuit: only while it's stopped - hidden while simulating, like
+  // the other editing buttons (Arrange), which leaves room for the run controls.
   function updateUndoRedoButtons(): void {
-    undoBtn.disabled = !canUndo() || !canEdit(appState.mode);
-    redoBtn.disabled = !canRedo() || !canEdit(appState.mode);
+    const editable = canEdit(appState.mode);
+    undoBtn.hidden = !editable;
+    redoBtn.hidden = !editable;
+    undoBtn.disabled = !canUndo() || !editable;
+    redoBtn.disabled = !canRedo() || !editable;
   }
   onHistoryChange(updateUndoRedoButtons);
   appState.onModeChange(updateUndoRedoButtons);
   updateUndoRedoButtons();
 
-  container.append(playStopBtn, pauseBtn, stepBtn, renderSimulationSpeed(), undoBtn, redoBtn);
+  // The speed slider only while simulating (running or paused), like Record.
+  const speed = renderSimulationSpeed();
+  const followSpeed = (): void => {
+    speed.hidden = appState.mode === Modes.STOP;
+  };
+  appState.onModeChange(followSpeed);
+  followSpeed();
+
+  container.append(playStopBtn, pauseBtn, stepBtn, speed, undoBtn, redoBtn);
 }
 
 /** Simulation speed: a slider stepping through SIM_SPEEDS, with the current speed beside it.

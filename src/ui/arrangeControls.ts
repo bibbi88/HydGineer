@@ -22,8 +22,8 @@ function flipSelection(): void {
 }
 
 /** The toolbar's arrange section: rotate the selection either way, and flip it horizontally.
- * Every button here edits the diagram, so all three are disabled while the simulation is
- * running (canEdit) and while nothing is selected. Flip additionally needs a selection whose
+ * Every button here edits the diagram, so the section is hidden while the simulation runs or
+ * is paused (canEdit), and the buttons are disabled while nothing is selected. Flip additionally needs a selection whose
  * artwork survives being mirrored - see isMirrorableType. */
 export function renderArrangeControls(container: HTMLElement): void {
   const rotateCcwBtn = iconButton(
@@ -55,6 +55,14 @@ export function renderArrangeControls(container: HTMLElement): void {
   onSelectionChange(refresh);
   appState.onModeChange(refresh);
   refresh();
+
+  // The whole section is hidden while simulating: nothing here works then, and it leaves room for
+  // the run controls.
+  const followMode = (): void => {
+    container.hidden = !canEdit(appState.mode);
+  };
+  appState.onModeChange(followMode);
+  followMode();
 
   container.append(rotateCcwBtn, rotateCwBtn, flipBtn);
 }

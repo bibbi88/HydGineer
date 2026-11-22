@@ -47,4 +47,17 @@ describe('simulation buttons', () => {
     expect(appState.mode).toBe(Modes.PAUSE);
     expect(caption(btn(el, 0))).toBe('Stop');
   });
+
+  it('Undo, Redo and the speed slider: editing buttons hide while simulating, the slider shows', () => {
+    const undo = el.querySelector<HTMLButtonElement>('button[aria-label="Undo"]')!;
+    const redo = el.querySelector<HTMLButtonElement>('button[aria-label="Redo"]')!;
+    const speed = el.querySelector<HTMLElement>('.simSpeed')!;
+    expect([undo.hidden, redo.hidden, speed.hidden]).toEqual([false, false, true]);
+    btn(el, 0).click();
+    expect([undo.hidden, redo.hidden, speed.hidden]).toEqual([true, true, false]);
+    btn(el, 1).click();
+    expect([undo.hidden, speed.hidden]).toEqual([true, false]);
+    btn(el, 0).click();
+    expect([undo.hidden, redo.hidden, speed.hidden]).toEqual([false, false, true]);
+  });
 });

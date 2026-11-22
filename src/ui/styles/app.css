@@ -3133,3 +3133,25 @@ a.inspectorTipsBtn {
   max-width: 420px;
   font-size: 13px;
 }
+
+/* The recording's clock while the simulation (and so the recording) is paused. */
+.recordTime--paused {
+  color: var(--muted);
+}
+
+.recordTime--paused::after {
+  content: ' ❚❚';
+  font-size: 9px;
+}
+
+/* A narrow window: the brand goes before the toolbar has to scroll (ui/topbar.ts, fitBrand). */
+.topbar--noBrand .brand {
+  display: none;
+}
+
+/* Toolbar groups and controls hidden while they can't be used (Arrange while simulating, the
+   speed slider while stopped). */
+.topbarSection[hidden],
+.simSpeed[hidden] {
+  display: none;
+}

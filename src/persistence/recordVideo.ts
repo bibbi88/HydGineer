@@ -140,8 +140,12 @@ function drawPresses(
 export interface VideoRecording {
   /** Stops and saves the video. */
   stop(): void;
-  /** Seconds recorded so far. */
+  /** Seconds recorded so far (paused time left out). */
   elapsed(): number;
+  /** Holds the video while the simulation is paused: nothing is filmed until resume(). */
+  pause(): void;
+  resume(): void;
+  readonly paused: boolean;
 }
 
 export interface RecordDeps {
@@ -185,12 +189,15 @@ export function startVideoRecording(deps: RecordDeps): VideoRecording | null {
   const css = appCss();
   const font = getComputedStyle(document.body).fontFamily || 'sans-serif';
   const started = performance.now();
-  const seconds = (): number => (performance.now() - started) / 1000;
+  // Paused time doesn't count: the video's clock (and the presses' fading) skips it.
+  let pausedAt: number | null = null;
+  let pausedTotal = 0;
+  const seconds = (): number => ((pausedAt ?? performance.now()) - started - pausedTotal) / 1000;
 
   // Presses on the canvas, while recording.
   const presses: Press[] = [];
   const onDown = (e: PointerEvent): void => {
-    if (e.button !== 0) return;
+    if (e.button !== 0 || pausedAt !== null) return;
     const p = deps.viewport.clientToWorld(e.clientX, e.clientY);
     presses.push({ x: p.x, y: p.y, down: seconds(), up: null });
   };
@@ -212,8 +219,8 @@ export function startVideoRecording(deps: RecordDeps): VideoRecording | null {
 
   let busy = false;
   let ended = false;
-  async function drawFrame(): Promise<void> {
-    if (busy || ended) return;
+  async function drawFrame(force = false): Promise<void> {
+    if (busy || ended || (pausedAt !== null && !force)) return;
     busy = true;
     const t = seconds();
     try {
@@ -274,7 +281,30 @@ export function startVideoRecording(deps: RecordDeps): VideoRecording | null {
     recorder.stop();
   }
 
-  void drawFrame();
+  function pause(): void {
+    if (ended || pausedAt !== null) return;
+    pausedAt = performance.now();
+    if (recorder.state === 'recording') recorder.pause();
+  }
+
+  function resume(): void {
+    if (ended || pausedAt === null) return;
+    pausedTotal += performance.now() - pausedAt;
+    pausedAt = null;
+    // What changed while paused (single steps) is in the first frame after it.
+    void drawFrame();
+    if (recorder.state === 'paused') recorder.resume();
+  }
+
+  void drawFrame(true);
   recorder.start(1000);
-  return { stop, elapsed: seconds };
+  return {
+    stop,
+    elapsed: seconds,
+    pause,
+    resume,
+    get paused() {
+      return pausedAt !== null;
+    },
+  };
 }
