@@ -114,6 +114,17 @@ frame's own paper; several files go into a folder you choose (Chrome, Edge, the 
 are downloaded. **Show the pages** previews each one as it will come out; click a page to give that
 circuit its own area, zoom and paper. The single Export has the same zoom.
 
+**Diagrams** (toolbar, beside Record) plot the recorded simulation. Every run is recorded:
+cylinder and motor positions, speeds, forces and torques, hydraulic and mechanical powers, pump
+flows, pressures and shaft powers, valve spools, and every button, sensor and relay. A diagram
+plots any of these over a window from one event to another - the run's start or end, a time, or
+the nth time a signal (a push button, a sensor such as A1) switches - and lists each one's start
+and end value, minimum, maximum, average and integral (energy in kJ, volume in L...). Ratios
+between them give efficiencies, e.g. the energy that reached the load over the pump's shaft
+energy over one stroke. The diagrams are saved with the circuit, and the whole recording can be
+exported as CSV. The three **Efficiency** examples drive the same cylinder and load with a fixed
+pump, a pressure-compensated pump and a load-sensing pump, ready to compare.
+
 **Open** opens a project file; the ▾ beside it lists the five most recently opened or saved
 files (Chrome, Edge and the desktop app) and the examples. The toolbar shows each button's name
 under its icon - **Settings → Toolbar** switches to icons only.

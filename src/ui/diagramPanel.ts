@@ -189,20 +189,30 @@ interface Axis {
 
 function niceRange(min: number, max: number): [number, number] {
   if (!Number.isFinite(min) || !Number.isFinite(max)) return [0, 1];
-  if (min === max)
-    return min === 0 ? [-1, 1] : [min - Math.abs(min) * 0.1, max + Math.abs(max) * 0.1];
+  // A quantity that (all but) doesn't change gets a band round its value.
+  if (max - min <= Math.max(Math.abs(min), Math.abs(max)) * 1e-6) {
+    const c = (min + max) / 2;
+    const half = Math.abs(c) * 0.1 || 1;
+    return [c - half, c + half];
+  }
   const pad = (max - min) * 0.06;
-  return [min > 0 && min - pad < 0 ? 0 : min - pad, max + pad];
+  // Positive quantities (powers, flows, pressures...) from zero, so the curves compare true to
+  // size.
+  if (min >= 0) return [0, max + pad];
+  return [min - pad, max + pad];
 }
 
-function ticks(min: number, max: number, n = 5): number[] {
+/** About `n` round values between min and max, for an axis - never more than 50. */
+export function axisTicks(min: number, max: number, n = 5): number[] {
   const span = max - min;
+  if (!(span > 0) || !Number.isFinite(span)) return Number.isFinite(min) ? [min] : [];
   const step0 = span / n;
   const mag = 10 ** Math.floor(Math.log10(step0));
   const step = [1, 2, 2.5, 5, 10].map((m) => m * mag).find((s) => span / s <= n) ?? step0;
+  const first = Math.ceil(min / step);
+  const count = Math.min(50, Math.floor(max / step + 1e-9) - first + 1);
   const out: number[] = [];
-  for (let v = Math.ceil(min / step) * step; v <= max + 1e-9; v += step)
-    out.push(Number(v.toPrecision(10)));
+  for (let k = 0; k < count; k++) out.push(Number(((first + k) * step).toPrecision(10)));
   return out;
 }
 
@@ -265,7 +275,7 @@ function drawChart(
     svgEl('rect', { x: L, y: T, width: W - L - R, height: plotH, class: 'diagPlotBg' }),
   );
   // Time grid.
-  for (const t of ticks(win.t0, win.t1, 6)) {
+  for (const t of axisTicks(win.t0, win.t1, 6)) {
     svg.appendChild(svgEl('line', { x1: x(t), x2: x(t), y1: T, y2: T + plotH, class: 'diagGrid' }));
     const lab = svgEl('text', {
       x: x(t),
@@ -286,7 +296,7 @@ function drawChart(
   svg.appendChild(tl);
   // Value axes: the first left, the second right.
   axes.slice(0, 2).forEach((ax, k) => {
-    for (const v of ticks(ax.min, ax.max, 5)) {
+    for (const v of axisTicks(ax.min, ax.max, 5)) {
       if (k === 0)
         svg.appendChild(
           svgEl('line', { x1: L, x2: W - R, y1: y(ax, v), y2: y(ax, v), class: 'diagGrid' }),
