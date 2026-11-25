@@ -6,6 +6,7 @@ import { clearElectrical } from './electrical';
 import { MAX_DT } from './constants';
 import { redrawMovedConnections } from '../wires/connection';
 import { getSimSpeed } from '../app/simSpeed';
+import { initRecorder, recordStep } from './recorder';
 
 let lastTime = performance.now();
 let stepOnce = false;
@@ -32,6 +33,7 @@ function tick(now: number): void {
   // A frame with no time in it (two with the same timestamp) has nothing to simulate.
   if ((appState.mode === Modes.PLAY || stepOnce) && dt > 0) {
     const frame = stepSimulation(dt);
+    recordStep(dt);
     applyToDom(frame);
     // A component can move its own ports in response to simulation state without any of the
     // edit-time triggers that redraw wires - only the wires on ports that actually moved are
@@ -52,6 +54,7 @@ function tick(now: number): void {
 
 export function startSimLoop(): void {
   lastTime = performance.now();
+  initRecorder();
   // Shown at rest again after any change or mode switch.
   appState.onChange(() => {
     restShown = false;

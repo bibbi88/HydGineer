@@ -1,10 +1,12 @@
 import { unixNow } from './project';
 import type { ProjectFileV1, ComponentSnapshot, ConnectionSnapshot } from './schema';
+import type { DiagramConfig } from '../app/diagrams';
 
 /** Small builder so the example circuits below read as a parts list plus a wiring list. */
 function circuit(name: string, build: (b: Builder) => void): ProjectFileV1 {
   const comps: ComponentSnapshot[] = [];
   const conns: ConnectionSnapshot[] = [];
+  const diagrams: DiagramConfig[] = [];
   let next = 1;
   const b: Builder = {
     add(type, x, y, data = {}, rot) {
@@ -22,17 +24,74 @@ function circuit(name: string, build: (b: Builder) => void): ProjectFileV1 {
         ...(dashed ? { dashed: true } : {}),
       });
     },
+    diagram(d) {
+      diagrams.push({ id: `ex${diagrams.length + 1}`, ratios: [], ...d });
+    },
   };
   build(b);
   // Opening an example starts a new project: created now.
-  return { schemaVersion: 1, name, ct: unixNow(), comps, conns };
+  return {
+    schemaVersion: 1,
+    name,
+    ct: unixNow(),
+    comps,
+    conns,
+    ...(diagrams.length ? { diagrams } : {}),
+  };
 }
 
 interface Builder {
   add(type: string, x: number, y: number, data?: Record<string, unknown>, rot?: number): number;
   /** `dashed` draws it as a pilot/signal line. */
   wire(a: number, ap: string, b: number, bp: string, dashed?: boolean): void;
+  /** A diagram of the recorded run (app/diagrams.ts), referring to components by add()'s ids. */
+  diagram(d: Omit<DiagramConfig, 'id' | 'ratios'> & { ratios?: DiagramConfig['ratios'] }): void;
 }
+
+/** The comparison every efficiency example shows: over one extending stroke (from the cylinder
+ * leaving A0 to reaching A1), the pump's shaft power and the power that reaches the load, and
+ * their ratio - the efficiency of the whole system; and the pump's pressure with the speed. */
+function efficiencyDiagrams(b: Builder, pump: number, cyl: number): void {
+  const stroke = {
+    from: { kind: 'signal' as const, name: 'A0', edge: 'off' as const, n: 1 },
+    to: { kind: 'signal' as const, name: 'A1', edge: 'on' as const, n: 1 },
+  };
+  b.diagram({
+    title: 'Power over one stroke',
+    series: [
+      { compId: pump, key: 'pShaft' },
+      { compId: cyl, key: 'pHyd' },
+      { compId: cyl, key: 'pLoad' },
+    ],
+    ...stroke,
+    ratios: [
+      {
+        label: 'Efficiency',
+        num: { compId: cyl, key: 'pLoad' },
+        den: { compId: pump, key: 'pShaft' },
+        measure: 'integral',
+      },
+    ],
+  });
+  b.diagram({
+    title: 'Pump pressure and cylinder speed',
+    series: [
+      { compId: pump, key: 'p' },
+      { compId: cyl, key: 'v' },
+    ],
+    ...stroke,
+  });
+}
+
+/** The cylinder all three efficiency examples drive: ⌀50/30, 400 mm stroke, lifting 10 kN. */
+const EFF_CYLINDER = {
+  bore: 50,
+  rodD: 30,
+  stroke: 400,
+  load: 10000,
+  friction: 100,
+  showName: true,
+};
 
 /** Pump with relief valve and gauge, feeding P of a valve; returns the junction on the supply
  * line so the caller can wire the valve to it. Pump at (px, py). */
@@ -628,6 +687,91 @@ export const EXAMPLES: Array<{ title: string; file: () => ProjectFileV1 }> = [
         minPct: 30,
         setting: 100,
         torque: 60,
+      }),
+  },
+  {
+    title: 'Efficiency 1: fixed pump, open centre, flow control',
+    file: () =>
+      circuit('Efficiency - fixed pump', (b) => {
+        // Start, then click the valve's left box: the cylinder extends at the flow control's
+        // 8 L/min while the rest of the pump's 20 L/min goes over the relief valve at 150 bar -
+        // all of it turned into heat. The diagrams compare the pump's shaft power with what
+        // reaches the load over the stroke. Compare with Efficiency 2 and 3.
+        const supply = powerUnit(b, 260, 560, 150, { displacement: 14 });
+        const valve = b.add('hydValve43', 460, 400, {
+          actuation: 'lever',
+          center: 'tandem',
+          qNom: 40,
+        });
+        const tank = b.add('hydTank', 560, 490);
+        const fc = b.add('hydFlowControl', 410, 260, { qSet: 8, bypass: true });
+        const cyl = b.add('hydCylinderDouble', 500, 110, EFF_CYLINDER);
+        b.wire(supply, 'P', valve, 'P');
+        b.wire(valve, 'T', tank, 'T');
+        b.wire(valve, 'A', fc, 'IN');
+        b.wire(fc, 'OUT', cyl, 'A');
+        b.wire(valve, 'B', cyl, 'B');
+        efficiencyDiagrams(b, 1, cyl);
+      }),
+  },
+  {
+    title: 'Efficiency 2: pressure-compensated pump, flow control',
+    file: () =>
+      circuit('Efficiency - pressure-compensated pump', (b) => {
+        // The same cylinder, load and 8 L/min - but the pump swivels back to give only what the
+        // flow control lets through, still at its 150 bar compensator setting: the flow control
+        // burns the difference between that and the load pressure.
+        const supply = powerUnit(b, 260, 560, 170, {
+          displacement: 14,
+          control: 'pc',
+          compSetting: 150,
+        });
+        const valve = b.add('hydValve43', 460, 400, {
+          actuation: 'lever',
+          center: 'closed',
+          qNom: 40,
+        });
+        const tank = b.add('hydTank', 560, 490);
+        const fc = b.add('hydFlowControl', 410, 260, { qSet: 8, bypass: true });
+        const cyl = b.add('hydCylinderDouble', 500, 110, EFF_CYLINDER);
+        b.wire(supply, 'P', valve, 'P');
+        b.wire(valve, 'T', tank, 'T');
+        b.wire(valve, 'A', fc, 'IN');
+        b.wire(fc, 'OUT', cyl, 'A');
+        b.wire(valve, 'B', cyl, 'B');
+        efficiencyDiagrams(b, 1, cyl);
+      }),
+  },
+  {
+    title: 'Efficiency 3: load-sensing pump',
+    file: () =>
+      circuit('Efficiency - load sensing', (b) => {
+        // The same cylinder and load. Start, then pull the lever slider under the valve fully to
+        // the right (P→A): the valve's metering notch gives about 8 L/min, and the pump holds only
+        // the load pressure + its 20 bar margin - the least oil and pressure the work needs.
+        const pump = b.add('hydPumpLS', 260, 560, {
+          displacement: 14,
+          speed: 1450,
+          margin: 20,
+          compSetting: 250,
+        });
+        const j = b.add('junction', 250, 450, { orientation: 'H' });
+        const relief = b.add('hydRelief', 130, 500, { setting: 270 });
+        const tankR = b.add('hydTank', 130, 600);
+        const gauge = b.add('hydGauge', 190, 410, { range: 250 });
+        b.wire(pump, 'P', j, 'P');
+        b.wire(j, 'P', relief, 'P');
+        b.wire(relief, 'T', tankR, 'T');
+        b.wire(j, 'P', gauge, 'P');
+        const valve = b.add('hydValveLS', 460, 380, { actuation: 'lever', qNom: 7 });
+        const tank = b.add('hydTank', 560, 470);
+        const cyl = b.add('hydCylinderDouble', 500, 110, EFF_CYLINDER);
+        b.wire(j, 'P', valve, 'P');
+        b.wire(valve, 'T', tank, 'T');
+        b.wire(valve, 'LS', pump, 'LS');
+        b.wire(valve, 'A', cyl, 'A');
+        b.wire(valve, 'B', cyl, 'B');
+        efficiencyDiagrams(b, pump, cyl);
       }),
   },
 ];

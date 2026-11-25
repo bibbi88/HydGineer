@@ -8,6 +8,7 @@ import { renderArrangeControls } from './arrangeControls';
 import { iconButton } from './iconButton';
 import { createBrandMark } from './brandMark';
 import { openSettingsDialog } from './settingsDialog';
+import { isDiagramPanelOpen, openDiagramPanel } from './diagramPanel';
 import { getSettings, onSettingsChange, updateSettings } from '../app/settings';
 import { appState } from '../app/AppState';
 
@@ -83,6 +84,17 @@ export function renderTopbar(
     viewport,
     workspaceEl,
   });
+  // Diagrams of the recorded run: plots, figures, efficiencies (ui/diagramPanel.ts).
+  const diagBtn = iconButton(
+    'chart',
+    'Diagrams of the recorded run - plots, figures and efficiencies',
+    () => {
+      openDiagramPanel();
+      diagBtn.classList.toggle('iconBtn--active', isDiagramPanelOpen());
+    },
+    'Diagrams',
+  );
+  simulation.appendChild(diagBtn);
   renderViewControls(section('View'), viewport, workspaceEl);
   renderArrangeControls(section('Arrange'));
   // Tips: a toggle, lit while on - the canvas shortcuts and the short explanations in the

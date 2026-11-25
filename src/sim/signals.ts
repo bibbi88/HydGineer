@@ -18,3 +18,8 @@ export function getSignal(key: string): boolean {
 export function resetSignals(): void {
   signals.clear();
 }
+
+/** Every signal set so far and its state (for the diagram recorder). */
+export function listSignals(): Array<[string, boolean]> {
+  return [...signals.entries()];
+}

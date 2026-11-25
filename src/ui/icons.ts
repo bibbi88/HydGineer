@@ -17,6 +17,7 @@ export type IconName =
   | 'play'
   | 'stop'
   | 'record'
+  | 'chart'
   | 'chevronDown'
   | 'pause'
   | 'step'
@@ -78,6 +79,11 @@ const ICONS: Record<IconName, Shape[]> = {
   play: [['path', { d: 'M6 3.5 20 12 6 20.5Z', ...FILLED }]],
   stop: [['rect', { x: 6, y: 6, width: 12, height: 12, rx: 1.5, ...FILLED }]],
   chevronDown: [['path', { d: 'm6 9 6 6 6-6' }]],
+  // A line chart: axes and a rising line.
+  chart: [
+    ['path', { d: 'M4 4v16h16' }],
+    ['path', { d: 'M7 15l4-5 3 3 5-6' }],
+  ],
   record: [
     ['circle', { cx: 12, cy: 12, r: 8.5 }],
     ['circle', { cx: 12, cy: 12, r: 4.5, ...FILLED }],

@@ -3,6 +3,15 @@ import type { HydElement } from '../sim/hydraulics';
 export type ComponentId = number;
 export type PortKey = string;
 
+/** One measured quantity (see Component.probes): `key` stays the same from step to step, the
+ * label and unit say what it is. Power is in kW, so its integral over time is in kJ. */
+export interface Probe {
+  key: string;
+  label: string;
+  unit: string;
+  value: number;
+}
+
 export interface PortDef {
   key: PortKey;
   cx: number;
@@ -150,6 +159,10 @@ export interface Component<TSnapshot = Record<string, unknown>> {
    * stops flowing (the line stays pressurized, but nothing streams through it any more), so
    * this goes empty. Purely a visualization hook, like `currentlyVenting`. */
   currentlyFilling?(): PortKey[];
+
+  /** Physical quantities this component measured in its last step() - position, speed, force,
+   * flow, power... - for the diagram recorder (sim/recorder.ts). */
+  probes?(): Probe[];
 
   snapshot(): TSnapshot;
   restore(data: TSnapshot): void;

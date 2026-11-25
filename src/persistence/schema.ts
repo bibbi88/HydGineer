@@ -1,3 +1,4 @@
+import type { DiagramConfig } from '../app/diagrams';
 import type { ComponentId, PortKey, WireGuide } from '../core/types';
 
 export const CURRENT_SCHEMA_VERSION = 1;
@@ -69,4 +70,6 @@ export interface ProjectFileV1 {
   lastSaved?: string;
   comps: ComponentSnapshot[];
   conns: ConnectionSnapshot[];
+  /** The diagrams of recorded runs (app/diagrams.ts), referring to `comps` by id. */
+  diagrams?: DiagramConfig[];
 }

@@ -1,4 +1,4 @@
-import type { Component, SimStepContext } from '../../core/types';
+import type { Component, Probe, SimStepContext } from '../../core/types';
 import { circleAreaCm2, type HydElement } from '../../sim/hydraulics';
 import { appState } from '../../app/AppState';
 import { Modes } from '../../app/modes';
@@ -207,6 +207,18 @@ function cylinderLabelMethods(
   };
 }
 
+/** What a cylinder measured: rod position and speed, the oil's force on the piston, and power -
+ * the oil's (hydraulic force × speed) and what reaches the load (load × speed). */
+function cylinderProbes(xMm: number, v: number, force: number, load: number): Probe[] {
+  return [
+    { key: 'x', label: 'Position x', unit: 'mm', value: xMm },
+    { key: 'v', label: 'Speed v', unit: 'm/s', value: v },
+    { key: 'F', label: 'Hydraulic force F', unit: 'N', value: force },
+    { key: 'pHyd', label: 'Hydraulic power in', unit: 'kW', value: (force * v) / 1000 },
+    { key: 'pLoad', label: 'Power to the load', unit: 'kW', value: (load * v) / 1000 },
+  ];
+}
+
 /** The piston element's losses: a friction force, or a hydromechanical efficiency. */
 function lossElement(
   mode: 'force' | 'efficiency',
@@ -270,6 +282,7 @@ export function createHydCylinderDouble(
   let peakA = 0;
   let peakB = 0;
 
+  let probeList: Probe[] = [];
   const comp = hydComponentBase(shell, type, x, y, svgW, svgH, ports);
   const annulus = (): number =>
     Math.max(0.01, circleAreaCm2(bore) - circleAreaCm2(Math.min(rodD, bore - 1)));
@@ -278,6 +291,7 @@ export function createHydCylinderDouble(
   const areaA = (): number => (doubleRod ? annulus() : circleAreaCm2(bore));
   const areaB = annulus;
   return Object.assign(comp, {
+    probes: () => probeList,
     ...cylinderLabelMethods(shell, state, () => comp.id),
     hydElements: (): HydElement[] => [
       {
@@ -306,6 +320,7 @@ export function createHydCylinderDouble(
       peakA = Math.max(peakA, pA);
       peakB = Math.max(peakB, pB);
       const force = (pA * areaA() - pB * areaB()) * 10;
+      probeList = cylinderProbes(pos * stroke, v, force, load);
       const lines = [`${fmtVel(v)} · x ${(pos * stroke).toFixed(0)} mm`, `F ${fmtForce(force)}`];
       // With a mass, stopping it suddenly compresses the trapped oil: show the peaks reached.
       if (mass > 0) lines.push(`peak A ${peakA.toFixed(0)} · B ${peakB.toFixed(0)} bar`);
@@ -395,8 +410,10 @@ export function createHydCylinderSingle(compLayer: HTMLElement, x: number, y: nu
 
   const springForce = (): number => springPreload + springRate * pos * stroke;
   const areaA = (): number => circleAreaCm2(bore);
+  let probeList: Probe[] = [];
   const comp = hydComponentBase(shell, HYD_CYLINDER_SINGLE_TYPE, x, y, svgW, svgH, ports);
   return Object.assign(comp, {
+    probes: () => probeList,
     ...cylinderLabelMethods(shell, state, () => comp.id),
     hydElements: (): HydElement[] => [
       {
@@ -421,6 +438,7 @@ export function createHydCylinderSingle(compLayer: HTMLElement, x: number, y: nu
       const pA = ctx.pressureAt('A');
       peakA = Math.max(peakA, pA);
       const force = pA * areaA() * 10;
+      probeList = cylinderProbes(pos * stroke, v, force, load);
       const lines = [
         `${fmtVel(v)} · x ${(pos * stroke).toFixed(0)} mm`,
         `F ${fmtForce(force)} (spring ${fmtForce(springForce())})`,
@@ -583,8 +601,10 @@ export function createHydMotor(
     return variable ? (displacement * pct) / 100 : displacement;
   }
 
+  let probeList: Probe[] = [];
   const comp = hydComponentBase(shell, type, x, y, svgW, svgH, ports);
   return Object.assign(comp, {
+    probes: () => probeList,
     hydElements: (): HydElement[] => [
       { kind: 'motor', a: 'A', b: 'B', disp: disp(), torque, etaHm: etaHm / 100 },
     ],
@@ -599,6 +619,13 @@ export function createHydMotor(
       const rpm = Math.abs(n) < 1e-4 ? 0 : n * 60;
       const pOut = Math.abs(t * 2 * Math.PI * n) / 1000;
       const pIn = Math.abs((dp * disp() * n * 0.06) / 600);
+      probeList = [
+        { key: 'n', label: 'Speed n', unit: 'rpm', value: rpm },
+        { key: 'torque', label: 'Shaft torque T', unit: 'Nm', value: t },
+        { key: 'dp', label: 'Pressure difference Δp', unit: 'bar', value: dp },
+        { key: 'pHyd', label: 'Hydraulic power in', unit: 'kW', value: pIn },
+        { key: 'pMech', label: 'Mechanical power out', unit: 'kW', value: pOut },
+      ];
       const lines = [`n ${rpm.toFixed(0)} rpm`, `T ${t.toFixed(1)} Nm (ηhm ${etaHm} %)`];
       if (pIn > 0.005) lines.push(`P in ${pIn.toFixed(2)} → out ${pOut.toFixed(2)} kW`);
       if (variable) {

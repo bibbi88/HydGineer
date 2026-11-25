@@ -1,4 +1,4 @@
-import type { Component, SimStepContext } from '../../core/types';
+import type { Component, Probe, SimStepContext } from '../../core/types';
 import { accumulatorOil, orificeKFromRating, type HydElement } from '../../sim/hydraulics';
 import { uid } from '../../core/ids';
 import { createPort, createPortLabel, createSvgEl } from '../shared/svgHelpers';
@@ -232,8 +232,10 @@ export function createHydPump(
     return lines;
   }
 
+  let probeList: Probe[] = [];
   const comp = hydComponentBase(shell, type, x, y, svgW, svgH, ports);
   return Object.assign(comp, {
+    probes: () => probeList,
     recompute(): void {
       const next = signalSaysRun();
       if (next !== running) {
@@ -264,6 +266,18 @@ export function createHydPump(
     step(_dt: number, ctx: SimStepContext): void {
       const p = ctx.pressureAt('P');
       const q = running ? ctx.elementValue(0) : 0;
+      {
+        const pHyd = (Math.max(0, q) * Math.max(0, p)) / 600;
+        const pShaft = running ? (geometricFlow(q, p) * Math.max(0, p)) / (600 * (etaHm / 100)) : 0;
+        const torque = speed > 0 ? (pShaft * 1000) / ((2 * Math.PI * speed) / 60) : 0;
+        probeList = [
+          { key: 'q', label: 'Flow Q', unit: 'L/min', value: q },
+          { key: 'p', label: 'Pressure p', unit: 'bar', value: p },
+          { key: 'pHyd', label: 'Hydraulic power out', unit: 'kW', value: pHyd },
+          { key: 'pShaft', label: 'Shaft power in', unit: 'kW', value: pShaft },
+          { key: 'torque', label: 'Shaft torque T', unit: 'Nm', value: torque },
+        ];
+      }
       const lines = running ? [`Q ${fmtFlow(q)}`, `p ${fmtBar(p)}`] : ['motor off'];
       if (running) lines.push(...drivePower(q, p));
       if (isLS) {
@@ -369,8 +383,10 @@ export function createHydPressureSource(compLayer: HTMLElement, x: number, y: nu
   }
   refresh();
 
+  let probeList: Probe[] = [];
   const comp = hydComponentBase(shell, HYD_PRESSURE_SOURCE_TYPE, x, y, svgW, svgH, ports);
   return Object.assign(comp, {
+    probes: () => probeList,
     hydElements: (): HydElement[] => [
       // A perfect compensator: full flow up to just below pMax, none past it.
       { kind: 'pump', out: 'P', q: qMax, leak: 0, comp: pMax, band: Math.max(0.5, pMax * 0.005) },
@@ -380,6 +396,16 @@ export function createHydPressureSource(compLayer: HTMLElement, x: number, y: nu
     step(_dt: number, ctx: SimStepContext): void {
       const p = ctx.pressureAt('P');
       const q = ctx.elementValue(0);
+      probeList = [
+        { key: 'q', label: 'Flow Q', unit: 'L/min', value: q },
+        { key: 'p', label: 'Pressure p', unit: 'bar', value: p },
+        {
+          key: 'pHyd',
+          label: 'Hydraulic power out',
+          unit: 'kW',
+          value: (Math.max(0, q) * Math.max(0, p)) / 600,
+        },
+      ];
       paintFlow(outLine, p, q);
       const limit = q < qMax * 0.98 ? 'pressure limit' : 'flow limit';
       shell.setInfo([
@@ -542,6 +568,7 @@ export function createHydGauge(compLayer: HTMLElement, x: number, y: number): Co
   const ports = { P: createPort(g, 'P', 20, 50, 'V') };
   shell.setInfoSide('right');
   let range = 250;
+  let probeList: Probe[] = [];
   const comp = hydComponentBase(shell, HYD_GAUGE_TYPE, x, y, svgW, svgH, ports);
   function setNeedle(p: number): void {
     // Needle sweeps 270° from -225° (0) to +45° (full scale).
@@ -551,8 +578,10 @@ export function createHydGauge(compLayer: HTMLElement, x: number, y: number): Co
   }
   setNeedle(0);
   return Object.assign(comp, {
+    probes: () => probeList,
     step(_dt: number, ctx: SimStepContext): void {
       const p = ctx.pressureAt('P');
+      probeList = [{ key: 'p', label: 'Pressure p', unit: 'bar', value: p }];
       setNeedle(p);
       shell.setInfo([fmtBar(p)]);
     },
@@ -603,14 +632,20 @@ export function createHydFlowMeter(compLayer: HTMLElement, x: number, y: number)
   };
   shell.setInfoSide('right');
   let total = 0;
+  let probeList: Probe[] = [];
   const comp = hydComponentBase(shell, HYD_FLOW_METER_TYPE, x, y, svgW, svgH, ports);
   return Object.assign(comp, {
     hydElements: (): HydElement[] => [
       { kind: 'orifice', a: 'IN', b: 'OUT', k: orificeKFromRating(100, 0.25) },
     ],
+    probes: () => probeList,
     step(dt: number, ctx: SimStepContext): void {
       const q = ctx.elementValue(0);
       total += (Math.abs(q) * dt) / 60;
+      probeList = [
+        { key: 'q', label: 'Flow Q', unit: 'L/min', value: q },
+        { key: 'p', label: 'Pressure p', unit: 'bar', value: ctx.pressureAt('IN') },
+      ];
       shell.setInfo([`Q ${fmtFlow(q)}`, `Σ ${total.toFixed(total < 10 ? 2 : 1)} L`]);
       paintFlow(inLead, ctx.pressureAt('IN'), q);
       paintFlow(outLead, ctx.pressureAt('OUT'), q);
@@ -1049,8 +1084,10 @@ export function createHydPumpLoop(compLayer: HTMLElement, x: number, y: number):
     return (maxFlow() * (1 - etaV / 100)) / Math.max(1, ratedPressure);
   }
 
+  let probeList: Probe[] = [];
   const comp = hydComponentBase(shell, HYD_PUMP_LOOP_TYPE, x, y, svgW, svgH, ports);
   return Object.assign(comp, {
+    probes: () => probeList,
     hydElements: (): HydElement[] => [
       // Lever right (+): deliver out of B, drawing from A; left: the other way round.
       { kind: 'loopPump', a: 'B', b: 'A', q: swash * maxFlow() },
@@ -1069,6 +1106,16 @@ export function createHydPumpLoop(compLayer: HTMLElement, x: number, y: number):
       // Delivered flow: what leaves the outlet side (B with the lever right, A with it left).
       const q = Math.max(0, swash >= 0 ? ctx.flowAt('B') : qA);
       const dp = Math.abs(pA - pB);
+      {
+        const pHyd = (dp * q) / 600;
+        const pShaft = (Math.abs(swash) * maxFlow() * dp) / (600 * (etaHm / 100));
+        probeList = [
+          { key: 'q', label: 'Flow Q', unit: 'L/min', value: q },
+          { key: 'dp', label: 'Pressure difference Δp', unit: 'bar', value: dp },
+          { key: 'pHyd', label: 'Hydraulic power out', unit: 'kW', value: pHyd },
+          { key: 'pShaft', label: 'Shaft power in', unit: 'kW', value: pShaft },
+        ];
+      }
       const lines = [`swash ${swash > 0 ? '+' : ''}${Math.round(swash * 100)} %`];
       if (Math.abs(swash) > 0.004) {
         lines.push(`Q ${fmtFlow(q)} out of ${swash >= 0 ? 'B' : 'A'}`);

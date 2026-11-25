@@ -1,4 +1,4 @@
-import type { Component, SimStepContext } from '../../core/types';
+import type { Component, Probe, SimStepContext } from '../../core/types';
 import { orificeKFromRating, type HydElement } from '../../sim/hydraulics';
 import { getSignal } from '../../sim/signals';
 import { appState } from '../../app/AppState';
@@ -400,6 +400,10 @@ export function createHydValve43(compLayer: HTMLElement, x: number, y: number): 
 
   const comp = hydComponentBase(shell, HYD_VALVE_43_TYPE, x, y, svgW, svgH, ports);
   return Object.assign(comp, {
+    // The spool's position, for the diagram recorder: when the valve was switched.
+    probes: (): Probe[] => [
+      { key: 'spool', label: 'Spool (−1 left, 0 centre, 1 right)', unit: 'position', value: state },
+    ],
     recompute(): void {
       if (actuation !== 'solenoid') return;
       const l = keyLeft.trim() !== '' && getSignal(keyLeft);
@@ -494,6 +498,10 @@ export function createHydValve42(compLayer: HTMLElement, x: number, y: number): 
 
   const comp = hydComponentBase(shell, HYD_VALVE_42_TYPE, x, y, svgW, svgH, ports);
   return Object.assign(comp, {
+    // The spool's position, for the diagram recorder: when the valve was switched.
+    probes: (): Probe[] => [
+      { key: 'spool', label: 'Spool (1 shifted)', unit: 'position', value: shifted ? 1 : 0 },
+    ],
     recompute(): void {
       if (actuation !== 'solenoid') return;
       const next = key.trim() !== '' && getSignal(key);
@@ -683,6 +691,10 @@ export function createHydValve32(compLayer: HTMLElement, x: number, y: number): 
 
   const comp = hydComponentBase(shell, HYD_VALVE_32_TYPE, x, y, svgW, svgH, ports);
   return Object.assign(comp, {
+    // The spool's position, for the diagram recorder: when the valve was switched.
+    probes: (): Probe[] => [
+      { key: 'spool', label: 'Spool (1 shifted)', unit: 'position', value: shifted ? 1 : 0 },
+    ],
     recompute(): void {
       if (actuation === 'lever') return;
       const signal = actuation === 'solenoid' ? key : sensorKey;
